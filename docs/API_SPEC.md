@@ -201,19 +201,20 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 메서드·URL: `GET /api/me/google/link`
 - 인증: 필요 (`access_token`)
 - 권한: 회원 본인 (로그인한 회원 자신의 계정에만 연동)
-- 인증 조건: 요청의 `access_token`으로 회원을 확인한 뒤 연동을 시작합니다. Access Token이 없거나 만료되었으면 401 TOKEN_INVALID로 거부합니다.
+- 인증 조건: 요청의 `access_token`으로 회원을 확인합니다. 이 검증은 연동 시작 시점에만 수행합니다. Access Token이 없거나 만료되었으면 401 TOKEN_INVALID로 거부하고 흐름을 시작하지 않습니다.
 - 요청: 본문 없음. 브라우저 리다이렉트 API입니다.
 - 처리 (FR-01-10, FR-01-12):
-  1. 현재 로그인한 회원 ID와 흐름 종류(연동)를 OAuth2 임시 세션에 저장하고, 같은 임시 세션에 OAuth2 `state` 값과 Authorization Request를 보관합니다. 보관 방식은 T11에서 확정합니다.
+  1. Access Token으로 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 세션에 저장합니다. 같은 임시 세션에 OAuth2 `state` 값과 Authorization Request를 보관합니다. 보관 방식은 T11에서 확정합니다.
   2. Google 인증 페이지로 리다이렉트합니다.
-  3. 콜백(2.5와 같은 URL)에서 다음을 검증합니다. (a) `state`가 임시 세션 값과 일치하고 한 번만 사용되는지 (CSRF 방지). (b) 콜백 요청의 `access_token`으로 확인되는 회원이 임시 세션의 연동 요청 회원과 같은지 (FR-01-15). 하나라도 실패하면 연동하지 않습니다.
-  4. 해당 `google_sub`가 다른 회원에게 연결되어 있으면 연동하지 않습니다.
-  5. 성공하면 `member.google_sub = sub`를 저장하고 `/mypage?google=linked`로 리다이렉트합니다.
+  3. 콜백(2.5와 같은 URL)에서 다음을 검증합니다. (a) 콜백의 `state`가 현재 브라우저의 OAuth2 임시 세션에 보관된 값과 일치하고 한 번만 사용되는지 (CSRF 방지). (b) 임시 세션이 존재하고 만료되지 않았는지. 하나라도 실패하면 연동하지 않습니다.
+  4. 연동 대상 회원은 임시 세션에 저장된 회원 ID로 정합니다. 그 회원이 아직 존재하는지 확인하고, 없으면 연동하지 않습니다. 콜백은 `access_token`을 요구하지 않으며, Google 인증 중 Access Token이 만료되어도 임시 세션이 유효하면 연동을 완료합니다 (FR-01-15).
+  5. 해당 `google_sub`가 다른 회원에게 연결되어 있으면 연동하지 않습니다. 기존 UNIQUE 제약(`uk_member_google_sub`)으로도 중복 연결을 막습니다.
+  6. 성공하면 `member.google_sub = sub`를 저장하고 `/mypage?google=linked`로 리다이렉트합니다.
 - 실패 리다이렉트:
   - `/mypage?error=google_already_linked` — 이미 다른 회원에게 연결된 Google 계정 (409 GOOGLE_ALREADY_LINKED에 해당)
   - `/mypage?error=google_unverified` — 검증되지 않은 Google 계정
-  - `/mypage?error=google_failed` — 인증 실패, `state` 검증 실패, 회원 불일치, 임시 세션 없음 또는 만료
-- 주요 오류: 401 TOKEN_INVALID (로그인되지 않음 → 로그인 페이지로 이동), 409 GOOGLE_ALREADY_LINKED
+  - `/mypage?error=google_failed` — 인증 실패, `state` 불일치, 임시 세션 없음 또는 만료, 연동 대상 회원 없음
+- 주요 오류: 401 TOKEN_INVALID (연동 시작 시 Access Token 없음 또는 만료 → 로그인 페이지로 이동), 409 GOOGLE_ALREADY_LINKED
 - 이미 자신에게 연동된 경우에는 변경 없이 `/mypage?google=linked`로 리다이렉트합니다.
 
 ### 2.7 Google 계정 연동 해제
