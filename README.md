@@ -9,7 +9,7 @@
 
 | ID | 기능 | 요약 |
 |----|------|------|
-| F1-01 | 회원 | 회원가입, 로그인, 로그아웃, JWT 인증, Google 로그인 |
+| F1-01 | 회원 | 회원가입, 이메일 로그인, 로그아웃, JWT 인증(Refresh Token 로테이션), Google 로그인, 기존 계정에 Google 계정 직접 연동 |
 | F1-02 | 맛집 | 맛집 등록·수정·삭제, 목록, 카테고리, 검색 |
 | F1-03 | 이미지 | 맛집 이미지 AWS S3 업로드 |
 | F1-04 | 리뷰 | 리뷰 작성·삭제, 평점(1~5), 평균 평점 |
@@ -17,6 +17,7 @@
 | F1-06 | 찜 | 찜하기/찜 취소, 내 찜 목록 |
 | F1-07 | AI 맛집 추천 | DB에 등록된 맛집만 대상으로 AI 추천 |
 | F1-08 | 메인 페이지 | 카테고리, 최신 맛집 |
+| F1-09 | 관리자 | 전체 맛집·리뷰 관리, 회원 조회, 관리자 대시보드, S3 삭제 재시도 (`ADMIN` 권한) |
 
 기능 상세는 [docs/FUNCTION_SPEC.md](docs/FUNCTION_SPEC.md)에 있습니다.
 
@@ -28,8 +29,8 @@
 | Framework | Spring Boot 3.x, Spring Security, Spring Data JPA, Spring AI |
 | AI | OpenRouter (Spring AI의 OpenAI 호환 클라이언트 사용) |
 | View | Thymeleaf, Bootstrap 5 |
-| Database | MySQL 8 |
-| Infra | AWS EC2 (Ubuntu), AWS S3 |
+| Database | MySQL 8 (AWS EC2 내부 설치, RDS 미사용) |
+| Infra | AWS EC2 (Ubuntu, MySQL 포함), AWS S3 |
 | CI/CD | GitHub Actions |
 | Build | Gradle |
 
