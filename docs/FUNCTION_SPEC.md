@@ -47,8 +47,8 @@
 4. 메인 페이지로 이동합니다.
 
 ### Google 로그인 흐름 (FR-01-09)
-1. "Google로 로그인" 클릭 → Spring Security OAuth2 Client가 Google 인증 페이지로 이동합니다.
-2. 인증 성공 후 Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다.
+1. "Google로 로그인" 클릭 → Spring Security OAuth2 Client가 Google 인증 페이지로 이동합니다. 이때 `state` 값과 흐름 종류(로그인)를 OAuth2 임시 세션에 보관합니다.
+2. 콜백에서 `state`가 임시 세션에 보관한 값과 일치하고 아직 사용되지 않았는지 확인합니다 (CSRF 방지). 일치하면 Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다. 일치하지 않으면 로그인하지 않고 `/login?error=google_failed`로 이동합니다.
 3. 처리 규칙:
    - `google_sub`가 같은 회원이 있으면 그 회원으로 로그인합니다.
    - 없고 같은 `email`의 기존 회원이 있으면 **자동으로 연결하지 않습니다.** 로그인하지 않고 `/login?error=email_account_exists`로 이동합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요."를 표시합니다.
@@ -56,10 +56,26 @@
    - 둘 다 없으면 새 회원을 만듭니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`). 닉네임 생성 규칙은 T3에서 정합니다.
 4. 로그인에 성공하면 이메일 로그인과 같은 방식으로 쿠키를 발급합니다.
 
+### Google OAuth2 임시 세션과 JWT 인증의 관계
+
+Google 인증 과정에서는 서버 임시 세션에 인증 진행 상태만 보관합니다. 일반 API 인증은 계속 JWT가 담당합니다 (DEVELOPMENT_RULES 5.7).
+
+| 구분 | 역할 | 수명 |
+|------|------|------|
+| 일반 API 인증 (JWT) | `/api/**` 요청의 회원 식별. Access Token(쿠키 또는 Bearer), Refresh Token(쿠키, DB에는 해시) | Access Token 30분, Refresh Token 14일 |
+| OAuth2 임시 세션 | Google 인증 진행 상태만 보관: `state`, Authorization Request, 연동 요청 회원 ID, 흐름 종류 | 인증 흐름이 끝날 때까지. 만료 시간은 T11 |
+
+규칙:
+1. 임시 세션은 회원의 로그인 상태를 나타내지 않습니다. `/api/**` 요청을 임시 세션만으로 인증하지 않습니다.
+2. 임시 세션에는 흐름 상태만 저장합니다. Access Token, Refresh Token 원문, 비밀번호는 저장하지 않습니다.
+3. 인증 흐름이 끝나면(성공이든 실패든) 해당 흐름의 임시 상태를 제거합니다. 같은 `state`는 한 번만 사용할 수 있습니다.
+4. 흐름이 끝난 뒤의 로그인 상태는 JWT 체계로 돌아갑니다. 로그인 흐름이면 JWT 쿠키를 발급합니다. 연동 흐름이면 이미 있는 JWT 로그인 상태를 그대로 사용합니다.
+5. 세션 저장 방식(Spring Security OAuth2 기본 저장소 사용 여부), 만료 시간, 세션 정책 세부 값은 구현 단계에서 확정합니다 (T11). 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다. 대신 `/api/**` 경로가 JWT로만 인증되도록 구분합니다.
+
 ### Google 계정 연동 흐름 (FR-01-10, FR-01-11, FR-01-12)
 1. 이메일로 로그인한 회원이 `/mypage`에서 "Google 계정 연동"을 누릅니다.
-2. `GET /api/me/google/link`가 현재 회원 ID와 "연동" 의도를 OAuth `state`에 묶고, Google 인증 페이지로 이동합니다.
-3. 콜백에서 `state`를 검증합니다. 검증에 실패하면 `/mypage?error=google_failed`로 이동하고 아무것도 바꾸지 않습니다.
+2. `GET /api/me/google/link`는 `access_token`으로 현재 회원을 확인합니다. 그다음 연동 요청 회원 ID와 흐름 종류(연동)를 OAuth2 임시 세션에 저장하고, `state` 값을 함께 보관한 뒤 Google 인증 페이지로 이동합니다.
+3. 콜백에서 다음을 검증합니다. (a) `state`가 임시 세션 값과 일치하고 아직 사용되지 않았는지 (CSRF 방지). (b) 콜백 요청의 `access_token`으로 확인되는 회원이 임시 세션에 저장된 연동 요청 회원과 같은지. (c) Access Token이 만료되어 회원을 확인할 수 없는지. 하나라도 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다. 사용자에게는 다시 로그인한 뒤 연동을 시도하라고 안내합니다.
 4. `email_verified`가 아니면 `/mypage?error=google_unverified`로 이동합니다.
 5. `google_sub`가 다른 회원에게 이미 연결되어 있으면 `/mypage?error=google_already_linked`로 이동합니다 (FR-01-11, 409 `GOOGLE_ALREADY_LINKED`에 해당).
 6. 이미 본인에게 연결되어 있으면 변경하지 않고 `/mypage?google=linked`로 이동합니다.
@@ -81,6 +97,7 @@
 - Cookie 기반 상태 변경 요청(POST, PUT, DELETE)은 CSRF 토큰(`XSRF-TOKEN` 쿠키, `X-XSRF-TOKEN` 헤더)을 검증합니다 (NFR-04). Bearer 헤더 요청은 CSRF 헤더를 요구하지 않습니다.
 - 쿠키 속성: `access_token`과 `refresh_token`은 HttpOnly, SameSite=Lax, 운영에서는 Secure. `refresh_token`의 Path는 `/api/auth`입니다.
 - 토큰이 만료되거나 위조되면 401을 반환하고, 화면 요청은 로그인 페이지로 리다이렉트합니다.
+- OAuth2 임시 세션은 일반 API 인증(JWT)을 대체하지 않습니다. 임시 세션의 흐름 상태는 Google 인증 과정이 끝나면 제거합니다.
 - 로그에 비밀번호, 토큰 원문, Refresh Token 원문을 남기지 않습니다 (NFR-10).
 
 ### 예외

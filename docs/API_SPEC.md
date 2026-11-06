@@ -14,6 +14,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 관리자 영역: 화면 `/admin/**`, API `/api/admin/**`
 - 날짜·시간: ISO 8601, 시간대는 서버 기준 `Asia/Seoul` 로컬 시각 (`2026-11-06T10:00:00`)
 - 인증: `access_token` 쿠키 또는 `Authorization: Bearer <accessToken>` 헤더
+- OAuth2 임시 세션은 Google 로그인과 계정 연동 흐름에서만 사용합니다. `/api/**` 요청 인증에는 사용하지 않습니다 (DEVELOPMENT_RULES 5.7).
 - CSRF: 쿠키 기반 인증 요청(상태 변경 메서드 POST, PUT, DELETE)은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 함께 보냅니다. Bearer 헤더 요청은 CSRF 헤더를 요구하지 않습니다.
 - 권한 표기:
   - `누구나`: 인증 없이 접근 가능
@@ -28,6 +29,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | `access_token` | Access Token(JWT) | 예 | Lax | 운영만 | `/` | 30분 |
 | `refresh_token` | Refresh Token 원문 | 예 | Lax | 운영만 | `/api/auth` | 14일 |
 | `XSRF-TOKEN` | CSRF 토큰 | 아니오 (JS가 헤더에 실어야 함) | Lax | 운영만 | `/` | 세션 |
+| OAuth2 임시 세션 쿠키 (이름은 구현 단계에서 확정) | Google 인증 흐름의 상태 식별자. API 인증에 사용하지 않음 | 예 | Lax | 운영만 | `/` | 인증 흐름 종료까지 (T11) |
 
 - `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 로그아웃 요청에서만 전송됩니다.
 - 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
@@ -185,11 +187,12 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 권한: 누구나
 - 요청: 브라우저 리다이렉트. Google 인증 페이지로 이동합니다.
 - 콜백 처리 (FR-01-09, Q1):
-  1. Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다.
-  2. `google_sub`가 같은 회원이 있으면 로그인합니다. JWT 쿠키를 설정하고 `/`로 리다이렉트합니다.
-  3. 없고 같은 `email`의 기존 회원이 있으면 **자동 연결하지 않습니다.** `/login?error=email_account_exists`로 리다이렉트합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요." 를 표시합니다.
-  4. `email_verified`가 아니면 `/login?error=google_unverified`로 리다이렉트합니다.
-  5. 둘 다 없으면 새 회원을 만듭니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`). 닉네임 규칙은 T3에서 정합니다. 성공 후 `/`로 리다이렉트합니다.
+  1. 콜백의 `state`가 OAuth2 임시 세션에 보관된 값과 일치하고 아직 사용되지 않았는지 확인합니다 (CSRF 방지). 일치하지 않으면 로그인하지 않고 `/login?error=google_failed`로 이동합니다.
+  2. Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다.
+  3. `google_sub`가 같은 회원이 있으면 로그인합니다. JWT 쿠키를 설정하고 `/`로 리다이렉트합니다.
+  4. 없고 같은 `email`의 기존 회원이 있으면 **자동 연결하지 않습니다.** `/login?error=email_account_exists`로 리다이렉트합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요." 를 표시합니다.
+  5. `email_verified`가 아니면 `/login?error=google_unverified`로 리다이렉트합니다.
+  6. 둘 다 없으면 새 회원을 만듭니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`). 닉네임 규칙은 T3에서 정합니다. 성공 후 `/`로 리다이렉트합니다.
 - 실패(Google 인증 오류 등): `/login?error=google_failed`로 리다이렉트합니다.
 - 주요 오류(리다이렉트 쿼리): `email_account_exists`, `google_unverified`, `google_failed`
 
@@ -198,17 +201,18 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 메서드·URL: `GET /api/me/google/link`
 - 인증: 필요 (`access_token`)
 - 권한: 회원 본인 (로그인한 회원 자신의 계정에만 연동)
+- 인증 조건: 요청의 `access_token`으로 회원을 확인한 뒤 연동을 시작합니다. Access Token이 없거나 만료되었으면 401 TOKEN_INVALID로 거부합니다.
 - 요청: 본문 없음. 브라우저 리다이렉트 API입니다.
 - 처리 (FR-01-10, FR-01-12):
-  1. 현재 로그인한 회원 ID와 "연동 의도"를 OAuth `state` 값에 묶어 서버 세션에 보관합니다.
+  1. 현재 로그인한 회원 ID와 흐름 종류(연동)를 OAuth2 임시 세션에 저장하고, 같은 임시 세션에 OAuth2 `state` 값과 Authorization Request를 보관합니다. 보관 방식은 T11에서 확정합니다.
   2. Google 인증 페이지로 리다이렉트합니다.
-  3. 콜백(2.5와 같은 URL)에서 `state`를 검증하고, 연동 의도인 경우에만 연동을 처리합니다.
+  3. 콜백(2.5와 같은 URL)에서 다음을 검증합니다. (a) `state`가 임시 세션 값과 일치하고 한 번만 사용되는지 (CSRF 방지). (b) 콜백 요청의 `access_token`으로 확인되는 회원이 임시 세션의 연동 요청 회원과 같은지 (FR-01-15). 하나라도 실패하면 연동하지 않습니다.
   4. 해당 `google_sub`가 다른 회원에게 연결되어 있으면 연동하지 않습니다.
   5. 성공하면 `member.google_sub = sub`를 저장하고 `/mypage?google=linked`로 리다이렉트합니다.
 - 실패 리다이렉트:
   - `/mypage?error=google_already_linked` — 이미 다른 회원에게 연결된 Google 계정 (409 GOOGLE_ALREADY_LINKED에 해당)
   - `/mypage?error=google_unverified` — 검증되지 않은 Google 계정
-  - `/mypage?error=google_failed` — 인증 실패 또는 `state` 검증 실패
+  - `/mypage?error=google_failed` — 인증 실패, `state` 검증 실패, 회원 불일치, 임시 세션 없음 또는 만료
 - 주요 오류: 401 TOKEN_INVALID (로그인되지 않음 → 로그인 페이지로 이동), 409 GOOGLE_ALREADY_LINKED
 - 이미 자신에게 연동된 경우에는 변경 없이 `/mypage?google=linked`로 리다이렉트합니다.
 
