@@ -2,17 +2,37 @@
 
 REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABASE_ERD.md](DATABASE_ERD.md), 처리 규칙은 [FUNCTION_SPEC.md](FUNCTION_SPEC.md)를 따릅니다.
 
+모든 API 항목은 다음 형식으로 표기합니다: 메서드·URL, 인증 필요 여부, 접근 가능 권한, 요청 데이터, 응답 데이터, 주요 오류 상황.
+
+> **구현 상태:** 이 문서는 설계 명세입니다. 구현된 API가 아닙니다. 실제 구현 여부는 [PROGRESS.md](PROGRESS.md)에서 확인합니다.
+
 ## 1. 공통 규칙
 
 - Base URL: `https://<도메인>` (로컬: `http://localhost:8080`)
 - JSON API 경로 접두사: `/api`
 - 화면 경로: 접두사 없음 (Thymeleaf 렌더링)
+- 관리자 영역: 화면 `/admin/**`, API `/api/admin/**`
 - 날짜·시간: ISO 8601, 시간대는 서버 기준 `Asia/Seoul` 로컬 시각 (`2026-11-06T10:00:00`)
-- 인증: `access_token` HttpOnly 쿠키 또는 `Authorization: Bearer <accessToken>` 헤더
-- 인증 필요 항목은 표의 **인증** 열에 `필요`로 표시합니다.
-- 리프레시 토큰: `refresh_token` HttpOnly 쿠키 (`/api/auth/refresh` 경로에서만 전송되도록 Path 제한)
+- 인증: `access_token` 쿠키 또는 `Authorization: Bearer <accessToken>` 헤더
+- CSRF: 쿠키 기반 인증 요청(상태 변경 메서드 POST, PUT, DELETE)은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 함께 보냅니다. Bearer 헤더 요청은 CSRF 헤더를 요구하지 않습니다.
+- 권한 표기:
+  - `누구나`: 인증 없이 접근 가능
+  - `회원`: 로그인한 회원(`USER` 또는 `ADMIN`)
+  - `작성자`: 해당 리소스를 만든 회원 본인
+  - `ADMIN`: 관리자(`role = ADMIN`)만 접근 가능. 서버에서 요청마다 검증합니다 (FR-09-08).
 
-### 1.1 공통 응답 형식
+### 1.1 쿠키 명세
+
+| 쿠키 | 내용 | HttpOnly | SameSite | Secure | Path | 만료 |
+|------|------|----------|----------|--------|------|------|
+| `access_token` | Access Token(JWT) | 예 | Lax | 운영만 | `/` | 30분 |
+| `refresh_token` | Refresh Token 원문 | 예 | Lax | 운영만 | `/api/auth` | 14일 |
+| `XSRF-TOKEN` | CSRF 토큰 | 아니오 (JS가 헤더에 실어야 함) | Lax | 운영만 | `/` | 세션 |
+
+- `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 로그아웃 요청에서만 전송됩니다.
+- 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
+
+### 1.2 공통 응답 형식
 
 성공:
 ```json
@@ -43,7 +63,9 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 
-### 1.2 공통 오류 코드
+브라우저 리다이렉트 방식의 Google 흐름은 JSON이 아니라 쿼리 파라미터 `error`로 실패 사유를 전달합니다 (2.5, 2.6 참조).
+
+### 1.3 공통 오류 코드
 
 | HTTP | code | 의미 |
 |------|------|------|
@@ -52,19 +74,25 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 400 | IMAGE_TYPE_NOT_ALLOWED | 허용되지 않은 이미지 형식 |
 | 400 | IMAGE_TOO_LARGE | 이미지 크기 초과 |
 | 400 | IMAGE_LIMIT_EXCEEDED | 맛집당 이미지 개수 초과 |
-| 401 | INVALID_CREDENTIALS | 이메일 또는 비밀번호 불일치 |
-| 401 | TOKEN_INVALID | 토큰 만료 또는 위조 |
-| 403 | FORBIDDEN | 권한 없음 (작성자 아님) |
+| 401 | INVALID_CREDENTIALS | 이메일 또는 비밀번호 불일치 (재인증 실패 포함) |
+| 401 | TOKEN_INVALID | 토큰 없음, 만료, 폐기 또는 위조 |
+| 403 | FORBIDDEN | 권한 없음 (작성자 아님, 또는 ADMIN 아님) |
+| 404 | MEMBER_NOT_FOUND | 회원 없음 |
 | 404 | RESTAURANT_NOT_FOUND | 맛집 없음 |
 | 404 | REVIEW_NOT_FOUND | 리뷰 없음 |
 | 404 | FAVORITE_NOT_FOUND | 찜 없음 |
+| 404 | GOOGLE_NOT_LINKED | 연동된 Google 계정 없음 |
 | 409 | EMAIL_DUPLICATED | 이메일 중복 |
 | 409 | REVIEW_ALREADY_EXISTS | 같은 맛집에 리뷰 중복 |
 | 409 | FAVORITE_ALREADY_EXISTS | 찜 중복 |
-| 502 | STORAGE_ERROR | S3 오류 |
+| 409 | GOOGLE_ALREADY_LINKED | 이미 다른 회원에게 연결된 Google 계정 (FR-01-11) |
+| 409 | LAST_LOGIN_METHOD | 남은 로그인 수단이 없어 Google 연동을 해제할 수 없음 (FR-01-13) |
+| 502 | STORAGE_ERROR | S3 오류 (업로드 등 S3 호출이 필요한 요청 실패) |
 | 502 | AI_UNAVAILABLE | OpenRouter 호출 실패 또는 타임아웃 |
 | 502 | AI_RESPONSE_INVALID | AI 응답 파싱 실패 |
 | 500 | INTERNAL_ERROR | 서버 내부 오류 |
+
+> S3 객체 삭제 실패는 오류 코드가 아닙니다. DB 삭제는 완료된 상태이므로 `200`과 함께 결과 필드(`storageDeleted`, `storageDeleteFailedCount`)로 알립니다 (FUNCTION_SPEC F1-02, F1-03).
 
 ---
 
@@ -72,9 +100,10 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.1 회원가입
 
-- `POST /api/auth/signup` · 인증: 불필요
-
-요청:
+- 메서드·URL: `POST /api/auth/signup`
+- 인증: 불필요
+- 권한: 누구나
+- 요청:
 ```json
 {
   "email": "user@example.com",
@@ -83,73 +112,141 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "nickname": "부산먹보"
 }
 ```
-
-응답 `201`:
+- 응답 `201`: 가입 후 자동 로그인합니다. `access_token`, `refresh_token` 쿠키를 설정합니다 (2.2와 같은 처리).
 ```json
 {
   "success": true,
-  "data": { "memberId": 1, "email": "user@example.com", "nickname": "부산먹보" },
+  "data": { "memberId": 1, "email": "user@example.com", "nickname": "부산먹보", "role": "USER" },
   "timestamp": "..."
 }
 ```
-
-오류: 400 VALIDATION_FAILED, 409 EMAIL_DUPLICATED
+- 주요 오류: 400 VALIDATION_FAILED, 409 EMAIL_DUPLICATED
 
 ### 2.2 로그인
 
-- `POST /api/auth/login` · 인증: 불필요
-
-요청:
+- 메서드·URL: `POST /api/auth/login`
+- 인증: 불필요
+- 권한: 누구나
+- 요청:
 ```json
 { "email": "user@example.com", "password": "<비밀번호>" }
 ```
-
-응답 `200`: `access_token`, `refresh_token` 쿠키 설정 + 본문
+- 응답 `200`: `access_token` 쿠키와 `refresh_token` 쿠키를 설정합니다 (1.1 참조). 본문:
 ```json
 {
   "success": true,
-  "data": { "memberId": 1, "nickname": "부산먹보", "accessTokenExpiresIn": 1800 },
+  "data": { "memberId": 1, "nickname": "부산먹보", "role": "USER", "accessTokenExpiresIn": 1800 },
   "timestamp": "..."
 }
 ```
+- 처리: Refresh Token 원문은 쿠키로만 내려주고, DB `refresh_token`에는 SHA-256 해시를 저장합니다 (FR-01-05).
+- 주요 오류: 401 INVALID_CREDENTIALS (Google 전용 계정의 비밀번호 로그인 시도도 같은 응답)
 
-오류: 401 INVALID_CREDENTIALS
+### 2.3 Access Token 재발급 (Refresh Token 로테이션)
 
-### 2.3 토큰 재발급
-
-- `POST /api/auth/refresh` · 인증: `refresh_token` 쿠키 필요
-
-응답 `200`: 새 `access_token` 쿠키 설정, 본문은 2.2와 동일 구조.
-오류: 401 TOKEN_INVALID (만료·폐기된 리프레시 토큰)
+- 메서드·URL: `POST /api/auth/refresh`
+- 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
+- 권한: 유효한 Refresh Token을 가진 회원
+- 요청: 본문 없음. `refresh_token` 쿠키를 전송합니다.
+- 처리 (FR-01-06):
+  1. 쿠키 원문의 SHA-256을 계산하여 `refresh_token`에서 조회합니다.
+  2. 행이 없거나, 폐기(`revoked_at`)되었거나, 만료되었으면 실패합니다.
+  3. 성공하면 기존 행의 `revoked_at`을 기록하고, 새 Refresh Token 행을 INSERT합니다.
+  4. 새 `access_token` 쿠키와 새 `refresh_token` 쿠키를 설정합니다.
+- 응답 `200`:
+```json
+{
+  "success": true,
+  "data": { "accessTokenExpiresIn": 1800 },
+  "timestamp": "..."
+}
+```
+- 실패 시 두 쿠키를 만료시킵니다.
+- 주요 오류: 401 TOKEN_INVALID (쿠키 없음, 만료, 폐기, 위조)
+- 재사용 탐지 정책은 T7에서 확정합니다.
 
 ### 2.4 로그아웃
 
-- `POST /api/auth/logout` · 인증: 필요
-
-응답 `200`: 리프레시 토큰 폐기, 두 쿠키 만료.
+- 메서드·URL: `POST /api/auth/logout`
+- 인증: 불필요 (Access Token이 만료되었어도 로그아웃할 수 있어야 하므로 요구하지 않습니다)
+- 권한: 누구나
+- 요청: 본문 없음. `refresh_token` 쿠키가 있으면 해당 토큰을 폐기합니다.
+- 처리: 해당 `refresh_token` 행의 `revoked_at`을 기록하고, `access_token`과 `refresh_token` 쿠키를 만료시킵니다 (FR-01-07).
+- 응답 `200`:
 ```json
 { "success": true, "data": null, "timestamp": "..." }
 ```
+- 쿠키가 없거나 이미 폐기된 토큰이어도 `200`을 반환합니다.
 
-### 2.5 Google 로그인 시작
+### 2.5 Google 로그인 (시작 및 콜백)
 
-- `GET /oauth2/authorization/google` · 인증: 불필요
-- Spring Security OAuth2 Client가 Google 인증 페이지로 리다이렉트합니다.
-- 성공 시 `GET /login/oauth2/code/google` 콜백 처리 후 `/`로 리다이렉트하고 JWT 쿠키를 설정합니다.
-- 실패 시 `/login?error=google`로 리다이렉트합니다.
+- 메서드·URL: `GET /oauth2/authorization/google` (시작), `GET /login/oauth2/code/google` (콜백)
+- 인증: 불필요
+- 권한: 누구나
+- 요청: 브라우저 리다이렉트. Google 인증 페이지로 이동합니다.
+- 콜백 처리 (FR-01-09, Q1):
+  1. Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다.
+  2. `google_sub`가 같은 회원이 있으면 로그인합니다. JWT 쿠키를 설정하고 `/`로 리다이렉트합니다.
+  3. 없고 같은 `email`의 기존 회원이 있으면 **자동 연결하지 않습니다.** `/login?error=email_account_exists`로 리다이렉트합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요." 를 표시합니다.
+  4. `email_verified`가 아니면 `/login?error=google_unverified`로 리다이렉트합니다.
+  5. 둘 다 없으면 새 회원을 만듭니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`). 닉네임 규칙은 T3에서 정합니다. 성공 후 `/`로 리다이렉트합니다.
+- 실패(Google 인증 오류 등): `/login?error=google_failed`로 리다이렉트합니다.
+- 주요 오류(리다이렉트 쿼리): `email_account_exists`, `google_unverified`, `google_failed`
 
-### 2.6 내 정보 조회
+### 2.6 Google 계정 연동 시작
 
-- `GET /api/auth/me` · 인증: 필요
+- 메서드·URL: `GET /api/me/google/link`
+- 인증: 필요 (`access_token`)
+- 권한: 회원 본인 (로그인한 회원 자신의 계정에만 연동)
+- 요청: 본문 없음. 브라우저 리다이렉트 API입니다.
+- 처리 (FR-01-10, FR-01-12):
+  1. 현재 로그인한 회원 ID와 "연동 의도"를 OAuth `state` 값에 묶어 서버 세션에 보관합니다.
+  2. Google 인증 페이지로 리다이렉트합니다.
+  3. 콜백(2.5와 같은 URL)에서 `state`를 검증하고, 연동 의도인 경우에만 연동을 처리합니다.
+  4. 해당 `google_sub`가 다른 회원에게 연결되어 있으면 연동하지 않습니다.
+  5. 성공하면 `member.google_sub = sub`를 저장하고 `/mypage?google=linked`로 리다이렉트합니다.
+- 실패 리다이렉트:
+  - `/mypage?error=google_already_linked` — 이미 다른 회원에게 연결된 Google 계정 (409 GOOGLE_ALREADY_LINKED에 해당)
+  - `/mypage?error=google_unverified` — 검증되지 않은 Google 계정
+  - `/mypage?error=google_failed` — 인증 실패 또는 `state` 검증 실패
+- 주요 오류: 401 TOKEN_INVALID (로그인되지 않음 → 로그인 페이지로 이동), 409 GOOGLE_ALREADY_LINKED
+- 이미 자신에게 연동된 경우에는 변경 없이 `/mypage?google=linked`로 리다이렉트합니다.
 
-응답 `200`:
+### 2.7 Google 계정 연동 해제
+
+- 메서드·URL: `DELETE /api/me/google`
+- 인증: 필요 (`access_token`)
+- 권한: 회원 본인
+- 요청:
+```json
+{ "password": "<현재 비밀번호>" }
+```
+- 처리 (FR-01-12, FR-01-13, T8):
+  1. 연동된 Google 계정이 없으면 404 GOOGLE_NOT_LINKED.
+  2. 회원에게 비밀번호가 없으면(Google 전용 계정) 해제하면 로그인 수단이 없어지므로 409 LAST_LOGIN_METHOD로 거부합니다.
+  3. 비밀번호가 맞지 않으면 401 INVALID_CREDENTIALS로 거부합니다 (재인증).
+  4. 성공하면 `member.google_sub = NULL`로 저장합니다.
+- 응답 `200`:
+```json
+{ "success": true, "data": { "googleLinked": false }, "timestamp": "..." }
+```
+- 주요 오류: 401 TOKEN_INVALID, 401 INVALID_CREDENTIALS, 404 GOOGLE_NOT_LINKED, 409 LAST_LOGIN_METHOD
+
+### 2.8 내 정보 조회
+
+- 메서드·URL: `GET /api/auth/me`
+- 인증: 필요
+- 권한: 회원 본인
+- 요청: 없음
+- 응답 `200`:
 ```json
 {
   "success": true,
-  "data": { "memberId": 1, "email": "user@example.com", "nickname": "부산먹보", "provider": "LOCAL" },
+  "data": { "memberId": 1, "email": "user@example.com", "nickname": "부산먹보", "role": "USER", "googleLinked": false, "hasPassword": true },
   "timestamp": "..."
 }
 ```
+- 주요 오류: 401 TOKEN_INVALID
 
 ---
 
@@ -157,9 +254,11 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 3.1 카테고리 목록
 
-- `GET /api/categories` · 인증: 불필요
-
-응답 `200`:
+- 메서드·URL: `GET /api/categories`
+- 인증: 불필요
+- 권한: 누구나
+- 요청: 없음
+- 응답 `200`:
 ```json
 {
   "success": true,
@@ -170,6 +269,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "timestamp": "..."
 }
 ```
+- 주요 오류: 없음
 
 ---
 
@@ -177,8 +277,10 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 4.1 맛집 목록·검색
 
-- `GET /api/restaurants` · 인증: 불필요
-- 쿼리 파라미터
+- 메서드·URL: `GET /api/restaurants`
+- 인증: 불필요
+- 권한: 누구나
+- 요청 (쿼리 파라미터):
 
 | 이름 | 타입 | 기본값 | 설명 |
 |------|------|--------|------|
@@ -188,7 +290,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | page | Integer | 0 | 0부터 시작 |
 | size | Integer | 12 | 최대 50 |
 
-응답 `200`: 목록 구조(1.1)의 `content` 항목
+- 응답 `200`: 목록 구조(1.2)의 `content` 항목
 ```json
 {
   "id": 10,
@@ -201,12 +303,15 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "createdAt": "2026-11-01T12:00:00"
 }
 ```
+- 주요 오류: 400 VALIDATION_FAILED (size 초과 등)
 
 ### 4.2 맛집 상세
 
-- `GET /api/restaurants/{id}` · 인증: 불필요
-
-응답 `200`:
+- 메서드·URL: `GET /api/restaurants/{id}`
+- 인증: 불필요
+- 권한: 누구나 (`isFavorited`, `isOwner`는 회원일 때만 의미 있음)
+- 요청: 경로 변수 `id`
+- 응답 `200`:
 ```json
 {
   "id": 10,
@@ -229,13 +334,14 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 - `isFavorited`, `isOwner`는 비회원이면 `false`입니다.
-- 오류: 404 RESTAURANT_NOT_FOUND
+- 주요 오류: 404 RESTAURANT_NOT_FOUND
 
 ### 4.3 맛집 등록
 
-- `POST /api/restaurants` · 인증: 필요
-
-요청:
+- 메서드·URL: `POST /api/restaurants`
+- 인증: 필요
+- 권한: 회원 (`USER` 또는 `ADMIN`)
+- 요청:
 ```json
 {
   "name": "해운대 돼지국밥",
@@ -248,35 +354,48 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 - `phone`, `latitude`, `longitude`는 선택 항목입니다.
+- 응답 `201`: 상세 DTO (4.2 구조). 등록한 회원이 `owner`가 됩니다.
+- 주요 오류: 400 VALIDATION_FAILED, 400 CATEGORY_NOT_FOUND, 401 TOKEN_INVALID
 
-응답 `201`: 4.2 응답의 `id` 및 기본 정보 (`{ "id": 10 }` 포함 상세 DTO)
-오류: 400 VALIDATION_FAILED, 400 CATEGORY_NOT_FOUND, 401 TOKEN_INVALID
+### 4.4 맛집 수정 (작성자)
 
-### 4.4 맛집 수정
+- 메서드·URL: `PUT /api/restaurants/{id}`
+- 인증: 필요
+- 권한: 작성자 본인 (FR-02-03). 관리자는 이 API로 다른 회원의 맛집을 수정할 수 없고, 11.3을 사용합니다.
+- 요청: 4.3과 동일
+- 응답 `200`: 상세 DTO (4.2 구조)
+- 주요 오류: 400 VALIDATION_FAILED, 400 CATEGORY_NOT_FOUND, 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND
 
-- `PUT /api/restaurants/{id}` · 인증: 필요 · 권한: 작성자
-- 요청 본문은 4.3과 동일합니다.
-- 응답 `200`: 상세 DTO
-- 오류: 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND, 400 VALIDATION_FAILED
+### 4.5 맛집 삭제 (작성자)
 
-### 4.5 맛집 삭제
-
-- `DELETE /api/restaurants/{id}` · 인증: 필요 · 권한: 작성자
-- 응답 `200`: `{ "success": true, "data": null }`
-- 리뷰, 찜, 이미지(S3 포함), AI 요약을 함께 삭제합니다.
-- 오류: 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND
+- 메서드·URL: `DELETE /api/restaurants/{id}`
+- 인증: 필요
+- 권한: 작성자 본인 (FR-02-03). 관리자는 11.4를 사용합니다.
+- 요청: 경로 변수 `id`
+- 처리 (FR-02-09, Q2, FUNCTION_SPEC F1-02): 리뷰, 찜, 이미지 메타데이터, AI 요약을 DB 트랜잭션에서 삭제합니다. S3 이미지 삭제는 커밋 후 수행하며, 실패한 키는 `storage_delete_task`에 기록합니다.
+- 응답 `200`:
+```json
+{
+  "success": true,
+  "data": { "restaurantId": 10, "deletedImageCount": 3, "storageDeleteFailedCount": 0 },
+  "timestamp": "..."
+}
+```
+- `storageDeleteFailedCount`가 0보다 크면 일부 S3 객체가 재시도 대기 중입니다. DB 삭제는 완료된 상태이며, 이 응답은 실패하지 않습니다.
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND
 
 ---
 
 ## 5. 맛집 이미지 API (F1-03)
 
-### 5.1 이미지 업로드
+### 5.1 이미지 업로드 (작성자)
 
-- `POST /api/restaurants/{id}/images` · 인증: 필요 · 권한: 작성자
-- Content-Type: `multipart/form-data`
-- 필드: `file` (파일 1개, JPEG·PNG·WEBP, 5MB 이하)
-
-응답 `201`:
+- 메서드·URL: `POST /api/restaurants/{id}/images`
+- 인증: 필요
+- 권한: 작성자 본인. 관리자는 11.5를 사용합니다.
+- 요청: `Content-Type: multipart/form-data`, 필드 `file` (파일 1개, JPEG·PNG·WEBP, 5MB 이하)
+- 처리: S3에 업로드한 뒤 DB에 메타데이터를 저장합니다. DB 저장이 실패하면 업로드한 객체를 삭제하고, 그 삭제도 실패하면 `storage_delete_task`에 기록합니다 (FUNCTION_SPEC F1-03).
+- 응답 `201`:
 ```json
 {
   "success": true,
@@ -284,14 +403,24 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "timestamp": "..."
 }
 ```
-- 오류: 400 IMAGE_TYPE_NOT_ALLOWED, 400 IMAGE_TOO_LARGE, 400 IMAGE_LIMIT_EXCEEDED, 502 STORAGE_ERROR
+- 주요 오류: 400 IMAGE_TYPE_NOT_ALLOWED, 400 IMAGE_TOO_LARGE, 400 IMAGE_LIMIT_EXCEEDED, 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND, 502 STORAGE_ERROR
 
-### 5.2 이미지 삭제
+### 5.2 이미지 삭제 (작성자)
 
-- `DELETE /api/restaurants/{id}/images/{imageId}` · 인증: 필요 · 권한: 작성자
-- S3 객체 삭제 후 DB 행 삭제.
-- 응답 `200`: `{ "success": true, "data": null }`
-- 오류: 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND (이미지 없음 포함), 502 STORAGE_ERROR
+- 메서드·URL: `DELETE /api/restaurants/{id}/images/{imageId}`
+- 인증: 필요
+- 권한: 작성자 본인. 관리자는 11.6을 사용합니다.
+- 처리 (FUNCTION_SPEC F1-03): 이미지 메타데이터를 삭제하고, 같은 트랜잭션에서 `storage_delete_task`를 기록한 뒤 커밋합니다. 그 후 S3 객체를 삭제합니다.
+- 응답 `200`:
+```json
+{
+  "success": true,
+  "data": { "imageId": 100, "storageDeleted": true },
+  "timestamp": "..."
+}
+```
+- `storageDeleted`가 `false`이면 DB 삭제는 완료되었고 S3 객체는 재시도 대기 중입니다.
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND (맛집 또는 이미지 없음)
 
 ---
 
@@ -299,11 +428,11 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 6.1 리뷰 목록
 
-- `GET /api/restaurants/{id}/reviews` · 인증: 불필요
-- 쿼리: `page` (기본 0), `size` (기본 10, 최대 50)
-- 정렬: 최신순 고정
-
-응답 `200`: 목록 구조(1.1)의 `content` 항목
+- 메서드·URL: `GET /api/restaurants/{id}/reviews`
+- 인증: 불필요
+- 권한: 누구나 (`isMine`은 회원일 때만 의미 있음)
+- 요청 (쿼리): `page` (기본 0), `size` (기본 10, 최대 50). 정렬은 최신순 고정.
+- 응답 `200`: 목록 구조(1.2)의 `content` 항목
 ```json
 {
   "id": 200,
@@ -315,17 +444,18 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "updatedAt": "2026-11-02T18:30:00"
 }
 ```
+- 주요 오류: 404 RESTAURANT_NOT_FOUND
 
 ### 6.2 리뷰 작성
 
-- `POST /api/restaurants/{id}/reviews` · 인증: 필요
-
-요청:
+- 메서드·URL: `POST /api/restaurants/{id}/reviews`
+- 인증: 필요
+- 권한: 회원 (`USER` 또는 `ADMIN`)
+- 요청:
 ```json
 { "rating": 5, "content": "국물이 진하고 좋아요." }
 ```
-
-응답 `201`:
+- 응답 `201`:
 ```json
 {
   "success": true,
@@ -334,11 +464,13 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 - 부작용: 맛집 평균 평점·리뷰 수 갱신, AI 요약 캐시 삭제 (F1-05).
-- 오류: 400 VALIDATION_FAILED, 404 RESTAURANT_NOT_FOUND, 409 REVIEW_ALREADY_EXISTS
+- 주요 오류: 400 VALIDATION_FAILED, 401 TOKEN_INVALID, 404 RESTAURANT_NOT_FOUND, 409 REVIEW_ALREADY_EXISTS
 
-### 6.3 리뷰 삭제
+### 6.3 리뷰 삭제 (작성자)
 
-- `DELETE /api/reviews/{reviewId}` · 인증: 필요 · 권한: 리뷰 작성자
+- 메서드·URL: `DELETE /api/reviews/{reviewId}`
+- 인증: 필요
+- 권한: 리뷰 작성자 본인 (FR-04-03). 관리자는 11.8을 사용합니다.
 - 응답 `200`:
 ```json
 {
@@ -348,7 +480,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 - 부작용: 평균 평점·리뷰 수 갱신, AI 요약 캐시 삭제.
-- 오류: 403 FORBIDDEN, 404 REVIEW_NOT_FOUND
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 404 REVIEW_NOT_FOUND
 
 ---
 
@@ -356,7 +488,11 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 7.1 맛집 AI 요약 조회
 
-- `GET /api/restaurants/{id}/summary` · 인증: 불필요
+- 메서드·URL: `GET /api/restaurants/{id}/summary`
+- 인증: 불필요
+- 권한: 누구나
+- 요청: 경로 변수 `id`
+- 처리: 리뷰 3개 미만이면 AI를 호출하지 않습니다. 캐시가 있으면 캐시를 반환하고, 없으면 OpenRouter를 호출해 저장한 뒤 반환합니다. 모델은 `OPENROUTER_MODEL`을 사용합니다 (FR-05-02).
 
 응답 `200` — 리뷰 3개 미만:
 ```json
@@ -386,6 +522,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 ```
 
 - `status` 값: `NOT_ENOUGH_REVIEWS`, `READY`, `UNAVAILABLE`
+- 주요 오류: 404 RESTAURANT_NOT_FOUND. AI 실패는 오류가 아니라 `status: UNAVAILABLE`로 응답합니다.
 
 ---
 
@@ -393,24 +530,30 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 8.1 찜하기
 
-- `POST /api/restaurants/{id}/favorite` · 인증: 필요
-
-응답 `201`: `{ "success": true, "data": { "restaurantId": 10, "favorited": true, "favoriteCount": 4 }, "timestamp": "..." }`
-- 오류: 404 RESTAURANT_NOT_FOUND, 409 FAVORITE_ALREADY_EXISTS
+- 메서드·URL: `POST /api/restaurants/{id}/favorite`
+- 인증: 필요
+- 권한: 회원 (`USER` 또는 `ADMIN`)
+- 요청: 경로 변수 `id`
+- 응답 `201`: `{ "success": true, "data": { "restaurantId": 10, "favorited": true, "favoriteCount": 4 }, "timestamp": "..." }`
+- 주요 오류: 401 TOKEN_INVALID, 404 RESTAURANT_NOT_FOUND, 409 FAVORITE_ALREADY_EXISTS
 
 ### 8.2 찜 취소
 
-- `DELETE /api/restaurants/{id}/favorite` · 인증: 필요
-
-응답 `200`: `{ "success": true, "data": { "restaurantId": 10, "favorited": false, "favoriteCount": 3 }, "timestamp": "..." }`
-- 오류: 404 FAVORITE_NOT_FOUND
+- 메서드·URL: `DELETE /api/restaurants/{id}/favorite`
+- 인증: 필요
+- 권한: 회원 (본인 찜만 취소)
+- 요청: 경로 변수 `id`
+- 응답 `200`: `{ "success": true, "data": { "restaurantId": 10, "favorited": false, "favoriteCount": 3 }, "timestamp": "..." }`
+- 주요 오류: 401 TOKEN_INVALID, 404 FAVORITE_NOT_FOUND
 
 ### 8.3 내 찜 목록
 
-- `GET /api/me/favorites` · 인증: 필요
-- 쿼리: `page` (기본 0), `size` (기본 12, 최대 50)
-- 정렬: 찜한 시각 내림차순
-- 응답 `200`: 목록 구조(1.1), `content` 항목은 맛집 목록 항목(4.1)과 같음
+- 메서드·URL: `GET /api/me/favorites`
+- 인증: 필요
+- 권한: 회원 본인
+- 요청 (쿼리): `page` (기본 0), `size` (기본 12, 최대 50). 정렬: 찜한 시각 내림차순.
+- 응답 `200`: 목록 구조(1.2), `content` 항목은 맛집 목록 항목(4.1)과 같음
+- 주요 오류: 401 TOKEN_INVALID
 
 ---
 
@@ -418,14 +561,15 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 9.1 추천 요청
 
-- `POST /api/recommendations` · 인증: 필요
-
-요청:
+- 메서드·URL: `POST /api/recommendations`
+- 인증: 필요
+- 권한: 회원 (`USER` 또는 `ADMIN`)
+- 요청:
 ```json
 { "preference": "2명이서 조용히 먹을 매운 국물 요리" }
 ```
-
-응답 `200`:
+- 처리: 후보는 DB에 등록된 맛집만 사용합니다 (FR-07-02). 모델은 `OPENROUTER_MODEL`을 사용합니다. AI가 반환한 `restaurantId`가 후보에 없으면 제외합니다 (FR-07-03).
+- 응답 `200`:
 ```json
 {
   "success": true,
@@ -440,52 +584,258 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 - 최대 5개까지 반환합니다.
-- 후보가 없으면 `recommendations: []`, `message: "등록된 맛집이 없어 추천할 수 없습니다."`.
-- 오류: 400 VALIDATION_FAILED (1~200자), 502 AI_UNAVAILABLE, 502 AI_RESPONSE_INVALID
+- 후보가 없으면 `recommendations: []`, `message: "등록된 맛집이 없어 추천할 수 없습니다."`. AI는 호출하지 않습니다 (FR-07-05).
+- 주요 오류: 400 VALIDATION_FAILED (1~200자), 401 TOKEN_INVALID, 502 AI_UNAVAILABLE, 502 AI_RESPONSE_INVALID
 
 ---
 
 ## 10. 화면 URL (Thymeleaf)
 
-| 경로 | 메서드 | 인증 | 설명 | 관련 기능 |
-|------|--------|------|------|-----------|
-| `/` | GET | 불필요 | 메인 페이지 (카테고리, 최신 맛집, 검색창) | F1-08 |
-| `/login` | GET | 불필요 | 로그인 폼 | F1-01 |
-| `/signup` | GET | 불필요 | 회원가입 폼 | F1-01 |
-| `/restaurants` | GET | 불필요 | 맛집 목록·검색 (`category`, `keyword`, `sort`, `page`) | F1-02 |
-| `/restaurants/{id}` | GET | 불필요 | 맛집 상세 (이미지, 리뷰, AI 요약, 찜 버튼) | F1-02, F1-04, F1-05, F1-06 |
-| `/restaurants/new` | GET | 필요 | 맛집 등록 폼 | F1-02 |
-| `/restaurants/{id}/edit` | GET | 필요 · 작성자 | 맛집 수정 폼 및 이미지 관리 | F1-02, F1-03 |
-| `/favorites` | GET | 필요 | 내 찜 목록 | F1-06 |
-| `/recommend` | GET | 필요 | AI 추천 입력 및 결과 | F1-07 |
+| 경로 | 메서드 | 인증 | 권한 | 설명 | 관련 기능 |
+|------|--------|------|------|------|-----------|
+| `/` | GET | 불필요 | 누구나 | 메인 페이지 (카테고리, 최신 맛집, 검색창) | F1-08 |
+| `/login` | GET | 불필요 | 누구나 | 로그인 폼, Google 로그인 버튼, 오류 메시지(`error` 쿼리) | F1-01 |
+| `/signup` | GET | 불필요 | 누구나 | 회원가입 폼 | F1-01 |
+| `/mypage` | GET | 필요 | 회원 본인 | 계정 설정: Google 계정 연동·해제, 내 정보 | F1-01 |
+| `/restaurants` | GET | 불필요 | 누구나 | 맛집 목록·검색 (`category`, `keyword`, `sort`, `page`) | F1-02 |
+| `/restaurants/{id}` | GET | 불필요 | 누구나 | 맛집 상세 (이미지, 리뷰, AI 요약, 찜 버튼). 작성자에게는 수정·삭제 버튼 표시 | F1-02, F1-04, F1-05, F1-06 |
+| `/restaurants/new` | GET | 필요 | 회원 | 맛집 등록 폼 | F1-02 |
+| `/restaurants/{id}/edit` | GET | 필요 | 작성자 | 맛집 수정 폼 및 이미지 관리 | F1-02, F1-03 |
+| `/favorites` | GET | 필요 | 회원 본인 | 내 찜 목록 | F1-06 |
+| `/recommend` | GET | 필요 | 회원 | AI 추천 입력 및 결과 | F1-07 |
+| `/admin` | GET | 필요 | ADMIN | 관리자 대시보드 | F1-09 |
+| `/admin/restaurants` | GET | 필요 | ADMIN | 전체 맛집 목록, 수정·삭제 | F1-09 |
+| `/admin/reviews` | GET | 필요 | ADMIN | 전체 리뷰 목록, 삭제 | F1-09 |
+| `/admin/members` | GET | 필요 | ADMIN | 회원 목록·상세 | F1-09 |
+| `/admin/storage-deletions` | GET | 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
-- 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 "화면 구현 방식" 절을 따릅니다.
+- 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
+- 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---
 
-## 11. 엔드포인트 요약
+## 11. 관리자 API (F1-09)
 
-| 메서드 | 경로 | 인증 | 기능 |
-|--------|------|------|------|
-| POST | /api/auth/signup | 불필요 | F1-01 |
-| POST | /api/auth/login | 불필요 | F1-01 |
-| POST | /api/auth/refresh | 리프레시 쿠키 | F1-01 |
-| POST | /api/auth/logout | 필요 | F1-01 |
-| GET | /oauth2/authorization/google | 불필요 | F1-01 |
-| GET | /api/auth/me | 필요 | F1-01 |
-| GET | /api/categories | 불필요 | F1-02, F1-08 |
-| GET | /api/restaurants | 불필요 | F1-02 |
-| GET | /api/restaurants/{id} | 불필요 | F1-02 |
-| POST | /api/restaurants | 필요 | F1-02 |
-| PUT | /api/restaurants/{id} | 필요 · 작성자 | F1-02 |
-| DELETE | /api/restaurants/{id} | 필요 · 작성자 | F1-02 |
-| POST | /api/restaurants/{id}/images | 필요 · 작성자 | F1-03 |
-| DELETE | /api/restaurants/{id}/images/{imageId} | 필요 · 작성자 | F1-03 |
-| GET | /api/restaurants/{id}/reviews | 불필요 | F1-04 |
-| POST | /api/restaurants/{id}/reviews | 필요 | F1-04 |
-| DELETE | /api/reviews/{reviewId} | 필요 · 작성자 | F1-04 |
-| GET | /api/restaurants/{id}/summary | 불필요 | F1-05 |
-| POST | /api/restaurants/{id}/favorite | 필요 | F1-06 |
-| DELETE | /api/restaurants/{id}/favorite | 필요 | F1-06 |
-| GET | /api/me/favorites | 필요 | F1-06 |
-| POST | /api/recommendations | 필요 | F1-07 |
+모든 관리자 API는 `ADMIN` 권한이 필요합니다 (FR-09-07, FR-09-08). 권한 없는 요청은 403 `FORBIDDEN`, 로그인하지 않은 요청은 401 `TOKEN_INVALID`를 반환합니다.
+
+관리자는 자신이 작성한 맛집과 리뷰에 대해서는 일반 회원과 같은 API(4.x, 5.x, 6.x)를 사용합니다. 다른 회원의 콘텐츠는 이 절의 API로만 관리합니다.
+
+### 11.1 관리자 대시보드
+
+- 메서드·URL: `GET /api/admin/dashboard`
+- 인증: 필요
+- 권한: ADMIN
+- 요청: 없음
+- 응답 `200`:
+```json
+{
+  "success": true,
+  "data": {
+    "memberCount": 120,
+    "restaurantCount": 45,
+    "reviewCount": 310,
+    "newRestaurantsLast7Days": 6,
+    "newReviewsLast7Days": 21,
+    "pendingStorageDeletionCount": 2
+  },
+  "timestamp": "..."
+}
+```
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN
+
+### 11.2 전체 맛집 목록
+
+- 메서드·URL: `GET /api/admin/restaurants`
+- 인증: 필요
+- 권한: ADMIN
+- 요청 (쿼리): `keyword` (이름·주소, 선택), `categoryId` (선택), `sort` (`latest` 기본, `rating`), `page` (기본 0), `size` (기본 20, 최대 50)
+- 응답 `200`: 목록 구조(1.2)의 `content` 항목
+```json
+{
+  "id": 10,
+  "name": "해운대 돼지국밥",
+  "category": { "id": 1, "name": "한식" },
+  "address": "부산 해운대구 ...",
+  "averageRating": 4.5,
+  "reviewCount": 12,
+  "imageCount": 3,
+  "owner": { "memberId": 1, "nickname": "부산먹보", "email": "user@example.com" },
+  "createdAt": "2026-11-01T12:00:00"
+}
+```
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN
+
+### 11.3 맛집 수정 (관리자)
+
+- 메서드·URL: `PUT /api/admin/restaurants/{id}`
+- 인증: 필요
+- 권한: ADMIN
+- 요청: 4.3과 같은 필드. 작성자(`owner`)는 바꾸지 않습니다.
+- 응답 `200`: 상세 DTO (4.2 구조)
+- 주요 오류: 400 VALIDATION_FAILED, 400 CATEGORY_NOT_FOUND, 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND
+
+### 11.4 맛집 삭제 (관리자)
+
+- 메서드·URL: `DELETE /api/admin/restaurants/{id}`
+- 인증: 필요
+- 권한: ADMIN
+- 처리: 4.5와 같은 삭제 정책을 따릅니다 (FR-09-02, FR-02-09).
+- 응답 `200`: 4.5와 같은 구조 (`restaurantId`, `deletedImageCount`, `storageDeleteFailedCount`)
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND
+
+### 11.5 이미지 업로드 (관리자)
+
+- 메서드·URL: `POST /api/admin/restaurants/{id}/images`
+- 인증: 필요
+- 권한: ADMIN
+- 요청·응답·처리: 5.1과 같습니다.
+- 주요 오류: 400 IMAGE_TYPE_NOT_ALLOWED, 400 IMAGE_TOO_LARGE, 400 IMAGE_LIMIT_EXCEEDED, 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND, 502 STORAGE_ERROR
+
+### 11.6 이미지 삭제 (관리자)
+
+- 메서드·URL: `DELETE /api/admin/restaurants/{id}/images/{imageId}`
+- 인증: 필요
+- 권한: ADMIN
+- 요청·응답·처리: 5.2와 같습니다.
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 404 RESTAURANT_NOT_FOUND
+
+### 11.7 전체 리뷰 목록
+
+- 메서드·URL: `GET /api/admin/reviews`
+- 인증: 필요
+- 권한: ADMIN
+- 요청 (쿼리): `restaurantId` (선택), `memberId` (선택), `page` (기본 0), `size` (기본 20, 최대 50). 정렬: 최신순.
+- 응답 `200`: 목록 구조(1.2)의 `content` 항목
+```json
+{
+  "id": 200,
+  "restaurant": { "id": 10, "name": "해운대 돼지국밥" },
+  "author": { "memberId": 2, "nickname": "맛객", "email": "foodie@example.com" },
+  "rating": 5,
+  "content": "국물이 진하고 좋아요.",
+  "createdAt": "2026-11-02T18:30:00"
+}
+```
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN
+
+### 11.8 리뷰 삭제 (관리자)
+
+- 메서드·URL: `DELETE /api/admin/reviews/{reviewId}`
+- 인증: 필요
+- 권한: ADMIN
+- 처리: 6.3과 같이 맛집 평균·리뷰 수를 갱신하고 AI 요약 캐시를 삭제합니다 (FR-09-03).
+- 응답 `200`: 6.3과 같은 구조 (`restaurantAverageRating`, `restaurantReviewCount`)
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 404 REVIEW_NOT_FOUND
+
+### 11.9 회원 목록
+
+- 메서드·URL: `GET /api/admin/members`
+- 인증: 필요
+- 권한: ADMIN
+- 요청 (쿼리): `keyword` (이메일·닉네임, 선택), `page` (기본 0), `size` (기본 20, 최대 50)
+- 응답 `200`: 목록 구조(1.2)의 `content` 항목
+```json
+{
+  "memberId": 1,
+  "email": "user@example.com",
+  "nickname": "부산먹보",
+  "role": "USER",
+  "googleLinked": false,
+  "restaurantCount": 3,
+  "reviewCount": 7,
+  "createdAt": "2026-10-01T09:00:00"
+}
+```
+- 회원 정지, 탈퇴, 권한 변경 기능은 이 명세에 포함하지 않습니다 (T1, T2).
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN
+
+### 11.10 회원 상세
+
+- 메서드·URL: `GET /api/admin/members/{memberId}`
+- 인증: 필요
+- 권한: ADMIN
+- 요청: 경로 변수 `memberId`
+- 응답 `200`: 11.9의 항목과 같은 구조
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 404 MEMBER_NOT_FOUND
+
+### 11.11 S3 삭제 재시도 대기 목록
+
+- 메서드·URL: `GET /api/admin/storage-deletions`
+- 인증: 필요
+- 권한: ADMIN
+- 요청 (쿼리): `page` (기본 0), `size` (기본 20, 최대 50). 정렬: 생성 시각 오래된 순.
+- 응답 `200`: 목록 구조(1.2)의 `content` 항목
+```json
+{
+  "id": 5,
+  "s3Key": "restaurants/10/3f2a....webp",
+  "retryCount": 2,
+  "lastError": "S3 timeout",
+  "createdAt": "2026-11-04T10:00:00",
+  "updatedAt": "2026-11-05T10:00:00"
+}
+```
+- `lastError`는 비밀 정보를 포함하지 않습니다 (DEVELOPMENT_RULES 5.3).
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN
+
+### 11.12 S3 삭제 재시도
+
+- 메서드·URL: `POST /api/admin/storage-deletions/retry`
+- 인증: 필요
+- 권한: ADMIN
+- 요청: 본문 없음
+- 처리: `storage_delete_task`의 행을 하나씩 S3에서 삭제합니다. 성공하면 행을 삭제하고, 실패하면 `retry_count`를 올리고 `last_error`를 기록합니다. S3에 객체가 이미 없으면 성공으로 처리합니다.
+- 응답 `200`:
+```json
+{
+  "success": true,
+  "data": { "processed": 2, "succeeded": 1, "failed": 1 },
+  "timestamp": "..."
+}
+```
+- 개별 객체 실패는 오류가 아니므로 `200`으로 응답합니다.
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN
+
+---
+
+## 12. 엔드포인트 요약
+
+| 메서드 | 경로 | 인증 | 권한 | 기능 |
+|--------|------|------|------|------|
+| POST | /api/auth/signup | 불필요 | 누구나 | F1-01 |
+| POST | /api/auth/login | 불필요 | 누구나 | F1-01 |
+| POST | /api/auth/refresh | Refresh 쿠키 | 유효한 Refresh Token | F1-01 |
+| POST | /api/auth/logout | 불필요 | 누구나 | F1-01 |
+| GET | /oauth2/authorization/google | 불필요 | 누구나 | F1-01 |
+| GET | /login/oauth2/code/google | 불필요 (OAuth 콜백) | 누구나 | F1-01 |
+| GET | /api/me/google/link | 필요 | 회원 본인 | F1-01 |
+| DELETE | /api/me/google | 필요 | 회원 본인 (비밀번호 재확인) | F1-01 |
+| GET | /api/auth/me | 필요 | 회원 본인 | F1-01 |
+| GET | /api/categories | 불필요 | 누구나 | F1-02, F1-08 |
+| GET | /api/restaurants | 불필요 | 누구나 | F1-02 |
+| GET | /api/restaurants/{id} | 불필요 | 누구나 | F1-02 |
+| POST | /api/restaurants | 필요 | 회원 | F1-02 |
+| PUT | /api/restaurants/{id} | 필요 | 작성자 | F1-02 |
+| DELETE | /api/restaurants/{id} | 필요 | 작성자 | F1-02 |
+| POST | /api/restaurants/{id}/images | 필요 | 작성자 | F1-03 |
+| DELETE | /api/restaurants/{id}/images/{imageId} | 필요 | 작성자 | F1-03 |
+| GET | /api/restaurants/{id}/reviews | 불필요 | 누구나 | F1-04 |
+| POST | /api/restaurants/{id}/reviews | 필요 | 회원 | F1-04 |
+| DELETE | /api/reviews/{reviewId} | 필요 | 작성자 | F1-04 |
+| GET | /api/restaurants/{id}/summary | 불필요 | 누구나 | F1-05 |
+| POST | /api/restaurants/{id}/favorite | 필요 | 회원 | F1-06 |
+| DELETE | /api/restaurants/{id}/favorite | 필요 | 회원 | F1-06 |
+| GET | /api/me/favorites | 필요 | 회원 본인 | F1-06 |
+| POST | /api/recommendations | 필요 | 회원 | F1-07 |
+| GET | /api/admin/dashboard | 필요 | ADMIN | F1-09 |
+| GET | /api/admin/restaurants | 필요 | ADMIN | F1-09 |
+| PUT | /api/admin/restaurants/{id} | 필요 | ADMIN | F1-09 |
+| DELETE | /api/admin/restaurants/{id} | 필요 | ADMIN | F1-09 |
+| POST | /api/admin/restaurants/{id}/images | 필요 | ADMIN | F1-09 |
+| DELETE | /api/admin/restaurants/{id}/images/{imageId} | 필요 | ADMIN | F1-09 |
+| GET | /api/admin/reviews | 필요 | ADMIN | F1-09 |
+| DELETE | /api/admin/reviews/{reviewId} | 필요 | ADMIN | F1-09 |
+| GET | /api/admin/members | 필요 | ADMIN | F1-09 |
+| GET | /api/admin/members/{memberId} | 필요 | ADMIN | F1-09 |
+| GET | /api/admin/storage-deletions | 필요 | ADMIN | F1-09 |
+| POST | /api/admin/storage-deletions/retry | 필요 | ADMIN | F1-09 |

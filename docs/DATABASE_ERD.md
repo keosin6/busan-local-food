@@ -1,6 +1,7 @@
 # 데이터베이스 ERD
 
 대상 DBMS: **MySQL 8** (InnoDB, utf8mb4 / utf8mb4_unicode_ci)
+운영 위치: **AWS EC2 내부 설치** (RDS 미사용, Q4)
 
 이 문서의 테이블, 컬럼, 제약은 [API_SPEC.md](API_SPEC.md)의 요청·응답 필드 및 [FUNCTION_SPEC.md](FUNCTION_SPEC.md)의 처리 흐름과 일치해야 합니다. 변경할 때는 세 문서를 함께 수정합니다.
 
@@ -21,10 +22,10 @@ erDiagram
     MEMBER {
         bigint id PK
         varchar email UK
-        varchar password_hash "NULL 허용 (GOOGLE 회원)"
+        varchar password_hash "NULL 허용 (Google 전용 계정)"
         varchar nickname
-        varchar provider "LOCAL | GOOGLE"
-        varchar provider_id "Google sub, NULL 허용"
+        varchar role "USER | ADMIN"
+        varchar google_sub UK "NULL 허용 (Google 연동 시 sub)"
         datetime created_at
         datetime updated_at
     }
@@ -95,7 +96,18 @@ erDiagram
         datetime revoked_at "NULL 허용"
         datetime created_at
     }
+
+    STORAGE_DELETE_TASK {
+        bigint id PK
+        varchar s3_key UK "FK 없음 (맛집 삭제 후에도 유지)"
+        int retry_count
+        varchar last_error "NULL 허용"
+        datetime created_at
+        datetime updated_at
+    }
 ```
+
+> `STORAGE_DELETE_TASK`는 다른 테이블과 FK로 연결하지 않습니다. 맛집이 삭제된 뒤에도 S3 객체 키를 보관해야 하기 때문입니다.
 
 ## 2. 테이블 정의
 
@@ -105,16 +117,28 @@ erDiagram
 |------|------|------|--------|------|
 | id | BIGINT | N | AUTO_INCREMENT | PK |
 | email | VARCHAR(255) | N | | 로그인 ID, 소문자 저장 |
-| password_hash | VARCHAR(100) | Y | | BCrypt 해시. GOOGLE 회원은 NULL |
+| password_hash | VARCHAR(100) | Y | | BCrypt 해시. Google 전용 계정은 NULL |
 | nickname | VARCHAR(20) | N | | 2~20자 |
-| provider | VARCHAR(20) | N | 'LOCAL' | `LOCAL` 또는 `GOOGLE` |
-| provider_id | VARCHAR(255) | Y | | Google `sub` |
+| role | VARCHAR(20) | N | 'USER' | `USER`(일반 회원) 또는 `ADMIN`(관리자) |
+| google_sub | VARCHAR(255) | Y | | 연동된 Google 계정의 `sub`. 연동하지 않았으면 NULL |
 | created_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) | |
 | updated_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) ON UPDATE | |
 
 - UNIQUE: `uk_member_email (email)`
-- UNIQUE: `uk_member_provider (provider, provider_id)` — provider_id가 NULL인 행은 중복 허용 (MySQL 동작)
-- CHECK: `provider IN ('LOCAL','GOOGLE')`
+- UNIQUE: `uk_member_google_sub (google_sub)` — 한 Google 계정은 한 회원에만 연결 (FR-01-11). MySQL UNIQUE는 NULL 중복을 허용하므로 미연동 회원은 여러 명일 수 있습니다.
+- CHECK: `role IN ('USER','ADMIN')`
+- 로그인 수단 규칙: `password_hash`와 `google_sub` 중 최소 하나는 NOT NULL이어야 합니다 (FR-01-13). 애플리케이션에서 검증하고, 조건을 DB CHECK로도 둡니다: `CHECK (password_hash IS NOT NULL OR google_sub IS NOT NULL)`.
+- `role`은 일반 회원 API로 변경할 수 없습니다 (FR-09-09). 변경 경로는 T2에서 정합니다.
+
+#### 변경 내역 (Q1, Q5)
+
+| 구분 | 이전 | 현재 | 이유 |
+|------|------|------|------|
+| 삭제 | `provider` (LOCAL/GOOGLE) | - | 자동 연동을 하지 않고 한 회원이 이메일 로그인과 Google 연동을 함께 가질 수 있으므로 "가입 방식" 단일 값으로는 표현이 맞지 않음 |
+| 삭제 | `provider_id` (Google sub) | `google_sub` | 이름을 역할에 맞게 바꾸고, 중복 연결 방지 UNIQUE를 직접 건다 |
+| 추가 | - | `role` | 관리자 구분 (Q5). 별도 관리자 테이블은 만들지 않음 |
+
+- 제거된 `uk_member_provider (provider, provider_id)`는 `uk_member_google_sub`로 대체합니다.
 
 ### 2.2 category (카테고리)
 
@@ -152,7 +176,7 @@ erDiagram
 - INDEX: `idx_restaurant_name (name)` — 이름 검색 보조 (LIKE '%…%'는 풀 스캔이 될 수 있으므로 규모가 커지면 FULLTEXT 검토)
 - CHECK: `average_rating BETWEEN 0 AND 5`, `review_count >= 0`
 
-> 정책 Q5: 맛집 수정·삭제는 `member_id`가 요청자와 같을 때만 허용합니다.
+> 권한 규칙 (FR-02-03, FR-09-02): 일반 맛집 수정·삭제 API는 `member_id`가 요청자와 같을 때만 허용합니다. 관리자는 F1-09의 관리자 API로만 다른 회원의 맛집을 수정·삭제합니다.
 
 ### 2.4 restaurant_image (맛집 이미지)
 
@@ -170,6 +194,7 @@ erDiagram
 - FK: `fk_image_restaurant (restaurant_id) → restaurant(id) ON DELETE CASCADE`
 - UNIQUE: `uk_image_s3_key (s3_key)`
 - INDEX: `idx_image_restaurant (restaurant_id, sort_order)`
+- 삭제 규칙: 이 행을 삭제할 때는 같은 트랜잭션에서 `storage_delete_task`에 `s3_key`를 기록합니다. S3 객체 삭제는 커밋 후 수행합니다 (FUNCTION_SPEC F1-03).
 
 ### 2.5 review (리뷰)
 
@@ -188,6 +213,8 @@ erDiagram
 - UNIQUE: `uk_review_member_restaurant (restaurant_id, member_id)` — 한 회원당 맛집 리뷰 1개 (FR-04-02)
 - INDEX: `idx_review_restaurant_created (restaurant_id, created_at)`
 - CHECK: `rating BETWEEN 1 AND 5`
+
+> 삭제 권한 (FR-04-03): 회원 삭제 API는 리뷰 작성자 본인만 허용합니다. 관리자 삭제는 F1-09에서 별도 API로 제공합니다.
 
 ### 2.6 favorite (찜)
 
@@ -215,7 +242,7 @@ erDiagram
 
 - FK: `fk_summary_restaurant (restaurant_id) → restaurant(id) ON DELETE CASCADE`
 - UNIQUE: `uk_summary_restaurant (restaurant_id)`
-- 무효화: 리뷰 작성·삭제 시 해당 행 DELETE (FUNCTION_SPEC F1-05)
+- 무효화: 리뷰 작성·삭제(회원 삭제, 관리자 삭제 포함) 시 해당 행 DELETE (FUNCTION_SPEC F1-05)
 
 ### 2.8 refresh_token (리프레시 토큰)
 
@@ -223,35 +250,97 @@ erDiagram
 |------|------|------|--------|------|
 | id | BIGINT | N | AUTO_INCREMENT | PK |
 | member_id | BIGINT | N | | FK → member.id |
-| token_hash | CHAR(64) | N | | 토큰의 SHA-256 해시 (원문 저장 금지) |
+| token_hash | CHAR(64) | N | | Refresh Token의 SHA-256 해시 (원문 저장 금지) |
 | expires_at | DATETIME(6) | N | | 만료 시각 |
-| revoked_at | DATETIME(6) | Y | | 로그아웃 등으로 폐기된 시각 |
+| revoked_at | DATETIME(6) | Y | | 로그아웃·재발급 등으로 폐기된 시각 |
 | created_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) | |
 
 - FK: `fk_refresh_member (member_id) → member(id) ON DELETE CASCADE`
 - UNIQUE: `uk_refresh_token_hash (token_hash)`
 - INDEX: `idx_refresh_member (member_id, revoked_at)`
+- 원문 저장 위치: 브라우저의 HttpOnly Cookie만 (FR-01-05). DB에는 해시만 저장합니다.
+- 로테이션 (FR-01-06): 재발급 시 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT합니다. 행을 물리 삭제하지 않습니다. 만료되거나 폐기된 행을 정리하는 방식은 구현 단계에서 정합니다.
+- 재사용 탐지 정책은 T7에서 확정합니다.
+
+### 2.9 storage_delete_task (S3 삭제 추적) — 신규
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | BIGINT | N | AUTO_INCREMENT | PK |
+| s3_key | VARCHAR(500) | N | | 삭제해야 할 S3 객체 키 |
+| retry_count | INT | N | 0 | S3 삭제 시도 실패 횟수 |
+| last_error | VARCHAR(500) | Y | | 마지막 실패 메시지 (비밀 정보 제외) |
+| created_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) | 삭제 대기 등록 시각 |
+| updated_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) ON UPDATE | 마지막 시도 시각 |
+
+- UNIQUE: `uk_storage_task_s3_key (s3_key)`
+- INDEX: `idx_storage_task_created (created_at)` — 관리자 목록 정렬
+- 행의 의미: "DB에서는 이미 삭제되었지만 S3 객체는 아직 지워지지 않은 키". S3 삭제에 성공하면 행을 삭제합니다.
+- 생성 규칙: 맛집 삭제·이미지 삭제 트랜잭션 안에서 INSERT합니다. 이렇게 하면 DB 커밋 후 프로세스가 중단되어도 키가 남습니다.
+- 재시도: 관리자 API로 수동 재시도합니다 (FR-03-06, FR-09-06). 자동 재시도 여부는 T6에서 정합니다.
+
+#### 추가 이유
+
+S3 삭제 실패 키를 추적하고 재시도하려면 영속 기록이 필요합니다. 기존 테이블 중에는 삭제가 끝난 `restaurant_image` 행을 이 용도로 쓸 수 없고(행이 이미 사라짐), 맛집이 삭제되면 같이 사라지는 테이블도 적합하지 않습니다. 따라서 Q2 구현에 필요한 최소 테이블 1개만 추가합니다.
 
 ## 3. 관계 요약
 
 | 관계 | 카디널리티 | 삭제 정책 |
 |------|-----------|-----------|
-| member → restaurant | 1 : N | 회원 삭제는 제한 (RESTRICT) |
+| member → restaurant | 1 : N | 회원 삭제는 제한 (RESTRICT). 탈퇴 정책은 T1 |
 | category → restaurant | 1 : N | 사용 중인 카테고리 삭제 제한 (RESTRICT) |
-| restaurant → restaurant_image | 1 : N | CASCADE (S3 객체는 애플리케이션에서 함께 삭제) |
+| restaurant → restaurant_image | 1 : N | CASCADE. S3 객체는 `storage_delete_task`를 거쳐 애플리케이션이 삭제 |
 | restaurant → review | 1 : N | CASCADE |
 | member → review | 1 : N | CASCADE |
 | restaurant ↔ member (favorite) | N : M | CASCADE |
 | restaurant → ai_review_summary | 1 : 0..1 | CASCADE |
 | member → refresh_token | 1 : N | CASCADE |
+| storage_delete_task | 독립 | FK 없음. 맛집 삭제 후에도 유지 |
 
-## 4. 집계 값 관리 규칙
+## 4. 데이터 정리 규칙
+
+### 4.1 맛집 삭제 시 데이터 정리 (Q2)
+
+DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후에 수행합니다.
+
+```
+[DB 트랜잭션]
+  1. restaurant 조회 (없으면 404), restaurant_image의 s3_key 목록 조회
+  2. storage_delete_task에 각 s3_key INSERT
+  3. ai_review_summary DELETE (restaurant_id)
+  4. favorite DELETE (restaurant_id)
+  5. review DELETE (restaurant_id)
+  6. restaurant_image DELETE (restaurant_id)
+  7. restaurant DELETE (id)
+  COMMIT
+[커밋 후, DB 트랜잭션 밖]
+  8. 각 s3_key에 대해 S3 객체 삭제
+     - 성공: storage_delete_task 행 DELETE
+     - 실패: storage_delete_task.retry_count + 1, last_error 기록
+```
+
+- 2번 단계로 DB 행과 S3 키가 같은 커밋에 묶입니다. 3~7번 단계의 FK CASCADE는 안전장치로 함께 둡니다.
+- 8번 단계가 실패해도 맛집 삭제는 이미 커밋되었으므로 되돌리지 않습니다.
+- 이 흐름은 두 저장소의 원자성을 보장하지 않습니다. 실패는 `storage_delete_task`로 추적·재시도합니다.
+
+### 4.2 집계 값 관리
 
 - `restaurant.review_count`와 `restaurant.average_rating`은 리뷰 작성·삭제 트랜잭션 안에서 갱신합니다.
 - 갱신 방식: `UPDATE restaurant SET review_count = review_count + 1, average_rating = ... WHERE id = ?` 또는 재계산 쿼리. 구현 시 동시성 테스트를 작성합니다.
 - 평균 평점은 `ROUND(AVG(rating), 1)`과 같은 규칙(소수점 첫째 자리 반올림)을 따릅니다.
 
-## 5. 마이그레이션 규칙
+## 5. 관리자 기능의 데이터 구조
 
-- 스키마 변경은 Flyway 마이그레이션 스크립트(`V{번호}__{설명}.sql`)로 관리합니다. Flyway 도입은 설계 변경 절차를 거쳐 확정합니다 (현재는 미결정).
+- 관리자 전용 테이블은 두지 않습니다. 관리자 여부는 `member.role = 'ADMIN'`으로 판단합니다 (FR-09-01).
+- 관리자 화면의 목록과 집계(대시보드)는 기존 테이블에 대한 조회 쿼리로 구현합니다.
+  - 회원 수: `member`
+  - 맛집 수, 최근 7일 신규 맛집: `restaurant`
+  - 리뷰 수, 최근 7일 신규 리뷰: `review`
+  - S3 삭제 재시도 대기 수: `storage_delete_task`
+- 회원 권한 변경 경로는 이번 ERD에 포함하지 않습니다. 정책은 T2에서 정합니다.
+
+## 6. 마이그레이션 규칙
+
+- 스키마 변경은 Flyway 마이그레이션 스크립트(`V{번호}__{설명}.sql`)로 관리합니다. Flyway 도입은 설계 변경 절차를 거쳐 확정합니다 (현재는 미도입).
 - 한 번 배포된 마이그레이션 파일은 수정하지 않습니다.
+- 이번 변경(`member` 컬럼 교체, `storage_delete_task` 추가)은 아직 배포된 DB가 없으므로 초기 스키마에 직접 반영합니다.
