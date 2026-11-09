@@ -9,9 +9,9 @@
 | 항목 | 상태 |
 |------|------|
 | Stage 0 문서 기획 | 완료 (Q1~Q6 의사결정 반영 완료, 2026-11-06) |
-| 문서 수정 작업 (Q1~Q6 반영) | 완료 — 브랜치 `docs/architecture-decisions-q1-q6`, PR #2 검토 대기 |
-| 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 보완 커밋 추가. Q1 결정 변경 없음 |
-| Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료. 기능 코드는 포함하지 않음 (`feature/project-skeleton`, PR 검토 대기) |
+| Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
+| 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
+| Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료. 기능 코드는 포함하지 않음 (`feature/project-skeleton`, PR #3 검토 대기) |
 | **다음 개발 단계** | **Stage 2: F1-01 회원·인증** (T3, T7, T8, T11 확정 후 시작) |
 
 ## 1. 단계 요약
@@ -92,15 +92,16 @@
 | 날짜 | 작업 | 결과 |
 |------|------|------|
 | 2026-11-06 | 기초 문서 구조 생성 (README, docs 7종) | 완료 (`main` 병합, PR #1) |
-| 2026-11-06 | Q1~Q6 의사결정 문서 반영 (브랜치 `docs/architecture-decisions-q1-q6`) | 완료. PR 검토 대기. 애플리케이션 코드는 작성하지 않음 |
+| 2026-11-06 | Q1~Q6 의사결정 문서 반영 (브랜치 `docs/architecture-decisions-q1-q6`) | 완료. PR #2로 main 병합. 애플리케이션 코드는 작성하지 않음 |
 | 2026-11-06 | PR #2 보완: JWT 기본 인증과 OAuth2 임시 세션의 역할 구분, Google 연결의 `state`·회원 일치 검증 명시 | 완료. 문서만 수정. Q1~Q6 결정 변경 없음 |
 | 2026-11-06 | PR #2 최종 보완: Google 연결 콜백의 Access Token 만료 의존 제거. 검증은 연결 시작 시점에만 하고, 콜백은 임시 세션과 `state`로 대상 회원을 정함 | 완료. 문서만 수정 |
 | 2026-11-09 | Stage 1 프로젝트 기본 구조 구현 (`feature/project-skeleton`). Spring Boot 3.5.16, Java 21, Gradle, Spring Security 기본 설정(임시 전체 허용), DB 환경변수 설정, 공통 오류 응답, Thymeleaf 홈 화면, Bootstrap 5.3.8 포함 | 완료. 아래 검증 참조. 기능 코드 없음 |
 | 2026-11-09 | Stage 1 검증: `gradle clean test` 9개 통과, `gradle bootJar` 성공. MySQL 8.0.46에서 기동, `/`와 정적 리소스 200, 브라우저 확인. 누락·잘못된 DB 설정 시 안내 메시지 확인 | 완료 |
+| 2026-11-09 | Gradle wrapper 배포본 SHA-256(gradle.org 공식 체크섬) 설정. wrapper 기반 `./gradlew clean test` 9개 통과, `./gradlew bootJar` 성공 | 완료 |
 | 2026-11-09 | Stage 1 중 발견·수정: 설정되지 않은 `${DB_PASSWORD}`가 비밀번호로 쓰이던 문제 → 기동 시점에 누락 변수 이름을 알리고 중단하도록 수정. 방언을 MySQL로 명시하고 기동 시 DB 연결 확인 추가 | 완료 |
 
 ## 7. 다음 작업
 
-1. Stage 1 PR 검토 및 승인 후 `main`에 병합합니다. 병합 전에는 `main`을 수정하지 않습니다.
+1. PR #3(Stage 1) 검토 및 승인 후 `main`에 병합합니다. 병합 전에는 `main`을 수정하지 않습니다.
 2. T9(테스트 라이브러리 도입 여부)를 확정합니다.
 3. Stage 2(F1-01) 시작 전에 T3(닉네임 규칙), T7(Refresh Token 재사용 탐지), T8(연동 본인 확인), T11(OAuth2 임시 세션 세부)을 확정합니다.
