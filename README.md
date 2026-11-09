@@ -26,13 +26,14 @@
 | 구분 | 기술 |
 |------|------|
 | Language | Java 21 |
-| Framework | Spring Boot 3.x, Spring Security, Spring Data JPA, Spring AI |
-| AI | OpenRouter (Spring AI의 OpenAI 호환 클라이언트 사용) |
+| Framework | Spring Boot 3.x, Spring Security, Spring Data JPA, Spring AI (도입 예정) |
+| AI | Spring AI + OpenRouter 무료 모델 (Spring AI의 OpenAI 호환 클라이언트 사용). Spring AI는 AI 기능 구현 단계(F1-05, F1-07)에서 도입하며, 현재 `build.gradle`에는 없습니다 |
 | View | Thymeleaf, Bootstrap 5 |
 | Database | MySQL 8 (AWS EC2 내부 설치, RDS 미사용) |
 | Infra | AWS EC2 (Ubuntu, MySQL 포함), AWS S3 |
 | CI/CD | GitHub Actions |
-| Build | Gradle |
+| Build | Gradle (`./gradlew bootJar`) |
+| 개발 도구 | IntelliJ IDEA, Git, GitHub, Postman, MySQL Workbench |
 
 기술 스택은 고정입니다. 바꿔야 할 이유가 생기면 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md)의 설계 변경 절차를 따릅니다.
 

@@ -14,11 +14,14 @@
 
 ## 2. 기술 스택 (고정)
 
-Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI · OpenRouter · Thymeleaf · Bootstrap 5 · MySQL 8 · AWS EC2(Ubuntu) · AWS S3 · GitHub Actions · Gradle
+Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI 기능 구현 단계에서 도입) · OpenRouter 무료 모델 · Thymeleaf · Bootstrap 5 · MySQL 8 · AWS EC2(Ubuntu) · AWS S3 · GitHub Actions · Gradle
 
-- 위 목록 밖의 라이브러리나 프레임워크는 설계 변경 절차(4절)를 거쳐야 추가할 수 있습니다.
+개발 도구: IntelliJ IDEA, Git, GitHub, Postman, MySQL Workbench
+
+- 위 목록 밖의 라이브러리나 프레임워크는 설계 변경 절차(4절)를 거쳐야 추가할 수 있습니다. 사용자 승인 없이 공식 스택 밖의 기술을 추가하지 않습니다.
+- Spring Boot Starter 내부에 포함되는 전이 의존성은 별도 기술 도입으로 보지 않습니다. Gradle의 Java 플러그인과 Spring Dependency Management 플러그인은 빌드 지원 도구로 유지합니다.
 - 라이브러리 버전은 Spring Boot BOM과 Spring AI BOM을 따르고, 임의로 고정하지 않습니다.
-- 테스트 도구(JUnit 5, Mockito, Testcontainers 등)는 테스트 목적의 추가로 보고, 추가 시 `PROGRESS.md`에 기록합니다. Testcontainers 등 기술 스택 밖의 도구 도입 여부는 T9에서 확정합니다.
+- 테스트 도구는 `spring-boot-starter-test`(JUnit 5, Mockito, AssertJ, Spring MockMvc)를 기준으로 합니다. Testcontainers, H2, Docker 기반 테스트 환경은 도입하지 않습니다 (T9 확정, 7절).
 
 ## 3. 브랜치·커밋·PR 규칙
 
@@ -210,6 +213,17 @@ com.busanlocalfood
 - Google 리다이렉트 흐름의 실패는 JSON이 아니라 `error` 쿼리 파라미터로 전달합니다 (API_SPEC 2.5, 2.6).
 
 ## 7. 테스트 규칙
+
+### 테스트 환경 (T9 확정, 2026-11-09)
+
+- 테스트 의존성은 `spring-boot-starter-test`입니다. JUnit 5, Mockito, AssertJ, Spring MockMvc를 사용합니다.
+- Testcontainers, H2, Docker 기반 테스트 환경은 도입하지 않습니다. Docker Desktop 설치를 요구하지 않습니다.
+- DB 연동 테스트는 개발 PC의 MySQL 8을 사용하되, 테스트 전용 데이터베이스를 개발 데이터베이스와 분리합니다. 테스트가 개발 데이터베이스의 데이터를 삭제하거나 변경하지 않도록 합니다.
+- 외부 서비스(Google, AWS S3, OpenRouter)는 모킹하거나 가짜 구현체를 사용합니다 (아래 마지막 항목 참조).
+- 위 목록 밖의 테스트 라이브러리가 필요하면 이유와 대안을 제안하고 사용자 승인을 받은 뒤 추가합니다.
+- CI 테스트는 기존 GitHub Actions 계획을 따릅니다. 이번 결정으로 새 테스트 인프라를 추가하지 않습니다.
+
+### 테스트 작성 기준
 
 - 기능마다 최소한 다음 테스트를 작성합니다.
   - 서비스 단위 테스트 (Mockito): 정상 흐름, 권한 없음, 중복, 없는 대상

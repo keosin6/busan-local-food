@@ -19,7 +19,7 @@
 | 단계 | 내용 | 상태 | 비고 |
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
-| 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확인 필요 |
+| 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
 | 2 | F1-01 회원·인증 (이메일 가입·로그인, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 미착수 | T3, T7, T8, T11 확정 필요 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
@@ -68,7 +68,6 @@
 | T6 | S3 삭제 재시도 자동화 여부 | Stage 4 이후 |
 | T7 | Refresh Token 재사용 탐지 시 정책 | Stage 2 |
 | T8 | Google 연동·해제 본인 확인 강도 (현재 제안: 비밀번호 재입력) | Stage 2 |
-| T9 | 테스트 라이브러리(Testcontainers 등) 도입 여부. Stage 1에서는 `spring-boot-starter-test`(JUnit 5, Mockito, AssertJ)만 사용하고 Testcontainers는 도입하지 않았음 | Stage 1 (결정 확인 필요) |
 | T10 | OpenRouter 사용 모델 ID 선정 (운영 설정 값) | Stage 8 전 |
 | T11 | OAuth2 임시 세션 구현 세부 (저장 위치, 만료 시간, 세션 정책 값) | Stage 2 전 |
 
@@ -86,6 +85,7 @@
 | 2026-11-06 | Q6 반영: `OPENROUTER_MODEL`로 모델 지정, 코드 고정 금지 | REQUIREMENTS, FUNCTION_SPEC, DEVELOPMENT_RULES, README | 사용자 결정 |
 | 2026-11-06 | 맛집 수정·삭제 권한을 작성자 본인으로 한정하고, 관리자 작업은 별도 관리자 API로 분리 | FUNCTION_SPEC, API_SPEC | 사용자 결정 (Q5에 따른 분리) |
 | 2026-11-06 | 인증 구조 명확화: 일반 API는 JWT 기반 유지, OAuth2 임시 세션은 Google 흐름에만 사용. 세션 정책을 완전 Stateless로 고정하지 않음 | DEVELOPMENT_RULES 5.7, FUNCTION_SPEC F1-01, API_SPEC 1.1·2.5·2.6, REQUIREMENTS FR-01-14~16·T11 | 사용자 지시 |
+| 2026-11-09 | T9 확정: 테스트 라이브러리는 `spring-boot-starter-test` 유지, Testcontainers·H2·Docker 기반 테스트 환경 미도입. DB 연동 테스트는 테스트 전용 MySQL 8을 사용하고 개발 DB와 분리 | DEVELOPMENT_RULES 2·7절, README, REQUIREMENTS 4.1절 | 사용자 결정 (T9) |
 
 ## 6. 작업 로그
 
@@ -100,9 +100,9 @@
 | 2026-11-09 | Gradle wrapper 배포본 SHA-256(gradle.org 공식 체크섬) 설정. wrapper 기반 `./gradlew clean test` 9개 통과, `./gradlew bootJar` 성공 | 완료 |
 | 2026-11-09 | Stage 1 중 발견·수정: 설정되지 않은 `${DB_PASSWORD}`가 비밀번호로 쓰이던 문제 → 기동 시점에 누락 변수 이름을 알리고 중단하도록 수정. 방언을 MySQL로 명시하고 기동 시 DB 연결 확인 추가 | 완료 |
 | 2026-11-09 | PR #3 Stage 1 프로젝트 기본 구조 구현 완료 및 `main` 병합. Merge commit `519170d8776d86eddaf7433143063af0661ea925` | 병합 완료 상태 기록 |
+| 2026-11-09 | 기술 스택 준수 점검 (`build.gradle`, 소스 import, 설정, 정적 리소스). 금지 기술 미사용 확인, 의존성 변경 없음. 인증 방식 충돌은 보고 후 결정 대기. T9 테스트 정책 확정 | 완료 (문서·정책 정리) |
 
 ## 7. 다음 작업
 
-1. T9(테스트 라이브러리 도입 여부)를 결정합니다.
-2. Stage 2(F1-01) 시작 전에 T3(닉네임 규칙), T7(Refresh Token 재사용 탐지), T8(연동 본인 확인), T11(OAuth2 임시 세션 세부)을 결정합니다.
-3. Stage 2(F1-01 회원·인증) 구현을 준비합니다.
+1. Stage 2(F1-01) 시작 전에 T3(닉네임 규칙), T7(Refresh Token 재사용 탐지), T8(연동 본인 확인), T11(OAuth2 임시 세션 세부)을 결정합니다.
+2. Stage 2(F1-01 회원·인증) 구현을 준비합니다.
