@@ -1,0 +1,4 @@
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.busanlocalfood.global.config.DatabaseConnectionFailureAnalyzer
+org.springframework.context.ApplicationListener=\
+com.busanlocalfood.global.config.RequiredDatabaseEnvironmentListener
