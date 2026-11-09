@@ -3,7 +3,7 @@
 
 사용자가 부산의 맛집을 등록·검색하고, 리뷰와 평점을 남기며, AI가 요약한 리뷰와 AI 맛집 추천을 받을 수 있는 웹 서비스입니다.
 
-> **현재 상태:** 설계 문서 작성 단계입니다. 애플리케이션 코드는 아직 없습니다. 진행 상황은 [docs/PROGRESS.md](docs/PROGRESS.md)를 확인하세요.
+> **현재 상태:** 프로젝트 기본 골격(Spring Boot, 설정, 공통 오류 응답, 기본 홈 화면)이 구현되었습니다. 기능 F1-01 ~ F1-09는 아직 구현 전입니다. 진행 상황은 [docs/PROGRESS.md](docs/PROGRESS.md)를 확인하세요.
 
 ## 필수 기능
 
@@ -50,7 +50,7 @@
 
 ## 환경 변수
 
-보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다.
+보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 기본 골격이 실제로 읽는 변수는 DB 관련 3개입니다.
 
 ```
 DB_URL, DB_USERNAME, DB_PASSWORD
@@ -62,4 +62,57 @@ OPENROUTER_API_KEY, OPENROUTER_MODEL
 
 ## 실행 방법
 
-애플리케이션 코드가 작성된 후 이 절에 로컬 실행, 테스트, 배포 방법을 추가합니다.
+### 준비물
+
+- Java 21
+- MySQL 8 (로컬 개발용)
+
+### 1. 로컬 데이터베이스 준비
+
+```bash
+mysql -u root -p -e "CREATE DATABASE busan_local_food CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER 'busan'@'localhost' IDENTIFIED BY '<비밀번호>'; GRANT ALL PRIVILEGES ON busan_local_food.* TO 'busan'@'localhost';"
+```
+
+### 2. 환경변수 설정
+
+비밀번호는 코드나 Git에 넣지 않고 환경변수로만 지정합니다. 로컬 프로필은 `DB_URL`(기본값 `jdbc:mysql://localhost:3306/busan_local_food`)과 `DB_USERNAME`(기본값 `busan`)에 기본값을 두므로 `DB_PASSWORD`만 지정하면 됩니다.
+
+```bash
+export DB_PASSWORD='<비밀번호>'
+```
+
+### 3. 실행
+
+```bash
+./gradlew bootRun
+```
+
+브라우저에서 http://localhost:8080/ 에 접속합니다.
+
+### 4. 테스트와 실행 가능한 JAR 빌드
+
+```bash
+./gradlew clean test
+./gradlew bootJar
+```
+
+JAR 실행에도 같은 환경변수가 필요합니다.
+
+```bash
+java -jar build/libs/busan-local-food-0.0.1-SNAPSHOT.jar
+```
+
+### 5. 운영 실행 (EC2)
+
+운영은 `prod` 프로필을 사용하고, 세 DB 변수를 모두 서버 환경변수로 지정합니다. 기본값은 없습니다.
+
+```bash
+SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAME='<사용자>' DB_PASSWORD='<비밀번호>' java -jar busan-local-food.jar
+```
+
+### 문제 해결
+
+| 증상 | 확인할 것 |
+|------|-----------|
+| `필수 환경변수가 설정되지 않았습니다: DB_PASSWORD` | 누락된 환경변수를 지정합니다. 목록에 표시된 변수만 확인하면 됩니다. |
+| `데이터베이스 연결 또는 초기화에 실패했습니다` | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`가 맞는지, MySQL 8이 실행 중인지, 사용자에게 권한이 있는지 확인합니다. 실패 원인 메시지가 함께 출력됩니다. |

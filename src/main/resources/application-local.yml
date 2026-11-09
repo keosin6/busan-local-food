@@ -1,0 +1,12 @@
+# 로컬 개발 설정. 로컬 MySQL 8 기준이다. 이 파일에는 비밀번호를 쓰지 않는다.
+# DB_PASSWORD는 반드시 환경변수로 지정해야 한다.
+spring:
+  datasource:
+    # 기본값은 로컬 MySQL 주소다. 다른 주소를 쓰려면 DB_URL을 지정한다.
+    # useSSL=false, allowPublicKeyRetrieval=true는 로컬 개발 전용이다. 운영 설정에 가져가지 않는다.
+    url: ${DB_URL:jdbc:mysql://localhost:3306/busan_local_food?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:busan}
+
+logging:
+  level:
+    com.busanlocalfood: debug
