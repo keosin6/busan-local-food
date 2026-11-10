@@ -186,7 +186,8 @@
 | T7 | Refresh Token 재사용(탈취 의심) 탐지 시 정책 | 미확정. 폐기된 토큰이 다시 사용되면 해당 회원의 모든 Refresh Token을 폐기할지 결정해야 한다. | Stage 2 (F1-01) |
 | T8 | Google 연동·해제 시 본인 확인 강도 | 현재 제안: 해제 시 비밀번호 재입력(비밀번호가 있는 계정). 연동 시에는 로그인된 세션과 OAuth `state` 검증. 추가 인증(2단계 인증 등) 필요 여부는 미정. | Stage 2 (F1-01) |
 | T10 | OpenRouter 사용 모델 ID 선정 | 운영자가 환경 변수로 설정하는 값이며, 문서 확정 대상이 아니다. | Stage 8 (F1-07) 전 |
-| T11 | OAuth2 임시 세션 구현 세부 | 미확정. Authorization Request 저장 위치, 임시 세션 만료 시간, Spring Security 세션 생성 정책 값, 세션 고정 공격 방지 방식을 구현 단계에서 정한다. 구조 원칙(FR-01-14~16)은 확정이며, 완전 Stateless로 고정하지 않는다. | Stage 2 (F1-01) 전 |
-| T12 | 화면 로그아웃 시 Refresh Token 폐기 방식 | 미확정. `refresh_token` 쿠키 Path(`/api/auth`)가 화면 로그아웃 경로(`/logout`)에는 전송되지 않아 DB 행을 폐기할 수 없다. 제안: 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출한 뒤 `POST /logout`을 호출한다. | Stage 2 (F1-01) 전 |
+| T11 | OAuth2 임시 세션 구현 세부 | 미확정. Authorization Request 저장 위치, 임시 상태 만료 시간, Spring Security 세션 생성 정책 값, 세션 고정 공격 방지 방식을 구현 단계에서 정한다. 구조 원칙(FR-01-14~16)은 확정이며, 완전 Stateless로 고정하지 않는다. 추가 쟁점: `/api/**` STATELESS 체인에서 연동 시작(`GET /api/me/google/link`)의 임시 상태를 어떻게 저장할지 옵션 A·B·C 중 사용자 결정이 필요하다 (DEVELOPMENT_RULES 5.7.1). | Stage 2 (F1-01) 전 |
+| T12 | 화면 로그아웃 시 Refresh Token 폐기 방식 | 미확정 (제안 있음, 승인 대기). 제안: 화면 로그아웃이 `POST /api/auth/logout`을 먼저 호출하고, 성공 후 `POST /logout`을 호출한다. 첫 요청이 실패하면 `/logout`을 호출하지 않고 재시도를 안내한다 (DEVELOPMENT_RULES 5.7.2). | Stage 2 (F1-01) 전 |
+| T13 | Access Token 만료 시 화면의 API 자동 재발급 방식 | 미확정 (제안 있음, 승인 대기). 제안: 401 수신 → refresh 1회 → 원요청 1회 재시도, 실패 시 재로그인 안내, 재발급은 동시에 한 번만 수행, Refresh Token 원문은 JavaScript에서 읽지 않는다 (DEVELOPMENT_RULES 5.7.2). | Stage 2 (F1-01) 전 |
 
 > 확정 항목(4.1)이 바뀌면 `FUNCTION_SPEC.md`, `DATABASE_ERD.md`, `API_SPEC.md`를 함께 갱신하고 `PROGRESS.md`의 설계 변경 이력에 기록합니다.

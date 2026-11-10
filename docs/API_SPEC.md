@@ -171,6 +171,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 ```
 - 실패 시 두 쿠키를 만료시킵니다.
 - 화면 세션(`JSESSIONID`)은 이 API로 재발급되지 않습니다.
+- 화면의 자동 재발급과 재시도 규칙은 DEVELOPMENT_RULES 5.7.2의 제안(T13, 승인 대기)을 참조합니다.
 - 주요 오류: 401 TOKEN_INVALID (쿠키 없음, 만료, 폐기, 위조)
 - 재사용 탐지 정책은 T7에서 확정합니다.
 
@@ -215,7 +216,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증 조건: 요청의 `access_token`으로 회원을 확인합니다. 이 검증은 연동 시작 시점에만 수행합니다. Access Token이 없거나 만료되었으면 401 TOKEN_INVALID로 거부하고 흐름을 시작하지 않습니다.
 - 요청: 본문 없음. 브라우저 리다이렉트 API입니다.
 - 처리 (FR-01-10, FR-01-12):
-  1. Access Token으로 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 세션에 저장합니다. 같은 임시 세션에 OAuth2 `state` 값과 Authorization Request를 보관합니다. 보관 방식은 T11에서 확정합니다.
+  1. Access Token으로 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 상태로 저장하고, OAuth2 `state` 값을 함께 보관합니다. 이 API는 `/api/**` STATELESS 체인에 속하므로 저장 방식은 DEVELOPMENT_RULES 5.7.1의 옵션 중 사용자 결정 후 확정합니다 (T11). 승인 전에는 구현하지 않습니다.
   2. Google 인증 페이지로 리다이렉트합니다.
   3. 콜백(2.5와 같은 URL)에서 다음을 검증합니다. (a) 콜백의 `state`가 현재 브라우저의 OAuth2 임시 세션에 보관된 값과 일치하고 한 번만 사용되는지 (CSRF 방지). (b) 임시 세션이 존재하고 만료되지 않았는지. 하나라도 실패하면 연동하지 않습니다.
   4. 연동 대상 회원은 임시 세션에 저장된 회원 ID로 정합니다. 그 회원이 아직 존재하는지 확인하고, 없으면 연동하지 않습니다. 콜백은 `access_token`을 요구하지 않으며, Google 인증 중 Access Token이 만료되어도 임시 세션이 유효하면 연동을 완료합니다 (FR-01-15).
@@ -291,7 +292,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 권한: 누구나 (로그인 상태에서 사용)
 - 요청: CSRF 토큰 필요. 본문 없음.
 - 처리: Spring Security 세션을 무효화하고 SecurityContext를 제거합니다. `access_token`, `refresh_token` 쿠키를 만료시킵니다 (발급 당시와 같은 Path 사용).
-- Refresh Token DB 행 폐기 방식은 T12에서 확정합니다. `refresh_token` 쿠키의 Path가 `/api/auth`이므로 `/logout` 요청에서는 쿠키를 읽을 수 없습니다. 제안: 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출한 뒤 `POST /logout`을 호출합니다.
+- Refresh Token 폐기 방식은 T12 제안(승인 대기)입니다. `refresh_token` 쿠키의 Path가 `/api/auth`이므로 `/logout`에서는 쿠키를 읽을 수 없습니다. 제안: 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출하고, 성공하면 `POST /logout`을 호출합니다. 첫 요청이 실패하면 `POST /logout`을 호출하지 않고 로그인 상태를 유지한 채 재시도를 안내합니다 (DEVELOPMENT_RULES 5.7.2).
 - 응답: `302` → `/`.
 
 ---

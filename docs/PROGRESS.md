@@ -12,7 +12,7 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| **다음 개발 단계** | **Stage 2: F1-01 회원·인증** (T3, T7, T8, T11, T12 확정 후 시작) |
+| **다음 개발 단계** | **Stage 2: F1-01 회원·인증** (T3, T7, T8, T11, T12, T13 확정 후 시작) |
 
 ## 1. 단계 요약
 
@@ -20,7 +20,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 미착수 | T3, T7, T8, T11, T12 확정 필요 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 미착수 | T3, T7, T8, T11, T12, T13 확정 필요 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -69,8 +69,9 @@
 | T7 | Refresh Token 재사용 탐지 시 정책 | Stage 2 |
 | T8 | Google 연동·해제 본인 확인 강도 (현재 제안: 비밀번호 재입력) | Stage 2 |
 | T10 | OpenRouter 사용 모델 ID 선정 (운영 설정 값) | Stage 8 전 |
-| T11 | OAuth2 임시 세션 구현 세부 (저장 위치, 만료 시간, 세션 정책 값) | Stage 2 전 |
-| T12 | 화면 로그아웃 시 Refresh Token 폐기 방식 (`refresh_token` 쿠키 Path 제약으로 `/logout`에서 읽을 수 없음) | Stage 2 전 |
+| T11 | OAuth2 임시 세션 구현 세부 (저장 위치, 만료 시간, 세션 정책 값). 추가 쟁점: `/api/**` STATELESS 체인의 연동 시작 임시 상태 저장 방식(옵션 A·B·C, 사용자 결정 필요) | Stage 2 전 |
+| T12 | 화면 로그아웃 시 Refresh Token 폐기 방식. 제안 있음, 승인 대기 (`/api/auth/logout` 선행 호출 방식) | Stage 2 전 |
+| T13 | Access Token 만료 시 화면의 API 자동 재발급 방식. 제안 있음, 승인 대기 | Stage 2 전 |
 
 ## 5. 설계 변경 이력
 
@@ -88,6 +89,7 @@
 | 2026-11-06 | 인증 구조 명확화: 일반 API는 JWT 기반 유지, OAuth2 임시 세션은 Google 흐름에만 사용. 세션 정책을 완전 Stateless로 고정하지 않음 | DEVELOPMENT_RULES 5.7, FUNCTION_SPEC F1-01, API_SPEC 1.1·2.5·2.6, REQUIREMENTS FR-01-14~16·T11 | 사용자 지시 |
 | 2026-11-10 | 인증 구조 최종 확정: 화면은 Spring Security 세션, API는 JWT. 화면 로그인·화면 회원가입·Google 로그인은 세션과 JWT를 함께 발급하고, API 로그인·회원가입은 JWT만 발급. 화면 체인과 API 체인을 필터 체인으로 분리 | DEVELOPMENT_RULES 5.3·5.7, FUNCTION_SPEC F1-01, API_SPEC 1.1·2·10·12, REQUIREMENTS FR-01-03·07·08·17~20, README, PROJECT_OVERVIEW | 사용자 결정 |
 | 2026-11-10 | 미확정 항목 T12 등록: 화면 로그아웃에서 Refresh Token 쿠키를 읽을 수 없는 문제. 제안만 기록하고 확정하지 않음 | REQUIREMENTS 4.2, FUNCTION_SPEC F1-01, API_SPEC 2.11 | 설계 점검 결과 (보고) |
+| 2026-11-10 | 인증 문서 정합성 검토: 로그아웃(T12)·재발급(T13)은 제안만 기록하고 승인 대기. OAuth2 임시 상태와 `/api/**` STATELESS 체인의 충돌을 T11 쟁점으로 기록. 개발 MySQL을 개발 PC 직접 설치로 정정 | DEVELOPMENT_RULES 5.5·5.7·7, FUNCTION_SPEC F1-01, API_SPEC 2.3·2.6·2.11, REQUIREMENTS 4.2, README, PROJECT_OVERVIEW | 점검 결과 (승인 대기 항목 미확정) |
 | 2026-11-09 | T9 확정: 테스트 라이브러리는 `spring-boot-starter-test` 유지, Testcontainers·H2·Docker 기반 테스트 환경 미도입. DB 연동 테스트는 테스트 전용 MySQL 8을 사용하고 개발 DB와 분리 | DEVELOPMENT_RULES 2·7절, README, REQUIREMENTS 4.1절 | 사용자 결정 (T9) |
 
 ## 6. 작업 로그
@@ -104,8 +106,10 @@
 | 2026-11-09 | Stage 1 중 발견·수정: 설정되지 않은 `${DB_PASSWORD}`가 비밀번호로 쓰이던 문제 → 기동 시점에 누락 변수 이름을 알리고 중단하도록 수정. 방언을 MySQL로 명시하고 기동 시 DB 연결 확인 추가 | 완료 |
 | 2026-11-09 | PR #3 Stage 1 프로젝트 기본 구조 구현 완료 및 `main` 병합. Merge commit `519170d8776d86eddaf7433143063af0661ea925` | 병합 완료 상태 기록 |
 | 2026-11-09 | 기술 스택 준수 점검 (`build.gradle`, 소스 import, 설정, 정적 리소스). 금지 기술 미사용 확인, 의존성 변경 없음. 인증 방식 충돌은 보고 후 결정 대기. T9 테스트 정책 확정 | 완료 (문서·정책 정리) |
+| 2026-11-10 | 화면 세션 + API JWT 인증 구조 문서 반영 (커밋 `627f071`) | 완료. 문서만 수정 |
+| 2026-11-10 | 인증 문서 정합성 검토: MySQL 개발 환경을 개발 PC 직접 설치로 정정, OAuth2 임시 상태와 `/api/**` STATELESS 체인의 충돌을 T11 쟁점으로 기록, T12(로그아웃)·T13(재발급) 제안 기록 | 완료. 승인 대기 항목은 미확정 |
 
 ## 7. 다음 작업
 
-1. Stage 2(F1-01) 시작 전에 T3(닉네임 규칙), T7(Refresh Token 재사용 탐지), T8(연동 본인 확인), T11(OAuth2 임시 세션 세부), T12(화면 로그아웃의 Refresh Token 폐기 방식)를 결정합니다.
+1. Stage 2(F1-01) 시작 전에 T3(닉네임 규칙), T7(Refresh Token 재사용 탐지), T8(연동 본인 확인), T11(OAuth2 임시 세션 세부, 연동 시작 임시 상태 저장 방식), T12(화면 로그아웃의 Refresh Token 폐기 방식), T13(Access Token 만료 시 자동 재발급)을 결정합니다.
 2. Stage 2(F1-01 회원·인증) 구현을 준비합니다.

@@ -54,11 +54,23 @@
 - 재사용 탐지(폐기된 토큰의 재사용)에 따른 추가 조치는 T7에서 확정합니다.
 
 ### 로그아웃 흐름 (화면, FR-01-07)
-1. `POST /logout`을 호출합니다 (CSRF 토큰 필요).
-2. Spring Security 세션을 무효화하고 SecurityContext를 제거합니다.
-3. `access_token`, `refresh_token` 쿠키를 만료시킵니다. 발급 당시와 같은 Path를 사용합니다.
-4. `refresh_token`의 DB 행을 폐기합니다. 다만 `refresh_token` 쿠키의 Path는 `/api/auth`라서 `/logout` 요청에는 전송되지 않습니다. 폐기 방식은 T12에서 확정합니다.
-5. 메인 페이지(`/`)로 이동합니다.
+
+T12 제안(승인 대기, DEVELOPMENT_RULES 5.7.2)입니다.
+1. 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출합니다. Refresh Token 행을 폐기하고 JWT 쿠키를 만료시킵니다.
+2. 1이 성공하면 `POST /logout`을 호출합니다 (CSRF 토큰 필요). Spring Security 세션을 무효화하고 SecurityContext를 제거하며 `JSESSIONID`를 만료시킵니다.
+3. 메인 페이지(`/`)로 이동합니다.
+- 1이 실패하면 `POST /logout`을 호출하지 않습니다. 로그인 상태를 유지하고 재시도를 안내합니다.
+- 1이 성공하고 2가 실패하면 JWT 쿠키는 만료되고 세션은 남습니다. 재시도하면 1은 `200`으로 끝나고 2가 다시 실행됩니다.
+- `refresh_token` 쿠키의 Path는 `/api/auth`이므로 `/logout` 요청에서는 전송되지 않습니다. 이것이 T12의 원인입니다.
+
+### Access Token 만료 대응 (화면, T13 제안)
+
+화면 세션이 유효해도 Access Token은 만료될 수 있습니다. T13 제안(승인 대기)은 다음과 같습니다 (DEVELOPMENT_RULES 5.7.2).
+1. API 요청이 `401 TOKEN_INVALID`를 받으면 `POST /api/auth/refresh`를 1회 호출합니다.
+2. 재발급이 성공하면 원래 요청을 1회만 다시 보냅니다.
+3. 재발급이 실패하면 재로그인을 안내합니다.
+4. 재시도는 요청당 1회입니다. 재발급은 동시에 한 번만 진행합니다.
+5. Refresh Token 원문은 JavaScript에서 읽지 않습니다.
 
 ### 로그아웃 흐름 (API)
 1. `POST /api/auth/logout`을 호출합니다. 인증을 요구하지 않으므로 Access Token이 만료되었어도 호출할 수 있습니다.
@@ -95,7 +107,7 @@
 
 ### Google 계정 연동 흐름 (FR-01-10, FR-01-11, FR-01-12, FR-01-15)
 1. 이메일로 로그인한 회원이 `/mypage`에서 "Google 계정 연동"을 누릅니다.
-2. `GET /api/me/google/link`는 요청의 `access_token`으로 현재 회원을 확인합니다. 이 검증은 연동 시작 시점에만 합니다. 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 세션에 저장하고, `state` 값을 함께 보관한 뒤 Google 인증 페이지로 이동합니다. Access Token이 없거나 만료되었으면 흐름을 시작하지 않습니다.
+2. `GET /api/me/google/link`는 요청의 `access_token`으로 현재 회원을 확인합니다. 이 검증은 연동 시작 시점에만 합니다. 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 상태로 저장하고, `state` 값을 함께 보관한 뒤 Google 인증 페이지로 이동합니다. Access Token이 없거나 만료되었으면 흐름을 시작하지 않습니다. 이 API는 `/api/**` STATELESS 체인에 속하므로 임시 상태 저장 방식은 미확정입니다 (DEVELOPMENT_RULES 5.7.1, T11 옵션 승인 대기).
 3. 콜백에서 다음을 검증합니다. (a) 콜백의 `state`가 임시 세션에 보관된 값과 일치하고 아직 사용되지 않았는지 (CSRF 방지). (b) 임시 세션이 존재하고 만료되지 않았는지. (c) 임시 세션에 저장된 회원 ID의 회원이 존재하는지. 하나라도 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다. 콜백은 `access_token`을 요구하지 않습니다. Google 인증 중 Access Token이 만료되어도 임시 세션이 유효하면 연동을 완료합니다.
 4. `email_verified`가 아니면 `/mypage?error=google_unverified`로 이동합니다.
 5. `google_sub`가 다른 회원에게 이미 연결되어 있으면 `/mypage?error=google_already_linked`로 이동합니다 (FR-01-11, 409 `GOOGLE_ALREADY_LINKED`에 해당).

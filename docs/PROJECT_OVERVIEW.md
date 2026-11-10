@@ -61,7 +61,7 @@
 | 데이터 접근 | Spring Data JPA |
 | AI | Spring AI, OpenRouter (OpenAI 호환 API) |
 | 화면 | Thymeleaf, Bootstrap 5 |
-| 데이터베이스 | MySQL 8 (AWS EC2 내부 설치, RDS 미사용) |
+| 데이터베이스 | MySQL 8 (개발은 개발 PC에 직접 설치, 운영은 AWS EC2 내부 설치, RDS 미사용) |
 | 파일 저장소 | AWS S3 |
 | 서버 | AWS EC2 (Ubuntu) |
 | CI/CD | GitHub Actions |
