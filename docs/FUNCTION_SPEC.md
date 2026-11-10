@@ -26,6 +26,7 @@
 ### 회원가입 흐름 (화면)
 1. 이메일 형식, 비밀번호 길이(8자 이상), 비밀번호 확인 일치, 닉네임(2~20자)을 검증합니다. 실패하면 `/signup?error=validation_failed`로 이동합니다.
 2. 이메일이 이미 존재하면 `/signup?error=email_duplicated`로 이동합니다. Google로만 가입된 계정과 이메일이 같은 경우도 같습니다.
+   닉네임이 이미 사용 중이면 `/signup?error=nickname_duplicated`로 이동합니다. 저장 시점에 `uk_member_nickname`이 위반되면 같은 결과로 처리합니다 (ERD 2.1).
 3. 비밀번호를 BCrypt로 해시하여 `member`에 저장합니다 (`role = USER`, `google_sub = NULL`).
 4. 자동 로그인합니다. Spring Security 세션을 생성하고, JWT Access Token과 Refresh Token을 발급합니다 (Refresh Token의 SHA-256 해시는 `refresh_token`에 저장). 쿠키를 설정하고 메인 페이지(`/`)로 이동합니다.
 
@@ -53,6 +54,7 @@
 5. 정상이면 회원 행에 잠금을 걸고 토큰 행을 다시 조회합니다. 여전히 정상이면 기존 행의 `revoked_at`을 기록하고, 새 Refresh Token 원문을 발급하여 해시를 새 행으로 INSERT합니다.
 6. 새 `access_token` 쿠키와 새 `refresh_token` 쿠키를 설정합니다.
 - 화면 세션은 재발급 대상이 아닙니다. 화면 세션은 이 흐름으로 갱신하지 않습니다. 화면 세션의 만료 정책은 T11에서 정합니다.
+- 동시 갱신: 정상 중복 요청을 재사용으로 오인하지 않는 처리 방식은 T14 결정 대기입니다. 그 전까지 T7 원칙을 그대로 적용합니다 (DEVELOPMENT_RULES 5.7.4).
 - 폐기된 행은 재사용 탐지를 위해 보존합니다. 삭제하지 않습니다.
 
 ### 로그아웃 흐름 (화면, FR-01-07, FR-01-25, T12 A안)
@@ -98,7 +100,7 @@
 5. 닉네임이 2~20자가 아니면 `validation_failed`, 중복이면 `nickname_duplicated`로 같은 화면에 다시 입력하도록 합니다. 회원은 만들지 않습니다.
 6. 검증이 끝나면 회원을 만들고(`role = USER`, `password_hash = NULL`, `google_sub = sub`), 화면 세션과 JWT를 함께 발급한 뒤 메인 페이지(`/`)로 이동합니다. 가입 진행 상태를 제거합니다.
 7. 닉네임 설정 전에 이탈하면 회원은 만들어지지 않습니다. 가입 진행 상태는 흐름이 끝나면 제거합니다.
-- `nickname`에는 현재 ERD상 UNIQUE 제약이 없습니다. 중복 검사는 저장 직전에 수행합니다 (DEVELOPMENT_RULES 5.7.3).
+- `nickname`에는 `uk_member_nickname` UNIQUE 제약이 있습니다. 중복 검사는 저장 직전에 수행하고, 저장 시 위반은 `nickname_duplicated`로 처리합니다 (DEVELOPMENT_RULES 5.7.3, 6.4).
 
 ### 화면 세션, API JWT, OAuth2 임시 세션의 관계
 
@@ -160,6 +162,8 @@
 | 상황 | 응답 |
 |------|------|
 | 이메일 중복 (API) | 409 `EMAIL_DUPLICATED` |
+| 닉네임 중복 (API) | 409 `NICKNAME_DUPLICATED` |
+| 닉네임 중복 (화면 회원가입) | `/signup?error=nickname_duplicated` |
 | 이메일 중복 (화면) | `/signup?error=email_duplicated` |
 | 입력값 검증 실패 (API) | 400 `VALIDATION_FAILED` |
 | 입력값 검증 실패 (화면) | `/signup?error=validation_failed` |

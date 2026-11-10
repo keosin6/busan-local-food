@@ -89,6 +89,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 404 | FAVORITE_NOT_FOUND | 찜 없음 |
 | 404 | GOOGLE_NOT_LINKED | 연동된 Google 계정 없음 (화면 해제 흐름에서는 `/mypage?error=google_not_linked`로 안내, 2.7) |
 | 409 | EMAIL_DUPLICATED | 이메일 중복 |
+| 409 | NICKNAME_DUPLICATED | 닉네임 중복 (`uk_member_nickname` 위반 포함) |
 | 409 | REVIEW_ALREADY_EXISTS | 같은 맛집에 리뷰 중복 |
 | 409 | FAVORITE_ALREADY_EXISTS | 찜 중복 |
 | 409 | GOOGLE_ALREADY_LINKED | 이미 다른 회원에게 연결된 Google 계정 (FR-01-11) |
@@ -128,7 +129,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "timestamp": "..."
 }
 ```
-- 주요 오류: 400 VALIDATION_FAILED, 409 EMAIL_DUPLICATED
+- 주요 오류: 400 VALIDATION_FAILED, 409 EMAIL_DUPLICATED, 409 NICKNAME_DUPLICATED
 
 ### 2.2 로그인 (API)
 
@@ -174,6 +175,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 실패 시 두 쿠키를 만료시킵니다.
 - 화면 세션(`JSESSIONID`)은 이 API로 재발급되지 않습니다.
 - 화면의 자동 재발급과 재시도 규칙은 DEVELOPMENT_RULES 5.7.2 (T13 A안)를 따릅니다.
+- 동시 갱신: 회원 행 잠금으로 활성 토큰이 둘 생기는 것(중복 발급)을 막습니다. 잠금 뒤 재조회에서 폐기된 행을 보는 요청은 재사용으로 판정되며, 이것이 T7 원칙입니다. 정상 중복 요청을 재사용으로 오인하지 않는 처리 방식은 T14 결정 대기입니다 (DEVELOPMENT_RULES 5.7.4).
 - 주요 오류: 401 TOKEN_INVALID (쿠키 없음, 만료, 폐기, 위조)
 - 재사용 탐지는 DEVELOPMENT_RULES 5.7.4 (T7 A안)를 따릅니다. 폐기된 토큰이 재사용되면 해당 회원의 모든 활성 Refresh Token을 폐기합니다.
 
@@ -225,7 +227,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   6. `302` → `/`로 리다이렉트합니다.
 - 닉네임 설정이 끝나기 전에는 회원을 만들지 않습니다. 흐름이 중단되면 가입 진행 상태만 제거하고, 회원은 만들지 않습니다.
 - 주요 오류(리다이렉트 쿼리): `validation_failed`, `nickname_duplicated`.
-- 참고: `nickname`에는 현재 ERD상 UNIQUE 제약이 없습니다 (DEVELOPMENT_RULES 5.7.3).
+- 참고: `nickname`에는 `uk_member_nickname` UNIQUE 제약이 있습니다. 사전 검사 후 저장 시 위반이 나면 같은 `nickname_duplicated`로 처리합니다 (ERD 2.1, DEVELOPMENT_RULES 5.7.3, 6.4).
 
 ### 2.6 Google 계정 연동 시작 (화면, 세션 기반)
 
@@ -321,7 +323,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 요청: 폼 필드 `email`, `password`, `passwordConfirm`, `nickname`. CSRF 토큰 필요.
 - 처리: 2.1과 같은 검증과 저장을 수행한 뒤 자동 로그인합니다. Spring Security 화면 세션을 생성하고 JWT 쿠키(`access_token`, `refresh_token`)를 발급합니다 (FR-01-17).
 - 응답: 성공 `302` → `/`.
-- 실패는 JSON이 아니라 리다이렉트로 응답합니다: `/signup?error=email_duplicated`, `/signup?error=validation_failed`.
+- 실패는 JSON이 아니라 리다이렉트로 응답합니다: `/signup?error=email_duplicated`, `/signup?error=nickname_duplicated`, `/signup?error=validation_failed`.
 
 ### 2.10 로그인 (화면)
 

@@ -23,7 +23,7 @@ erDiagram
         bigint id PK
         varchar email UK
         varchar password_hash "NULL 허용 (Google 전용 계정)"
-        varchar nickname
+        varchar nickname UK
         varchar role "USER | ADMIN"
         varchar google_sub UK "NULL 허용 (Google 연동 시 sub)"
         datetime created_at
@@ -118,13 +118,14 @@ erDiagram
 | id | BIGINT | N | AUTO_INCREMENT | PK |
 | email | VARCHAR(255) | N | | 로그인 ID, 소문자 저장 |
 | password_hash | VARCHAR(100) | Y | | BCrypt 해시. Google 전용 계정은 NULL |
-| nickname | VARCHAR(20) | N | | 2~20자 |
+| nickname | VARCHAR(20) | N | | 2~20자. 중복 불가 (`uk_member_nickname`) |
 | role | VARCHAR(20) | N | 'USER' | `USER`(일반 회원) 또는 `ADMIN`(관리자) |
 | google_sub | VARCHAR(255) | Y | | 연동된 Google 계정의 `sub`. 연동하지 않았으면 NULL |
 | created_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) | |
 | updated_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) ON UPDATE | |
 
 - UNIQUE: `uk_member_email (email)`
+- UNIQUE: `uk_member_nickname (nickname)` — 닉네임 중복 방지 (FR-01-01, FR-01-23). 애플리케이션의 사전 중복 검사는 동시 요청을 완전히 막을 수 없으므로, 최종 중복 방어는 이 제약입니다. 저장 시 위반이 발생하면 서비스 계층에서 `NICKNAME_DUPLICATED`(API 409) 또는 화면 `nickname_duplicated`로 변환합니다 (DEVELOPMENT_RULES 6.4). 중복 판정의 대소문자·악센트 구분은 테이블 collation을 따르며, 구현 단계에서 확인합니다.
 - UNIQUE: `uk_member_google_sub (google_sub)` — 한 Google 계정은 한 회원에만 연결 (FR-01-11). MySQL UNIQUE는 NULL 중복을 허용하므로 미연동 회원은 여러 명일 수 있습니다.
 - CHECK: `role IN ('USER','ADMIN')`
 - 로그인 수단 규칙: `password_hash`와 `google_sub` 중 최소 하나는 NOT NULL이어야 합니다 (FR-01-13). 애플리케이션에서 검증하고, 조건을 DB CHECK로도 둡니다: `CHECK (password_hash IS NOT NULL OR google_sub IS NOT NULL)`.
@@ -260,7 +261,8 @@ erDiagram
 - INDEX: `idx_refresh_member (member_id, revoked_at)`
 - 원문 저장 위치: 브라우저의 HttpOnly Cookie만 (FR-01-05). DB에는 해시만 저장합니다.
 - 로테이션 (FR-01-06): 재발급 시 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT합니다. 행을 물리 삭제하지 않습니다. 만료되거나 폐기된 행을 정리하는 방식은 구현 단계에서 정합니다.
-- 재사용 탐지 정책은 T7에서 확정합니다.
+- 재사용 탐지 (T7 A안 확정): 폐기된 Refresh Token의 재사용이 실제로 탐지되면 해당 회원의 모든 활성 Refresh Token(`revoked_at IS NULL`)을 폐기합니다. 원문은 저장하지 않고 SHA-256 해시만 저장합니다. 폐기된 행은 재사용 탐지를 위해 보존합니다.
+- 동시 갱신 상황에서 정상 중복 요청을 재사용으로 오인하지 않기 위한 세부 처리 방식은 별도 설계 결정(T14, DEVELOPMENT_RULES 5.7.4)에 따릅니다. 이 결정 전까지 T7 원칙을 그대로 적용합니다.
 
 ### 2.9 storage_delete_task (S3 삭제 추적) — 신규
 

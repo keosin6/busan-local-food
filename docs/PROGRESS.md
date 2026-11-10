@@ -66,6 +66,7 @@
 
 | 번호 | 항목 | 필요 시점 |
 |------|------|-----------|
+| T14 | Refresh Token 동시 갱신 시 정상 중복 요청 처리 (옵션 1 권장, 저장 구조 변경·유예 창은 결정 필요). 상세는 DEVELOPMENT_RULES 5.7.4 | Stage 2 구현 전 |
 | T1 | 회원 정지·탈퇴 정책 | Stage 10 전 |
 | T2 | 관리자 권한 부여·변경 방식, 최초 관리자 생성 방법 | Stage 10 전 |
 | T4 | DB 백업 주기, 보관 기간, 저장 위치, 복구 절차 | Stage 11 전 |
@@ -111,10 +112,12 @@
 | 2026-11-10 | 인증 문서 정합성 검토: MySQL 개발 환경을 개발 PC 직접 설치로 정정, OAuth2 임시 상태와 `/api/**` STATELESS 체인의 충돌을 T11 쟁점으로 기록, T12(로그아웃)·T13(재발급) 제안 기록 | 완료. 승인 대기 항목은 미확정 |
 | 2026-11-10 | T3(신규 가입 닉네임), T7(Refresh Token 재사용 탐지), T8(연동·해제 본인 확인), T12(화면 로그아웃 순서), T13(401 자동 재발급) A안 확정. 연동 해제를 화면 세션 기반으로 바꾸고 `DELETE /api/me/google` 제거. 로컬 비밀번호 설정 요구(FR-01-22) 추가. FR-01-22~26 추가 | 완료 (문서). 구현 미완료. DATABASE_ERD 263행 "T7에서 확정" 문구는 ERD 변경 금지 조건에 따라 이번에 수정하지 않음 |
 | 2026-11-10 | T11 확정 A안을 PROGRESS, DEVELOPMENT_RULES, API_SPEC, FUNCTION_SPEC, REQUIREMENTS, PROJECT_OVERVIEW에 반영 (문서만 수정). 구현은 Stage 2에서 진행 | 완료 (문서). 계정 연동 기능 구현 미완료 |
+| 2026-11-10 | PR #6 보완: `member.nickname`에 `uk_member_nickname` UNIQUE 추가 (ERD, REQUIREMENTS, 개발 규칙 6.4, API·화면 중복 응답 정리). Refresh Token 동시 갱신 분석을 T14로 등록하고 대안 3개와 권장안(옵션 1)을 기록. 사용자 결정 전 구현하지 않음. ERD 263행 T7 문구 정리 | 완료 (문서). 코드·DB 미변경
 | 2026-11-10 | T3·T7·T8·T12·T13 A안 문서 반영 (브랜치 `docs/finalize-auth-decisions-t3-t7-t8-t12-t13`, `main` 기준) | 완료. 문서만 수정. 코드·의존성·DB·ERD 변경 없음. Stage 2 미착수 |
 
 ## 7. 다음 작업
 
 1. Stage 2(F1-01 회원·인증) 구현을 준비합니다. 인증 설계 결정(T3, T7, T8, T11, T12, T13)은 확정되었습니다.
 2. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
-3. DATABASE_ERD 263행의 "T7에서 확정" 문구를 정리하고, `nickname` UNIQUE 제약 필요 여부를 ERD 변경 절차로 검토합니다.
+3. T14(Refresh Token 동시 갱신)를 결정합니다. 결정 전에는 구현하지 않습니다.
+4. DATABASE_ERD에 `uk_member_nickname`이 반영되었는지 구현 단계에서 확인합니다 (collation 확인 포함).
