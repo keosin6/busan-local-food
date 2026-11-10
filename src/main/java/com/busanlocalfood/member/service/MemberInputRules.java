@@ -26,7 +26,6 @@ final class MemberInputRules {
     private static final Pattern DIGIT = Pattern.compile("[0-9]");
     // ASCII 문장부호·기호 (영문과 숫자를 제외한 출력 가능 문자)
     private static final Pattern SPECIAL = Pattern.compile("\\p{Punct}");
-    private static final Pattern WHITESPACE = Pattern.compile("\\s");
 
     private MemberInputRules() {
     }
@@ -75,10 +74,17 @@ final class MemberInputRules {
         }
     }
 
+    /**
+     * 모든 Unicode 코드 포인트를 검사한다. 정규식 \s는 NBSP 등 일부 공백을 포함하지 않으므로 사용하지 않는다.
+     */
+    private static boolean containsWhitespace(String value) {
+        return value.codePoints().anyMatch(cp -> Character.isWhitespace(cp) || Character.isSpaceChar(cp));
+    }
+
     private static boolean satisfiesPasswordPolicy(String password) {
         return password.length() >= PASSWORD_MIN_LENGTH
                 && password.length() <= PASSWORD_MAX_LENGTH
-                && !WHITESPACE.matcher(password).find()
+                && !containsWhitespace(password)
                 && LETTER.matcher(password).find()
                 && DIGIT.matcher(password).find()
                 && SPECIAL.matcher(password).find();

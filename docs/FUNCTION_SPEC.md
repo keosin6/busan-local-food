@@ -44,7 +44,7 @@
 |------|------|-----------|
 | 이메일 | 필수. 앞뒤 공백 제거 후 소문자 정규화(Locale.ROOT). 공백 없이 `@`와 도메인 점을 포함하는 단순 형식. 최대 255자. 중복 불가 | `EMAIL_REQUIRED`, `EMAIL_INVALID`, `EMAIL_DUPLICATED` |
 | 닉네임 | 필수. 앞뒤 공백 제거 후 검증. 2~20자. 허용 문자는 한글 완성형(가-힣), 영문(A-Z, a-z), 숫자(0-9). 특수문자와 내부 공백 불가. 중복 불가 | `NICKNAME_REQUIRED`, `NICKNAME_INVALID`, `NICKNAME_DUPLICATED` |
-| 비밀번호 (가입) | 필수. 8~20자. 영문 1자 이상, 숫자 1자 이상, 특수문자 1자 이상(ASCII 문장부호·기호). 공백 불가. 앞뒤 공백 제거와 소문자 변환을 하지 않는다. `passwordConfirm`과 일치. 저장은 BCrypt 해시 | `PASSWORD_REQUIRED`, `PASSWORD_INVALID` |
+| 비밀번호 (가입) | 필수. 8~20자. 영문 1자 이상, 숫자 1자 이상, 특수문자 1자 이상(ASCII 문장부호·기호). 공백 불가(일반 스페이스, 탭, 줄바꿈, NBSP 등 Unicode 공백 문자 포함, 모든 코드 포인트 검사). 앞뒤 공백 제거와 소문자 변환을 하지 않는다. `passwordConfirm`과 일치. 저장은 BCrypt 해시 | `PASSWORD_REQUIRED`, `PASSWORD_INVALID` |
 | 로그인 이메일 | 필수. 가입과 같은 정규화와 형식 검사 | `EMAIL_REQUIRED`, `EMAIL_INVALID` |
 | 로그인 비밀번호 | 필수 여부만 확인. 가입 조합 규칙은 적용하지 않음 | `PASSWORD_REQUIRED` |
 
@@ -52,7 +52,7 @@
 1. 이메일, 닉네임, 비밀번호 순서로 형식을 검증합니다. 이메일과 닉네임의 중복 검사는 형식 검증 후에 수행합니다.
 2. 이메일 중복을 먼저 확인하고, 이어서 닉네임 중복을 확인합니다. 둘 다 중복이면 `EMAIL_DUPLICATED`를 반환합니다.
 3. 사전 검사 후 저장 시점에 DB UNIQUE 제약(`uk_member_email`, `uk_member_nickname`)이 위반되면 제약 이름으로 구분하여 `EMAIL_DUPLICATED` 또는 `NICKNAME_DUPLICATED`로 바꿉니다. 제약 이름을 알 수 없는 무결성 오류는 중복으로 바꾸지 않고 그대로 전파합니다.
-4. 로그인 실패(미가입, 비밀번호 불일치, Google 전용 계정)는 모두 `INVALID_CREDENTIALS`(401)입니다. 미가입 이메일에도 BCrypt 비교를 한 번 수행하여 응답 시간으로 가입 여부를 추측하기 어렵게 합니다.
+4. 로그인 실패(미가입, 비밀번호 불일치, Google 전용 계정)는 모두 `INVALID_CREDENTIALS`(401)이며, 외부 응답 메시지와 코드가 같습니다. 모든 경로에서 BCrypt 검증을 정확히 한 번 수행합니다. 비밀번호 해시가 없는 경우(미가입, Google 전용)에는 더미 해시와 비교하여 계정 유형에 따른 검증 횟수 차이를 없앱니다.
 
 ### 로그인 흐름 (화면)
 1. `POST /login`으로 이메일과 비밀번호를 검증합니다. 없거나, 비밀번호가 틀리거나, `password_hash`가 없는(Google 전용) 경우 같은 결과(`/login?error=invalid_credentials`)를 반환합니다. 계정 존재 여부와 가입 방식을 노출하지 않습니다.

@@ -199,6 +199,29 @@ class MemberRegistrationServiceTest {
         assertCode(() -> register("user@example.com", password, password, "부산먹보"), ErrorCode.PASSWORD_INVALID);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "pass\u00A01234!",   // NBSP (Non-breaking space)
+            "pass\u20031234!",   // EM SPACE
+            "pass\u30001234!",   // IDEOGRAPHIC SPACE
+            "pass\u20281234!",   // LINE SEPARATOR
+            "pass\t1234!",       // TAB
+            "pass\n1234!",       // LF
+            "pass\r1234!",       // CR
+            "pass 1234!"          // 일반 스페이스
+    })
+    void 비밀번호에_Unicode_공백이_있으면_PASSWORD_INVALID(String password) {
+        assertCode(() -> register("user@example.com", password, password, "부산먹보"), ErrorCode.PASSWORD_INVALID);
+        verify(memberRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void 공백이_없는_정상_비밀번호는_허용한다() {
+        Member result = register("user@example.com", "Pass-1234!", "Pass-1234!", "부산먹보");
+
+        assertThat(result.getNickname()).isEqualTo("부산먹보");
+    }
+
     @Test
     void 비밀번호_확인값이_다르면_PASSWORD_INVALID() {
         assertCode(() -> register("user@example.com", VALID_PASSWORD, "pass1234?", "부산먹보"),

@@ -35,7 +35,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | Stage 2-2 단위 테스트 완료 (87개 중 DB 테스트 13개는 테스트 DB 환경 변수 설정 시 실행) | 명세 반영 완료 (Q1, Q3, 인증 구조 2026-11-10). 인증 설계 확정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 구현 미완료 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | Stage 2-2 단위 테스트 완료 (101개 중 DB 테스트 13개는 테스트 DB 환경 변수 설정 시 실행) | 명세 반영 완료 (Q1, Q3, 인증 구조 2026-11-10). 인증 설계 확정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 구현 미완료 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -178,13 +178,28 @@
   - 비밀번호 확인값이 없으면 `PASSWORD_REQUIRED`로 처리. 지시서에 명시되지 않은 부분이므로 확인 필요.
   - 이메일 형식은 단순 정규식. 필요 시 정책 재검토.
   - 닉네임 중복은 테이블 collation(`utf8mb4_unicode_ci`)에 따라 대소문자와 악센트를 구분하지 않음. 사전 검사와 UNIQUE 제약이 같은 기준을 따른다.
-  - 타이밍 차이 잔여: 미가입은 더미 BCrypt 비교를 하지만 Google 전용 계정은 지시서 규칙에 따라 BCrypt를 하지 않아 응답 시간이 짧을 수 있음. 응답 메시지는 같음. 완화 방법은 후속 결정 필요.
+  - Google 전용 계정 응답 시간 차이는 PR #8 보완에서 해소: 모든 로그인 경로가 BCrypt 검증을 정확히 한 번 수행하며, 비밀번호 해시가 없으면 더미 해시와 비교한다.
 - 미완료 항목: 컨트롤러와 화면 폼 연결, JWT·Refresh Token, Google OAuth2, SecurityFilterChain 분리, 신규 가입 닉네임 설정 화면.
+
+### 6.3 PR #8 보완 기록 (로그인 검증 시간 차이, Unicode 공백)
+
+- 브랜치: `feat/f1-01-signup-login-service` (기존 PR #8에 추가 커밋).
+- 보완 ①: `MemberLoginService.authenticate`가 모든 경로에서 `PasswordEncoder.matches`를 정확히 한 번 호출. 비밀번호 해시가 없는 경우(미가입, Google 전용)는 더미 해시와 비교. 응답은 `INVALID_CREDENTIALS`로 동일.
+- 보완 ②: 비밀번호 공백 검사를 정규식 `\s`에서 코드 포인트 단위 `Character.isWhitespace || Character.isSpaceChar`로 변경. NBSP, EM SPACE, IDEOGRAPHIC SPACE 등 Unicode 공백을 거부.
+- 추가 테스트:
+  - `MemberLoginBcryptCallTest` (5개, Mockito): 미가입·Google 전용·일반 회원·불일치 경로의 `matches` 호출 횟수, 미가입과 Google 전용의 외부 응답 동일성.
+  - `MemberRegistrationServiceTest` (49개 중 추가): Unicode 공백 8종 거부, 공백 없는 정상 비밀번호 허용.
+- 검증 결과:
+  - `./gradlew clean test` (테스트 DB 미설정): 101개 중 88개 통과, 13개 건너뜀(DB 테스트), 실패 0개.
+  - 격리된 MySQL 8.0.46, DDL 적용, `TEST_DB_*` 설정: 101개 모두 통과. 테스트 후 `member`, `refresh_token` 0행.
+  - `./gradlew bootJar`: 성공.
+  - 보완 ②의 테스트가 실제로 결함을 잡는지 확인: 수정 전 `\s` 검사로 되돌리면 NBSP, EM SPACE, IDEOGRAPHIC SPACE 케이스가 실패함을 확인한 뒤 수정본을 복원.
+- 참고 (이번 범위 밖): 이메일 형식 정규식과 `trim()`은 Unicode 공백을 완전히 다루지 않는다. 예: 이메일 로컬 파트의 NBSP는 현재 형식 검사를 통과할 수 있다. 정책 결정 후 별도 보완이 필요하다. Java의 `isWhitespace`에 포함되지 않는 제로 폭 공백(U+200B)은 이번 검사 대상이 아니다.
 
 ## 7. 다음 작업
 
 1. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안, 잠금 순서 DEVELOPMENT_RULES 5.7.4), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안). Stage 2-2 서비스를 재사용한다.
 2. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
-3. 확인 필요: 비밀번호 확인값 누락 처리(`PASSWORD_REQUIRED`), Google 전용 계정의 응답 시간 차이 완화 방법, 닉네임 대소문자 구분 정책.
+3. 확인 필요: 비밀번호 확인값 누락 처리(`PASSWORD_REQUIRED`), 닉네임 대소문자 구분 정책, 이메일 형식 검사에 남아 있는 Unicode 공백 허용 여부(아래 참고).
 4. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
 5. 실제 MySQL 스키마 적용 절차(개발·운영 DB)는 사용자가 `db/manual/001_create_member_refresh_token.sql`을 직접 실행합니다. 이 작업에서는 실행하지 않았습니다.

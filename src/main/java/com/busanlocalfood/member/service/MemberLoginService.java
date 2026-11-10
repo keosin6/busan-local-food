@@ -35,18 +35,16 @@ public class MemberLoginService {
         String email = MemberInputRules.requireEmail(rawEmail);
         MemberInputRules.requireLoginPassword(rawPassword);
 
-        Optional<Member> found = memberRepository.findByEmail(email);
-        if (found.isEmpty()) {
-            passwordEncoder.matches(rawPassword, dummyPasswordHash);
-            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
-        }
+        Member member = memberRepository.findByEmail(email).orElse(null);
+        boolean hasPasswordHash = member != null && member.getPasswordHash() != null;
 
-        Member member = found.get();
-        // Google 전용 계정은 비밀번호 해시가 없으므로 BCrypt 비교 없이 같은 오류를 낸다.
-        if (member.getPasswordHash() == null) {
-            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
-        }
-        if (!passwordEncoder.matches(rawPassword, member.getPasswordHash())) {
+        // 모든 경로(정상, 비밀번호 불일치, 미가입, Google 전용)에서 BCrypt 검증을 정확히 한 번 수행한다.
+        // 비밀번호 해시가 없으면(미가입, Google 전용) 더미 해시와 비교하여 응답 시간 차이를 줄인다.
+        String hashToCompare = hasPasswordHash ? member.getPasswordHash() : dummyPasswordHash;
+        boolean passwordMatches = passwordEncoder.matches(rawPassword, hashToCompare);
+
+        // 실패 사유(미가입, 불일치, Google 전용)는 구분하지 않고 같은 오류로 응답한다.
+        if (!hasPasswordHash || !passwordMatches) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
         return member;
