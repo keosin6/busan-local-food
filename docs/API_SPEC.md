@@ -157,13 +157,17 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
 - 권한: 유효한 Refresh Token을 가진 회원
 - 요청: 본문 없음. `refresh_token` 쿠키를 전송합니다.
-- 처리 (FR-01-06, FR-01-24, T7 A안):
-  1. 쿠키 원문의 SHA-256을 계산하여 `refresh_token`에서 조회합니다.
-  2. 행이 없으면 `401 TOKEN_INVALID`를 반환합니다. 다른 행은 변경하지 않습니다.
-  3. 행의 `revoked_at`이 있으면 재사용으로 판단합니다 (만료 여부와 무관). 같은 트랜잭션에서 해당 회원의 `revoked_at`이 없는 모든 행에 `revoked_at`을 기록하고 `401 TOKEN_INVALID`를 반환합니다. 폐기된 행은 삭제하지 않습니다.
-  4. 폐기되지 않았지만 만료되었으면 `401 TOKEN_INVALID`를 반환합니다. 다른 행은 변경하지 않습니다.
-  5. 정상이면 회원 행에 잠금을 걸고 토큰 행을 다시 조회합니다. 여전히 폐기되지 않은 정상 행이면 기존 행의 `revoked_at`을 기록하고 새 Refresh Token 행을 INSERT합니다. 그렇지 않으면 3번의 재사용 처리를 수행합니다.
-  6. 새 `access_token` 쿠키와 새 `refresh_token` 쿠키를 설정합니다.
+- 처리 (FR-01-06, FR-01-24, T7 A안, T14 A안):
+  1. 쿠키 원문의 SHA-256 해시로 `refresh_token` 행을 잠금 없이 조회하여 회원 ID를 확인합니다. 행이 없으면 `401 TOKEN_INVALID`를 반환합니다. 어떤 행도 변경하지 않습니다.
+  2. 트랜잭션을 시작하고 회원 행을 잠금 조회합니다.
+  3. 같은 트랜잭션에서 `refresh_token` 행을 다시 조회하여 아래로 판정합니다.
+     - 폐기되지 않았고 만료되지 않았으면 정상 갱신입니다. 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT한 뒤 커밋합니다.
+     - 폐기되지 않았지만 만료되었으면 `401 TOKEN_INVALID`를 반환합니다. 다른 행은 변경하지 않습니다.
+     - `revoked_at`이 있으면 재사용입니다. 같은 회원의 `revoked_at`이 없는 모든 행에 `revoked_at`을 기록하고 커밋합니다. 커밋 후 `401 TOKEN_INVALID`를 반환합니다.
+  4. 정상 갱신일 때만 새 `access_token`, `refresh_token` 쿠키를 설정합니다.
+- 재사용 탐지 응답: `401 TOKEN_INVALID`입니다. 서버는 해당 회원의 모든 활성 Refresh Token을 커밋한 뒤 응답합니다. 응답 본문에는 재사용 여부나 토큰 정보를 넣지 않습니다.
+- 응답 유실 시: 응답이 네트워크에서 유실되면 클라이언트는 새 쿠키를 받지 못합니다. 이후 이전 토큰을 제출하면 재사용으로 판정되어 재로그인이 필요할 수 있습니다. 이는 T14 A안의 수용된 한계입니다.
+- 응답 보안: Refresh Token 원문과 해시는 응답 본문에 노출하지 않습니다. 쿠키의 HttpOnly, Secure, SameSite, Path 설정은 1.1절을 따르며 이 절에서 바꾸지 않습니다.
 - 응답 `200`:
 ```json
 {
@@ -175,7 +179,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 실패 시 두 쿠키를 만료시킵니다.
 - 화면 세션(`JSESSIONID`)은 이 API로 재발급되지 않습니다.
 - 화면의 자동 재발급과 재시도 규칙은 DEVELOPMENT_RULES 5.7.2 (T13 A안)를 따릅니다.
-- 동시 갱신: 회원 행 잠금으로 활성 토큰이 둘 생기는 것(중복 발급)을 막습니다. 잠금 뒤 재조회에서 폐기된 행을 보는 요청은 재사용으로 판정되며, 이것이 T7 원칙입니다. 정상 중복 요청을 재사용으로 오인하지 않는 처리 방식은 T14 결정 대기입니다 (DEVELOPMENT_RULES 5.7.4).
+- 동시 갱신 (T14 A안): 같은 브라우저의 여러 탭은 Web Locks API로 갱신을 직렬화하고, 잠금 안에서 `GET /api/auth/me`로 인증 상태를 확인한 뒤 필요할 때만 이 API를 호출합니다 (DEVELOPMENT_RULES 5.7.2). 서버는 회원 행 잠금으로 정상 갱신과 재사용 탐지를 같은 순서로 처리합니다 (DEVELOPMENT_RULES 5.7.4).
 - 주요 오류: 401 TOKEN_INVALID (쿠키 없음, 만료, 폐기, 위조)
 - 재사용 탐지는 DEVELOPMENT_RULES 5.7.4 (T7 A안)를 따릅니다. 폐기된 토큰이 재사용되면 해당 회원의 모든 활성 Refresh Token을 폐기합니다.
 
@@ -185,7 +189,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증: 불필요 (Access Token이 만료되었어도 로그아웃할 수 있어야 하므로 요구하지 않습니다)
 - 권한: 누구나
 - 요청: 본문 없음. `refresh_token` 쿠키가 있으면 해당 토큰을 폐기합니다.
-- 처리: 해당 `refresh_token` 행의 `revoked_at`을 기록하고, `access_token`과 `refresh_token` 쿠키를 만료시킵니다 (FR-01-07).
+- 처리: 회원 행을 먼저 잠근 뒤 해당 `refresh_token` 행의 `revoked_at`을 기록하고, `access_token`과 `refresh_token` 쿠키를 만료시킵니다 (FR-01-07). 잠금 순서는 재발급과 같습니다 (DEVELOPMENT_RULES 5.7.4).
 - 응답 `200`:
 ```json
 { "success": true, "data": null, "timestamp": "..." }
