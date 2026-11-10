@@ -34,7 +34,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 별도 쿠키 없음 | OAuth2 임시 상태는 HTTP 세션(`JSESSIONID`)에 저장 | - | - | - | - | 세션과 같음 |
 
 - `access_token`의 Path는 `/api`로 제한합니다. API 요청에서만 전송됩니다. 화면 요청은 `JSESSIONID`로 인증합니다.
-- `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다 (T12).
+- `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다. 화면 로그아웃은 먼저 `POST /api/auth/logout`을 호출합니다 (T12, 2.11).
 - 쿠키를 만료시킬 때는 발급 당시와 같은 Path와 Domain을 사용합니다.
 - 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
 
@@ -87,12 +87,13 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 404 | RESTAURANT_NOT_FOUND | 맛집 없음 |
 | 404 | REVIEW_NOT_FOUND | 리뷰 없음 |
 | 404 | FAVORITE_NOT_FOUND | 찜 없음 |
-| 404 | GOOGLE_NOT_LINKED | 연동된 Google 계정 없음 |
+| 404 | GOOGLE_NOT_LINKED | 연동된 Google 계정 없음 (화면 해제 흐름에서는 `/mypage?error=google_not_linked`로 안내, 2.7) |
 | 409 | EMAIL_DUPLICATED | 이메일 중복 |
+| 409 | NICKNAME_DUPLICATED | 닉네임 중복 (`uk_member_nickname` 위반 포함) |
 | 409 | REVIEW_ALREADY_EXISTS | 같은 맛집에 리뷰 중복 |
 | 409 | FAVORITE_ALREADY_EXISTS | 찜 중복 |
 | 409 | GOOGLE_ALREADY_LINKED | 이미 다른 회원에게 연결된 Google 계정 (FR-01-11) |
-| 409 | LAST_LOGIN_METHOD | 남은 로그인 수단이 없어 Google 연동을 해제할 수 없음 (FR-01-13) |
+| 409 | LAST_LOGIN_METHOD | 남은 로그인 수단이 없어 Google 연동을 해제할 수 없음 (FR-01-13). 화면 해제 흐름에서는 `/mypage?error=password_required`로 안내 (2.7) |
 | 502 | STORAGE_ERROR | S3 오류 (업로드 등 S3 호출이 필요한 요청 실패) |
 | 502 | AI_UNAVAILABLE | OpenRouter 호출 실패 또는 타임아웃 |
 | 502 | AI_RESPONSE_INVALID | AI 응답 파싱 실패 |
@@ -128,7 +129,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "timestamp": "..."
 }
 ```
-- 주요 오류: 400 VALIDATION_FAILED, 409 EMAIL_DUPLICATED
+- 주요 오류: 400 VALIDATION_FAILED, 409 EMAIL_DUPLICATED, 409 NICKNAME_DUPLICATED
 
 ### 2.2 로그인 (API)
 
@@ -156,11 +157,17 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
 - 권한: 유효한 Refresh Token을 가진 회원
 - 요청: 본문 없음. `refresh_token` 쿠키를 전송합니다.
-- 처리 (FR-01-06):
-  1. 쿠키 원문의 SHA-256을 계산하여 `refresh_token`에서 조회합니다.
-  2. 행이 없거나, 폐기(`revoked_at`)되었거나, 만료되었으면 실패합니다.
-  3. 성공하면 기존 행의 `revoked_at`을 기록하고, 새 Refresh Token 행을 INSERT합니다.
-  4. 새 `access_token` 쿠키와 새 `refresh_token` 쿠키를 설정합니다.
+- 처리 (FR-01-06, FR-01-24, T7 A안, T14 A안):
+  1. 쿠키 원문의 SHA-256 해시로 `refresh_token` 행을 잠금 없이 조회하여 회원 ID를 확인합니다. 행이 없으면 `401 TOKEN_INVALID`를 반환합니다. 어떤 행도 변경하지 않습니다.
+  2. 트랜잭션을 시작하고 회원 행을 잠금 조회합니다.
+  3. 같은 트랜잭션에서 `refresh_token` 행을 다시 조회하여 아래로 판정합니다.
+     - 폐기되지 않았고 만료되지 않았으면 정상 갱신입니다. 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT한 뒤 커밋합니다.
+     - 폐기되지 않았지만 만료되었으면 `401 TOKEN_INVALID`를 반환합니다. 다른 행은 변경하지 않습니다.
+     - `revoked_at`이 있으면 재사용입니다. 같은 회원의 `revoked_at`이 없는 모든 행에 `revoked_at`을 기록하고 커밋합니다. 커밋 후 `401 TOKEN_INVALID`를 반환합니다.
+  4. 정상 갱신일 때만 새 `access_token`, `refresh_token` 쿠키를 설정합니다.
+- 재사용 탐지 응답: `401 TOKEN_INVALID`입니다. 서버는 해당 회원의 모든 활성 Refresh Token을 커밋한 뒤 응답합니다. 응답 본문에는 재사용 여부나 토큰 정보를 넣지 않습니다.
+- 응답 유실 시: 응답이 네트워크에서 유실되면 클라이언트는 새 쿠키를 받지 못합니다. 이후 이전 토큰을 제출하면 재사용으로 판정되어 재로그인이 필요할 수 있습니다. 이는 T14 A안의 수용된 한계입니다.
+- 응답 보안: Refresh Token 원문과 해시는 응답 본문에 노출하지 않습니다. 쿠키의 HttpOnly, Secure, SameSite, Path 설정은 1.1절을 따르며 이 절에서 바꾸지 않습니다.
 - 응답 `200`:
 ```json
 {
@@ -171,9 +178,10 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 ```
 - 실패 시 두 쿠키를 만료시킵니다.
 - 화면 세션(`JSESSIONID`)은 이 API로 재발급되지 않습니다.
-- 화면의 자동 재발급과 재시도 규칙은 DEVELOPMENT_RULES 5.7.2의 제안(T13, 승인 대기)을 참조합니다.
+- 화면의 자동 재발급과 재시도 규칙은 DEVELOPMENT_RULES 5.7.2 (T13 A안)를 따릅니다.
+- 동시 갱신 (T14 A안): 같은 브라우저의 여러 탭은 Web Locks API로 갱신을 직렬화하고, 잠금 안에서 `GET /api/auth/me`로 인증 상태를 확인한 뒤 필요할 때만 이 API를 호출합니다 (DEVELOPMENT_RULES 5.7.2). 서버는 회원 행 잠금으로 정상 갱신과 재사용 탐지를 같은 순서로 처리합니다 (DEVELOPMENT_RULES 5.7.4).
 - 주요 오류: 401 TOKEN_INVALID (쿠키 없음, 만료, 폐기, 위조)
-- 재사용 탐지 정책은 T7에서 확정합니다.
+- 재사용 탐지는 DEVELOPMENT_RULES 5.7.4 (T7 A안)를 따릅니다. 폐기된 토큰이 재사용되면 해당 회원의 모든 활성 Refresh Token을 폐기합니다.
 
 ### 2.4 로그아웃 (API)
 
@@ -181,7 +189,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증: 불필요 (Access Token이 만료되었어도 로그아웃할 수 있어야 하므로 요구하지 않습니다)
 - 권한: 누구나
 - 요청: 본문 없음. `refresh_token` 쿠키가 있으면 해당 토큰을 폐기합니다.
-- 처리: 해당 `refresh_token` 행의 `revoked_at`을 기록하고, `access_token`과 `refresh_token` 쿠키를 만료시킵니다 (FR-01-07).
+- 처리: 회원 행을 먼저 잠근 뒤 해당 `refresh_token` 행의 `revoked_at`을 기록하고, `access_token`과 `refresh_token` 쿠키를 만료시킵니다 (FR-01-07). 잠금 순서는 재발급과 같습니다 (DEVELOPMENT_RULES 5.7.4).
 - 응답 `200`:
 ```json
 { "success": true, "data": null, "timestamp": "..." }
@@ -201,11 +209,29 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   3. `google_sub`가 같은 회원이 있으면 로그인합니다. Spring Security 화면 세션을 생성하고 JWT 쿠키(`access_token`, `refresh_token`)를 설정한 뒤 `/`로 리다이렉트합니다.
   4. 없고 같은 `email`의 기존 회원이 있으면 **자동 연결하지 않습니다.** `/login?error=email_account_exists`로 리다이렉트합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요." 를 표시합니다.
   5. `email_verified`가 아니면 `/login?error=google_unverified`로 리다이렉트합니다.
-  6. 둘 다 없으면 새 회원을 만듭니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`). 닉네임 규칙은 T3에서 정합니다. 화면 세션과 JWT 쿠키를 함께 발급하고 `/`로 리다이렉트합니다.
+  6. 둘 다 없으면 회원을 만들지 않습니다. 신규 가입 진행 상태(Google `sub`, `email`, 흐름 = 신규 가입)를 OAuth2 임시 세션에 저장하고, 로그인 상태 없이 닉네임 설정 화면(`GET <닉네임 설정 화면 경로>`, 경로는 구현 단계에서 확정)으로 리다이렉트합니다. 화면 세션과 JWT는 발급하지 않습니다 (T3 A안, 2.5.1).
 - 실패(Google 인증 오류 등): `/login?error=google_failed`로 리다이렉트합니다.
 - 콜백 처리는 사용자 정의 `AuthenticationSuccessHandler`(성공)와 `AuthenticationFailureHandler`(실패)가 담당합니다. 세션의 연동 진행 상태가 없으면 위 일반 로그인 처리를 유지합니다 (DEVELOPMENT_RULES 5.7.1 Callback 핸들러 원칙).
 - 발급: 성공하면 화면 세션과 JWT를 함께 발급합니다 (FR-01-17).
 - 주요 오류(리다이렉트 쿼리): `email_account_exists`, `google_unverified`, `google_failed`
+
+### 2.5.1 Google 신규 가입 닉네임 설정 (화면, T3 A안)
+
+- 메서드·URL: `GET <닉네임 설정 화면 경로>` (화면 표시), `POST <닉네임 설정 화면 경로>` (제출). 경로는 구현 단계에서 확정합니다. 화면 경로이며 `/api/**`가 아닙니다.
+- 인증: 불필요. 대신 OAuth2 임시 세션에 신규 가입 진행 상태가 있어야 합니다. 없으면 `/login`으로 이동합니다.
+- 권한: Google 신규 가입을 진행 중인 사용자
+- CSRF: 제출(POST)에 필요
+- 요청: 폼 필드 `nickname` (2~20자)
+- 처리:
+  1. 가입 진행 상태를 확인합니다. 없으면 `/login`으로 이동합니다.
+  2. 닉네임 길이(2~20자)를 검증합니다. 실패하면 `<닉네임 설정 화면 경로>?error=validation_failed`로 이동합니다.
+  3. 닉네임 중복을 검사합니다. 중복이면 `<닉네임 설정 화면 경로>?error=nickname_duplicated`로 이동합니다.
+  4. 회원을 생성합니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`).
+  5. 화면 세션과 JWT 쿠키(`access_token`, `refresh_token`)를 발급하고, 가입 진행 상태를 제거합니다 (FR-01-17).
+  6. `302` → `/`로 리다이렉트합니다.
+- 닉네임 설정이 끝나기 전에는 회원을 만들지 않습니다. 흐름이 중단되면 가입 진행 상태만 제거하고, 회원은 만들지 않습니다.
+- 주요 오류(리다이렉트 쿼리): `validation_failed`, `nickname_duplicated`.
+- 참고: `nickname`에는 `uk_member_nickname` UNIQUE 제약이 있습니다. 사전 검사 후 저장 시 위반이 나면 같은 `nickname_duplicated`로 처리합니다 (ERD 2.1, DEVELOPMENT_RULES 5.7.3, 6.4).
 
 ### 2.6 Google 계정 연동 시작 (화면, 세션 기반)
 
@@ -247,25 +273,35 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 실패하면 기존 세션과 JWT를 변경하지 않고, 임시 상태만 정리합니다.
 - 주요 오류(리다이렉트 쿼리): `google_failed`, `google_unverified`, `google_already_linked`.
 
-### 2.7 Google 계정 연동 해제
+### 2.7 Google 계정 연동 해제 (화면, 세션 기반, T8 A안)
 
-- 메서드·URL: `DELETE /api/me/google`
-- 인증: 필요 (`access_token`)
-- 권한: 회원 본인
-- 요청:
-```json
-{ "password": "<현재 비밀번호>" }
-```
-- 처리 (FR-01-12, FR-01-13, T8):
-  1. 연동된 Google 계정이 없으면 404 GOOGLE_NOT_LINKED.
-  2. 회원에게 비밀번호가 없으면(Google 전용 계정) 해제하면 로그인 수단이 없어지므로 409 LAST_LOGIN_METHOD로 거부합니다.
-  3. 비밀번호가 맞지 않으면 401 INVALID_CREDENTIALS로 거부합니다 (재인증).
-  4. 성공하면 `member.google_sub = NULL`로 저장합니다.
-- 응답 `200`:
-```json
-{ "success": true, "data": { "googleLinked": false }, "timestamp": "..." }
-```
-- 주요 오류: 401 TOKEN_INVALID, 401 INVALID_CREDENTIALS, 404 GOOGLE_NOT_LINKED, 409 LAST_LOGIN_METHOD
+- 메서드·URL: `POST <연동 해제 화면 경로>`. 경로는 구현 단계에서 확정합니다. 화면 경로이며 `/api/**`가 아닙니다. API 엔드포인트로 제공하지 않습니다.
+- 인증: 화면 세션 필요 (로그인된 회원). 세션이 없으면 `/login`으로 이동합니다.
+- 권한: 로그인된 회원 본인
+- CSRF: 필요
+- 요청: 폼 필드 `password` (현재 비밀번호)
+- 처리 (FR-01-12, FR-01-13, T8 A안):
+  1. 세션에서 로그인 회원을 확인합니다.
+  2. 연동된 Google 계정이 없으면 해제하지 않고 `/mypage?error=google_not_linked`로 이동합니다.
+  3. 회원에게 비밀번호(`password_hash`)가 없으면 Google 전용 계정입니다. 해제하면 로그인 수단이 없어지므로 해제하지 않고 `/mypage?error=password_required`로 이동합니다. 2.7.1로 먼저 로컬 비밀번호를 설정하도록 안내합니다.
+  4. 입력한 비밀번호가 `password_hash`와 BCrypt로 일치하지 않으면 해제하지 않고 `/mypage?error=invalid_credentials`로 이동합니다.
+  5. 검증이 끝나면 `member.google_sub = NULL`로 저장하고 `/mypage?google=unlinked`로 이동합니다.
+- 주요 오류(리다이렉트 쿼리): `google_not_linked`, `password_required`, `invalid_credentials`.
+
+### 2.7.1 로컬 비밀번호 설정 (화면, Google 전용 회원, FR-01-22)
+
+- 메서드·URL: `GET <비밀번호 설정 화면 경로>` (화면 표시), `POST <비밀번호 설정 화면 경로>` (제출). 경로는 구현 단계에서 확정합니다.
+- 인증: 화면 세션 필요 (로그인된 회원)
+- 권한: 회원 본인. `password_hash`가 없는 회원만 설정할 수 있습니다.
+- CSRF: 제출(POST)에 필요
+- 요청: 폼 필드 `password` (8자 이상), `passwordConfirm` (일치)
+- 처리:
+  1. 세션에서 회원을 확인합니다.
+  2. `password_hash`가 이미 있으면 `/mypage?error=password_already_set`으로 이동합니다. 비밀번호 변경은 이번 명세 범위가 아닙니다.
+  3. 검증에 실패하면 `<비밀번호 설정 화면 경로>?error=validation_failed`로 이동합니다.
+  4. 비밀번호를 BCrypt로 해시하여 `password_hash`에 저장합니다 (FR-01-02).
+  5. `/mypage?password=set`으로 이동합니다. 이후 2.7의 연동 해제를 할 수 있습니다.
+- 소셜 계정 자동 연결이나 별도 인증 방식을 추가하지 않습니다.
 
 ### 2.8 내 정보 조회
 
@@ -291,7 +327,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 요청: 폼 필드 `email`, `password`, `passwordConfirm`, `nickname`. CSRF 토큰 필요.
 - 처리: 2.1과 같은 검증과 저장을 수행한 뒤 자동 로그인합니다. Spring Security 화면 세션을 생성하고 JWT 쿠키(`access_token`, `refresh_token`)를 발급합니다 (FR-01-17).
 - 응답: 성공 `302` → `/`.
-- 실패는 JSON이 아니라 리다이렉트로 응답합니다: `/signup?error=email_duplicated`, `/signup?error=validation_failed`.
+- 실패는 JSON이 아니라 리다이렉트로 응답합니다: `/signup?error=email_duplicated`, `/signup?error=nickname_duplicated`, `/signup?error=validation_failed`.
 
 ### 2.10 로그인 (화면)
 
@@ -306,12 +342,18 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 ### 2.11 로그아웃 (화면)
 
 - 메서드·URL: `POST /logout`
-- 인증: 세션 (세션이 없어도 `/`로 이동)
+- 인증: 세션 (세션이 없어도 `/login`으로 이동)
 - 권한: 누구나 (로그인 상태에서 사용)
 - 요청: CSRF 토큰 필요. 본문 없음.
-- 처리: Spring Security 세션을 무효화하고 SecurityContext를 제거합니다. `access_token`, `refresh_token` 쿠키를 만료시킵니다 (발급 당시와 같은 Path 사용).
-- Refresh Token 폐기 방식은 T12 제안(승인 대기)입니다. `refresh_token` 쿠키의 Path가 `/api/auth`이므로 `/logout`에서는 쿠키를 읽을 수 없습니다. 제안: 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출하고, 성공하면 `POST /logout`을 호출합니다. 첫 요청이 실패하면 `POST /logout`을 호출하지 않고 로그인 상태를 유지한 채 재시도를 안내합니다 (DEVELOPMENT_RULES 5.7.2).
-- 응답: `302` → `/`.
+- 처리 (T12 A안, 순서 고정):
+  1. 브라우저가 `POST /api/auth/logout`을 먼저 호출합니다 (2.4, `X-XSRF-TOKEN` 헤더 포함). 서버는 Refresh Token을 폐기하고 `access_token`, `refresh_token` 쿠키를 만료시킵니다.
+  2. 1이 성공한 경우에만 브라우저가 `POST /logout`을 호출합니다.
+  3. 서버는 Spring Security 세션을 무효화하고 SecurityContext를 제거하며 `JSESSIONID`를 만료시킵니다.
+  4. 완료 후 `302` → `/login`
+- 1이 실패하면 `POST /logout`을 호출하지 않습니다. 화면 세션을 종료하지 않고 재시도를 안내합니다.
+- 1이 성공하고 2가 실패하면 API 토큰은 이미 폐기된 상태입니다. 화면 로그아웃만 재시도합니다.
+- 중복 로그아웃 요청은 안전하게 처리합니다.
+- `refresh_token` 쿠키의 Path는 `/api/auth`를 유지하며, `/logout`에서 이 쿠키를 읽지 않습니다 (DEVELOPMENT_RULES 5.7.2).
 
 ---
 
@@ -664,7 +706,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/signup` | POST | 불필요 | 누구나 | 회원가입 제출 (2.9) | F1-01 |
 | `/login` | POST | 불필요 | 누구나 | 로그인 제출 (2.10) | F1-01 |
 | `/logout` | POST | 세션 | 누구나 | 화면 로그아웃 (2.11) | F1-01 |
-| `/mypage` | GET | 세션 필요 | 회원 본인 | 계정 설정: Google 계정 연동·해제, 내 정보 | F1-01 |
+| `/mypage` | GET | 세션 필요 | 회원 본인 | 계정 설정: Google 계정 연동·해제, 로컬 비밀번호 설정(Google 전용 회원), 내 정보 | F1-01 |
 | `/restaurants` | GET | 불필요 | 누구나 | 맛집 목록·검색 (`category`, `keyword`, `sort`, `page`) | F1-02 |
 | `/restaurants/{id}` | GET | 불필요 | 누구나 | 맛집 상세 (이미지, 리뷰, AI 요약, 찜 버튼). 작성자에게는 수정·삭제 버튼 표시 | F1-02, F1-04, F1-05, F1-06 |
 | `/restaurants/new` | GET | 세션 필요 | 회원 | 맛집 등록 폼 | F1-02 |
@@ -880,7 +922,9 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | POST | /login | 불필요 | 누구나 | F1-01 (화면, 2.10) |
 | POST | /logout | 세션 | 누구나 | F1-01 (화면, 2.11) |
 | POST | <연동 시작 화면 경로, 구현 단계 확정> | 세션 | 로그인 회원 본인 | F1-01 (화면, 2.6) |
-| DELETE | /api/me/google | 필요 | 회원 본인 (비밀번호 재확인) | F1-01 |
+| POST | <연동 해제 화면 경로, 구현 단계 확정> | 세션 | 로그인 회원 본인 (비밀번호 재확인) | F1-01 (화면, 2.7) |
+| POST | <비밀번호 설정 화면 경로, 구현 단계 확정> | 세션 | Google 전용 회원 본인 | F1-01 (화면, 2.7.1) |
+| GET, POST | <닉네임 설정 화면 경로, 구현 단계 확정> | 가입 진행 상태 | Google 신규 가입 진행자 | F1-01 (화면, 2.5.1) |
 | GET | /api/auth/me | 필요 | 회원 본인 | F1-01 |
 | GET | /api/categories | 불필요 | 누구나 | F1-02, F1-08 |
 | GET | /api/restaurants | 불필요 | 누구나 | F1-02 |
