@@ -20,7 +20,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 미착수 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중 (Stage 2-1 회원·DB 기반 구현 완료, 인증 기능은 미구현) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -35,7 +35,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 미착수 | - | 명세 반영 완료 (Q1, Q3, 인증 구조 2026-11-10). 인증 설계 확정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 구현 미완료 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | Stage 2-1 기반 테스트 완료 (29개 중 DB 테스트 10개는 테스트 DB 환경 변수 설정 시 실행) | 명세 반영 완료 (Q1, Q3, 인증 구조 2026-11-10). 인증 설계 확정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 구현 미완료 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -120,8 +120,44 @@
 | 2026-11-10 | PR #6 보완: `member.nickname`에 `uk_member_nickname` UNIQUE 추가 (ERD, REQUIREMENTS, 개발 규칙 6.4, API·화면 중복 응답 정리). Refresh Token 동시 갱신 분석을 T14로 등록하고 대안 3개와 권장안(옵션 1)을 기록. 사용자 결정 전 구현하지 않음. ※ 같은 날 T14 A안으로 확정됨 (위 2026-11-10 행 참조). ERD 263행 T7 문구 정리 | 완료 (문서). 코드·DB 미변경
 | 2026-11-10 | T3·T7·T8·T12·T13 A안 문서 반영 (브랜치 `docs/finalize-auth-decisions-t3-t7-t8-t12-t13`, `main` 기준) | 완료. 문서만 수정. 당시 범위: 코드·의존성·DB·ERD 변경 없음 (이 행 이후 7586d62에서 ERD에 `uk_member_nickname`과 T14 정책 반영). Stage 2 미착수 |
 
+### 6.1 Stage 2-1 기록 (회원·DB 기반 구현)
+
+- 작업 브랜치: `feat/f1-01-member-foundation` (기준: `main` 789b476, PR #6 병합 커밋)
+- 범위: 회원 Entity·Repository, Refresh Token Entity·Repository, BCrypt 설정, 수동 DDL. 회원가입·로그인·JWT·Google 로그인·토큰 발급은 미구현.
+- 추가한 의존성 (Spring Boot BOM 관리, 버전 임의 지정 없음): `spring-boot-starter-oauth2-client`, `spring-security-oauth2-jose`. 기존 `spring-boot-starter-security`와 `spring-boot-starter-test`는 유지.
+- Entity·Repository:
+  - `member.domain.Member`: DATABASE_ERD 2.1 컬럼 매핑. 이메일 소문자·공백 제거 정규화. 생성 시 역할은 항상 `USER`. 비밀번호 해시와 Google sub 중 최소 하나 필요 (DB CHECK와 같은 조건).
+  - `member.domain.Role`: `USER`, `ADMIN`.
+  - `member.domain.RefreshToken`: DATABASE_ERD 2.8 매핑. 원문을 받는 생성 경로 없음. 해시는 소문자 16진수 64자만 허용.
+  - `member.repository.MemberRepository`: 이메일 조회·존재 여부, 닉네임 존재 여부, Google sub 조회.
+  - `member.repository.RefreshTokenRepository`: 해시 조회, 회원별 폐기되지 않은 토큰 조회.
+  - `global.config.PasswordEncoderConfig`: `BCryptPasswordEncoder` Bean.
+- 수동 DDL: `db/manual/001_create_member_refresh_token.sql` (MySQL 8.0.16 이상). 자동 실행되지 않으며 CREATE TABLE만 포함하고 데이터는 건드리지 않음. 제약 이름은 `uk_member_email`, `uk_member_nickname`, `uk_member_google_sub`, `ck_member_role`, `ck_member_login_method`, `uk_refresh_token_hash`, `fk_refresh_member`(ERD 2.8 이름 준수), `idx_refresh_member`.
+- 테스트 DB 연동 테스트 실행 방법: 테스트 전용 MySQL 8에 위 DDL을 먼저 적용한 뒤, 환경 변수 `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정하여 실행. 변수가 없으면 해당 테스트 10개는 건너뜀. 개발 DB에는 연결하지 않음. H2·Testcontainers 미사용.
+- 테스트 결과:
+  - `./gradlew clean test` (테스트 DB 변수 미설정): 29개 중 19개 통과, 10개 건너뜀(DB 테스트), 실패 0개.
+  - `./gradlew clean test` (테스트 DB 설정 및 DDL 적용, 격리된 MySQL 8.0.46 테스트 인스턴스): 29개 모두 통과. DB 제약(UNIQUE, CHECK, FK) 검증 포함.
+  - `./gradlew bootJar`: 성공.
+  - 기동 확인: 생성된 jar를 테스트 DB 설정으로 실행. `/`와 `/css/app.css`가 200 응답, 시작 로그에 오류 없음.
+- 확인한 사실:
+  - MySQL은 CHECK 제약 위반을 SQLSTATE `HY000`으로 보고하므로 Spring에서 `DataIntegrityViolationException`이 아니라 `UncategorizedSQLException`(`DataAccessException`의 하위)으로 감싸집니다. 서비스 계층에서 CHECK 위반을 사용자 메시지로 바꾸지 않고, 입력 검증을 먼저 수행합니다.
+  - 테이블 기본 collation을 `utf8mb4_unicode_ci`로 두었으므로 닉네임·이메일의 유일성 비교는 대소문자와 악센트를 구분하지 않습니다. 이전에 확인이 필요하다고 기록한 collation 항목은 이 기준으로 정리되었습니다.
+- 설계와의 차이 및 결정 필요 사항:
+  - Refresh Token FK 이름: 작업 지시서는 `fk_refresh_token_member`를 요구했으나, 설계 기준인 DATABASE_ERD 2.8은 `fk_refresh_member`입니다. 지시서의 "ERD와 일치" 원칙에 따라 ERD 이름을 사용했습니다. 이름을 바꾸려면 ERD를 함께 고쳐야 합니다.
+  - CHECK 제약 이름(`ck_member_role`, `ck_member_login_method`)은 ERD에 이름이 없어 이번 DDL에서 부여했습니다. ERD에도 같은 이름을 기록하는 것이 좋습니다.
+  - `ddl-auto`는 `none`을 유지했습니다. JPA 매핑과 실제 스키마의 일치는 DB 연동 테스트로 확인했습니다. 스키마 검증 모드(`validate`)는 설정하지 않았습니다.
+- 미완료 항목 (이번 단계 제외):
+  - 회원가입·로그인 서비스와 화면·API
+  - JWT 생성·검증, Refresh Token 발급·로테이션·재사용 탐지·폐기
+  - Google OAuth2 로그인·계정 연동·신규 가입 닉네임 설정
+  - SecurityFilterChain 분리 (현재 임시 전체 허용 정책 유지)
+  - 자동 토큰 갱신 JavaScript
+- 기타: 격리 테스트용 MySQL 인스턴스(포트 3307)는 작업 디렉터리 밖 데이터 경로에만 두었고, 기존 개발 DB에는 접속하지 않았습니다. 테스트 계정 비밀번호는 저장소에 기록하지 않았습니다.
+
 ## 7. 다음 작업
 
-1. Stage 2(F1-01 회원·인증) 구현을 준비합니다. 인증 설계 결정(T3, T7, T8, T11, T12, T13, T14)은 확정되었습니다. 설계 문서 작업은 완료되었습니다.
-2. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
-3. 실제 MySQL 스키마 구현 시 `uk_member_nickname` 제약을 반영하고 collation을 확인합니다. 설계 문서 기준은 DATABASE_ERD 2.1입니다.
+1. Stage 2-2: 회원가입·로그인 서비스 (이메일 소문자 정규화, 닉네임 2~20자 검증, BCrypt 비밀번호 검증, DB UNIQUE 위반을 `NICKNAME_DUPLICATED`·`EMAIL_DUPLICATED`로 변환). 화면과 API는 설계 문서 2.1·2.9·2.10을 따른다.
+2. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안, 잠금 순서 DEVELOPMENT_RULES 5.7.4), API 로그아웃과 화면 로그아웃(T12 A안).
+3. Stage 2-4: Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
+4. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
+5. 실제 MySQL 스키마 적용 절차(개발·운영 DB)는 사용자가 `db/manual/001_create_member_refresh_token.sql`을 직접 실행합니다. 이 작업에서는 실행하지 않았습니다.
