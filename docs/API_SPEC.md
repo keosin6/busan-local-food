@@ -80,8 +80,8 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 400 | EMAIL_INVALID | 이메일 형식 또는 길이(255자) 오류 (회원가입·로그인) |
 | 400 | NICKNAME_REQUIRED | 닉네임 미입력 (회원가입) |
 | 400 | NICKNAME_INVALID | 닉네임 길이(2~20자) 또는 허용 문자(한글·영문·숫자) 오류 (회원가입) |
-| 400 | PASSWORD_REQUIRED | 비밀번호 또는 비밀번호 확인 미입력 (회원가입·로그인·로컬 비밀번호 설정) |
-| 400 | PASSWORD_INVALID | 비밀번호 규칙 위반 또는 확인값 불일치 (회원가입·로컬 비밀번호 설정) |
+| 400 | PASSWORD_REQUIRED | 비밀번호 미입력. 회원가입과 로컬 비밀번호 설정에서는 비밀번호 또는 비밀번호 확인값 미입력도 포함. 로그인에서는 비밀번호 미입력만 해당 |
+| 400 | PASSWORD_INVALID | 회원가입·로컬 비밀번호 설정: 비밀번호 정책 위반 또는 확인값 불일치. 로그인: 사용하지 않음 (로그인은 비밀번호 조합 규칙을 검증하지 않음) |
 | 400 | CATEGORY_NOT_FOUND | 존재하지 않는 카테고리 |
 | 400 | IMAGE_TYPE_NOT_ALLOWED | 허용되지 않은 이미지 형식 |
 | 400 | IMAGE_TOO_LARGE | 이미지 크기 초과 |

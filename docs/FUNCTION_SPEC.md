@@ -46,7 +46,7 @@
 | 닉네임 | 필수. 앞뒤 공백 제거 후 검증. 2~20자. 허용 문자는 한글 완성형(가-힣), 영문(A-Z, a-z), 숫자(0-9). 특수문자와 내부 공백 불가. 중복 불가 | `NICKNAME_REQUIRED`, `NICKNAME_INVALID`, `NICKNAME_DUPLICATED` |
 | 비밀번호 (가입) | 필수. 8~20자. 영문 1자 이상, 숫자 1자 이상, 특수문자 1자 이상(ASCII 문장부호·기호). 공백 불가(일반 스페이스, 탭, 줄바꿈, NBSP 등 Unicode 공백 문자 포함, 모든 코드 포인트 검사). 앞뒤 공백 제거와 소문자 변환을 하지 않는다. `passwordConfirm`과 일치. 저장은 BCrypt 해시 | `PASSWORD_REQUIRED`, `PASSWORD_INVALID` |
 | 로그인 이메일 | 필수. 가입과 같은 정규화와 형식 검사 | `EMAIL_REQUIRED`, `EMAIL_INVALID` |
-| 로그인 비밀번호 | 필수 여부만 확인. 가입 조합 규칙은 적용하지 않음 | `PASSWORD_REQUIRED` |
+| 로그인 비밀번호 | 필수 여부만 확인. 미입력이면 `PASSWORD_REQUIRED`. 가입 조합 규칙 위반과 `PASSWORD_INVALID`는 적용하지 않음 | `PASSWORD_REQUIRED` |
 
 검증 순서와 중복 처리:
 1. 이메일, 닉네임, 비밀번호 순서로 형식을 검증합니다. 이메일과 닉네임의 중복 검사는 형식 검증 후에 수행합니다.
@@ -189,8 +189,9 @@
 | 이메일 형식·길이 오류 (API) | 400 `EMAIL_INVALID` |
 | 닉네임 미입력 (API) | 400 `NICKNAME_REQUIRED` |
 | 닉네임 규칙 위반 (API) | 400 `NICKNAME_INVALID` |
-| 비밀번호 미입력 (API) | 400 `PASSWORD_REQUIRED` |
-| 비밀번호 규칙 위반 또는 확인 불일치 (API) | 400 `PASSWORD_INVALID` |
+| 회원가입·로컬 비밀번호 설정 시 비밀번호 또는 확인값 미입력 (API) | 400 `PASSWORD_REQUIRED` |
+| 로그인 비밀번호 미입력 (API) | 400 `PASSWORD_REQUIRED` |
+| 회원가입·로컬 비밀번호 설정 시 비밀번호 정책 위반 또는 확인값 불일치 (API) | 400 `PASSWORD_INVALID` (로그인에는 적용하지 않음) |
 | 닉네임 중복 (API) | 409 `NICKNAME_DUPLICATED` |
 | 로그인 입력 누락 (API) | 400 `EMAIL_REQUIRED`·`PASSWORD_REQUIRED`, 형식 오류 400 `EMAIL_INVALID` |
 | 입력값 검증 실패 (화면) | `/signup?error=validation_failed` (화면은 세부 코드를 쿼리로 노출하지 않음) |
