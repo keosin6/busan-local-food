@@ -12,12 +12,12 @@
 |----|----------|----------|
 | FR-01-01 | 이메일, 비밀번호, 닉네임으로 회원가입할 수 있다. | M |
 | FR-01-02 | 비밀번호는 단방향 해시(BCrypt)로 저장한다. | M |
-| FR-01-03 | 이메일과 비밀번호로 로그인할 수 있다. | M |
+| FR-01-03 | 이메일과 비밀번호로 로그인할 수 있다. 화면 로그인은 Spring Security 세션과 JWT를 함께 발급하고, API 로그인은 JWT만 발급한다. | M |
 | FR-01-04 | Access Token(JWT)과 Refresh Token을 분리하여 발급한다. | M |
 | FR-01-05 | Refresh Token 원문은 브라우저의 HttpOnly Cookie에만 저장하고, DB에는 SHA-256 해시값만 저장한다. | M |
 | FR-01-06 | Refresh Token으로 Access Token을 재발급할 수 있다. 재발급 시 기존 Refresh Token을 폐기하고 새 Refresh Token으로 교체한다(로테이션). | M |
-| FR-01-07 | 로그아웃 시 해당 Refresh Token을 폐기하고 인증 쿠키를 제거한다. | M |
-| FR-01-08 | 인증이 필요한 API와 화면은 유효한 Access Token 없이 접근할 수 없다. | M |
+| FR-01-07 | API 로그아웃은 해당 Refresh Token을 폐기하고 JWT 쿠키를 제거한다. 화면 로그아웃은 세션을 무효화하고 JWT 쿠키를 제거한다. 화면 로그아웃의 Refresh Token 폐기 방식은 T12에서 확정한다. | M |
+| FR-01-08 | 인증이 필요한 API는 유효한 JWT 없이, 인증이 필요한 화면은 유효한 Spring Security 세션 없이 접근할 수 없다. 두 인증 수단은 서로 대체할 수 없다. | M |
 | FR-01-09 | Google OAuth2 계정으로 로그인할 수 있다. Google 계정의 이메일과 같은 이메일의 기존 이메일 계정이 있어도 **자동으로 연결하지 않는다.** | M |
 | FR-01-10 | 기존 이메일 계정 사용자는 먼저 기존 계정으로 로그인한 뒤, 마이페이지에서 Google 계정을 **직접 연동**할 수 있다. | M |
 | FR-01-11 | 한 Google 계정은 하나의 회원 계정에만 연결할 수 있다. 이미 다른 회원에게 연결된 Google 계정은 중복 연결할 수 없다. | M |
@@ -26,6 +26,10 @@
 | FR-01-14 | Google OAuth2 인증 진행 중의 `state`와 연동 요청 회원 정보는 서버 임시 세션에만 보관하고, 인증 흐름이 끝나면 제거한다. 임시 세션은 회원의 로그인 상태를 나타내지 않는다. | M |
 | FR-01-15 | Google 계정 연결은 시작 시점에 Access Token으로 회원을 검증하고, 검증된 회원 ID를 OAuth2 임시 세션에 저장한다. 콜백은 `state`가 같은 임시 세션의 값인지 확인하고, 임시 세션에 저장된 회원 ID를 연동 대상으로 사용한다. 콜백은 Access Token의 유효기간에 의존하지 않는다. 임시 세션이 없거나 만료되었거나 `state`가 일치하지 않으면 연결하지 않는다. 기존 UNIQUE 제약으로 다른 회원과의 중복 연결을 막는다. | M |
 | FR-01-16 | 일반 API 인증은 JWT 기반을 유지한다. OAuth2 임시 세션은 Google 인증 과정에만 사용하며 API 인증을 대체하지 않는다. 인증 완료 후에는 JWT 체계로 돌아간다. | M |
+| FR-01-17 | 화면 로그인, 화면 회원가입 후 자동 로그인, Google 로그인이 성공하면 Spring Security 세션과 JWT(Access Token, Refresh Token)를 함께 발급한다. | M |
+| FR-01-18 | API 로그인과 API 회원가입은 JWT만 발급하며 Spring Security 세션을 만들지 않는다. 화면 세션은 API 인증을 대체하지 않는다. | M |
+| FR-01-19 | API 인증 경로(`/api/**`)와 화면 인증 경로를 Spring Security 필터 체인으로 분리한다. OAuth2 경로(`/oauth2/**`, `/login/oauth2/**`)는 화면 체인에서 처리하며 API 체인에 포함하지 않는다. | M |
+| FR-01-20 | CSRF 보호는 화면 세션 쿠키 기반 요청과 JWT 쿠키 기반 API 상태 변경 요청 모두에 적용한다. Bearer 헤더 요청은 CSRF 헤더를 요구하지 않는다. | M |
 
 ### F1-02 맛집 관리
 
@@ -146,6 +150,7 @@
 - 기술 스택은 [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md#5-기술-스택-고정)에 정의된 목록으로 고정합니다.
 - 맛집 데이터는 사용자 등록으로만 생성합니다. 외부 데이터 자동 수집은 하지 않습니다.
 - AI 기능은 OpenRouter 한 곳만 사용합니다.
+- 인증 수단: 화면은 Spring Security 세션, API는 JWT로 인증합니다 (2026-11-10 확정, FR-01-17~20). Google 로그인은 화면 로그인 흐름이며 OAuth2 임시 세션을 사용합니다.
 - 운영 DB는 EC2 내부 MySQL 8입니다 (Q4). RDS는 이번 범위에서 사용하지 않습니다.
 - DB 마이그레이션 도구(Flyway 등)는 이번 문서 범위에서 도입하지 않습니다. 도입은 설계 변경 절차를 거칩니다.
 - 새로운 라이브러리나 프레임워크는 설계 변경 절차 없이 추가하지 않습니다.
@@ -182,5 +187,6 @@
 | T8 | Google 연동·해제 시 본인 확인 강도 | 현재 제안: 해제 시 비밀번호 재입력(비밀번호가 있는 계정). 연동 시에는 로그인된 세션과 OAuth `state` 검증. 추가 인증(2단계 인증 등) 필요 여부는 미정. | Stage 2 (F1-01) |
 | T10 | OpenRouter 사용 모델 ID 선정 | 운영자가 환경 변수로 설정하는 값이며, 문서 확정 대상이 아니다. | Stage 8 (F1-07) 전 |
 | T11 | OAuth2 임시 세션 구현 세부 | 미확정. Authorization Request 저장 위치, 임시 세션 만료 시간, Spring Security 세션 생성 정책 값, 세션 고정 공격 방지 방식을 구현 단계에서 정한다. 구조 원칙(FR-01-14~16)은 확정이며, 완전 Stateless로 고정하지 않는다. | Stage 2 (F1-01) 전 |
+| T12 | 화면 로그아웃 시 Refresh Token 폐기 방식 | 미확정. `refresh_token` 쿠키 Path(`/api/auth`)가 화면 로그아웃 경로(`/logout`)에는 전송되지 않아 DB 행을 폐기할 수 없다. 제안: 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출한 뒤 `POST /logout`을 호출한다. | Stage 2 (F1-01) 전 |
 
 > 확정 항목(4.1)이 바뀌면 `FUNCTION_SPEC.md`, `DATABASE_ERD.md`, `API_SPEC.md`를 함께 갱신하고 `PROGRESS.md`의 설계 변경 이력에 기록합니다.

@@ -16,6 +16,8 @@
 
 Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI 기능 구현 단계에서 도입) · OpenRouter 무료 모델 · Thymeleaf · Bootstrap 5 · MySQL 8 · AWS EC2(Ubuntu) · AWS S3 · GitHub Actions · Gradle
 
+인증: 화면은 Spring Security 세션 로그인, API는 JWT, 소셜 로그인은 Google 로그인 (5.7절)
+
 개발 도구: IntelliJ IDEA, Git, GitHub, Postman, MySQL Workbench
 
 - 위 목록 밖의 라이브러리나 프레임워크는 설계 변경 절차(4절)를 거쳐야 추가할 수 있습니다. 사용자 승인 없이 공식 스택 밖의 기술을 추가하지 않습니다.
@@ -96,10 +98,11 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
 - 관리자 권한(`ADMIN`)은 Spring Security 규칙(`/admin/**`, `/api/admin/**`)과 서비스 계층 검사로 **서버에서** 검증합니다. URL을 숨기는 것만으로는 보호하지 않습니다 (FR-09-08).
 - 일반 회원이 자신의 `role`을 바꾸는 API나 입력 경로를 만들지 않습니다 (FR-09-09).
 - 쿠키 속성:
-  - `access_token`, `refresh_token`: `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`.
-  - `refresh_token`의 Path는 `/api/auth`로 제한합니다.
+  - `JSESSIONID`(화면 세션): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`.
+  - `access_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api`로 제한합니다.
+  - `refresh_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api/auth`로 제한합니다.
 - Refresh Token 원문은 쿠키에만 두고, DB에는 SHA-256 해시만 저장합니다 (FR-01-05). 로그와 응답 본문에도 원문을 남기지 않습니다.
-- CSRF: Cookie 기반 인증을 쓰므로 Spring Security CSRF 보호를 유지합니다. 상태 변경 요청은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 보냅니다.
+- CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청 모두에 Spring Security CSRF 보호를 유지합니다. 상태 변경 요청은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 보냅니다. Bearer 헤더 요청은 쿠키 기반 인증이 아니므로 CSRF 헤더를 요구하지 않습니다.
 - Thymeleaf의 `th:text`를 사용하고, `th:utext`로 사용자 입력을 출력하지 않습니다.
 - 파일 업로드는 MIME 타입과 확장자, 크기를 모두 검사합니다.
 - 에러 응답에 스택 트레이스나 SQL을 노출하지 않습니다.
@@ -155,24 +158,39 @@ DB와 S3는 분산 트랜잭션으로 묶지 않습니다. 아래 순서를 지�
 4. S3에 객체가 없으면 삭제 성공으로 처리합니다 (재시도가 중복되어도 안전해야 합니다).
 5. 문서와 코드 주석, 응답 메시지에서 "DB와 S3가 함께 롤백된다" 또는 "원자적으로 처리된다"고 표현하지 않습니다.
 
-### 5.7 인증 구조와 세션 정책 (JWT · OAuth2 임시 세션)
+### 5.7 인증 구조 (화면 세션 + API JWT, 2026-11-10 확정)
 
-인증은 두 역할로 나눕니다. 두 역할을 혼동하지 않습니다.
+최종 결정: **화면은 Spring Security 세션, API는 JWT로 인증합니다.** 두 인증 수단은 서로 독립적으로 동작하며 서로 대체할 수 없습니다.
 
-| 구분 | 역할 | 사용 범위 |
-|------|------|-----------|
-| JWT 기반 인증 (기본) | 일반 웹·API 요청의 회원 식별. Access Token(쿠키 또는 Bearer), Refresh Token(쿠키, DB에는 해시만 저장) | `/api/**`, 일반 화면 요청 |
-| OAuth2 임시 세션 | Google 인증 진행 중의 상태 관리: `state`, Authorization Request, 연동 요청 회원 ID, 흐름 종류(로그인/연동) | Google 로그인 및 계정 연동 흐름에만 사용 |
+| 구분 | 화면 인증 | API 인증 |
+|------|-----------|----------|
+| 기술 | Spring Security 세션 (`JSESSIONID`) | JWT (`access_token` 쿠키 또는 Bearer) |
+| 적용 경로 | 일반 화면 URL (`/`, `/login`, `/mypage` 등) | `/api/**` |
+| 인증 정보 | 세션에 저장된 회원 정보 | JWT Access Token |
+| 인증 유지 | 세션 만료 또는 화면 로그아웃까지 | Access Token 만료까지 (Refresh Token으로 재발급) |
+| 로그인 방식 | 화면 로그인(`POST /login`), 화면 회원가입(`POST /signup`), Google 로그인 | API 로그인(`POST /api/auth/login`), API 회원가입(`POST /api/auth/signup`) |
+| CSRF | 활성 | 쿠키 기반 상태 변경 요청에 활성 |
 
 원칙:
-1. 일반 API 인증은 JWT 기반으로 유지합니다.
-2. Google OAuth2 인증 과정에서만 필요한 임시 상태 관리를 위해 서버 세션을 사용할 수 있습니다.
-3. OAuth2 임시 세션은 일반 API 인증을 대체하지 않습니다. `/api/**` 요청은 임시 세션만으로 인증하지 않습니다.
-4. OAuth2 인증이 완료되면 기존 JWT 기반 인증 체계로 돌아갑니다.
-5. Spring Security 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다. OAuth2 인증 과정의 상태 관리가 막히지 않아야 합니다. 세부 설정 값(세션 생성 정책, 저장 위치, 만료 시간)은 구현 단계에서 확정합니다 (REQUIREMENTS T11).
-6. 임시 세션에는 로그인 상태(회원 권한)를 저장하지 않고 흐름 상태만 저장합니다. Access Token, Refresh Token 원문, 비밀번호는 저장하지 않습니다.
-7. 흐름이 끝나면(성공이든 실패든) 임시 상태를 제거합니다. `state` 값은 한 번만 사용할 수 있습니다.
-8. Google 계정 연결은 시작 시점에만 Access Token으로 회원을 검증하고, 검증된 회원 ID를 OAuth2 임시 세션에 저장합니다. 콜백은 `state`가 같은 임시 세션의 값인지 확인한 뒤 임시 세션의 회원 ID를 기준으로 연결합니다. 콜백은 Access Token 유효기간에 의존하지 않습니다 (FR-01-15).
+1. 화면 요청은 유효한 Spring Security 세션으로만 인증합니다. JWT만으로 화면 로그인 상태를 인정하지 않습니다.
+2. API 요청(`/api/**`)은 JWT 검증을 통과해야 합니다. 세션만으로 API 로그인 상태를 인정하지 않습니다 (FR-01-16, FR-01-18).
+3. 화면 로그인, 화면 회원가입 후 자동 로그인, Google 로그인이 성공하면 세션과 JWT를 동시에 발급합니다 (FR-01-17).
+4. API 로그인과 API 회원가입은 JWT만 발급합니다. Spring Security 세션을 만들지 않습니다.
+5. 화면 로그인으로 발급된 JWT는 API 인증에 사용할 수 있습니다.
+6. Google 계정 연동은 기존 인증 회원을 대상으로 합니다. 연동 시작 시 JWT로 회원을 검증하고, 검증된 회원 ID를 OAuth2 임시 세션에 저장합니다. 콜백은 임시 세션의 회원 ID를 기준으로 연결하며, 연동 흐름은 세션의 로그인 회원을 다른 회원으로 바꾸지 않습니다 (FR-01-15).
+7. OAuth2 임시 세션은 Google 인증 진행 상태(`state`, Authorization Request, 흐름 종류, 연동 요청 회원 ID)만 담습니다. 로그인 상태(회원 권한)는 담지 않습니다. 흐름이 끝나면(성공이든 실패든) 제거하며, `state`는 한 번만 사용합니다 (FR-01-14).
+8. 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다. 세션 생성 정책, 저장 위치, 만료 시간, 세션 고정 방지의 세부 값은 구현 단계에서 확정합니다 (REQUIREMENTS T11).
+
+SecurityFilterChain 분리 (구현 기준):
+- **API 체인**: RequestMatcher `/api/**`. JWT 인증 필터를 적용합니다. 세션 인증을 사용하지 않고 `STATELESS` 정책을 씁니다. 인증 실패는 JSON 오류 응답(API_SPEC 1.2)으로 반환합니다.
+- **화면 체인**: 나머지 화면 URL. Spring Security 세션 인증을 사용합니다. 화면 로그인(`/login`), 화면 로그아웃, Google OAuth2 로그인과 콜백(`/oauth2/**`, `/login/oauth2/**`)을 처리합니다. 인증 실패는 로그인 페이지로 리다이렉트합니다.
+- `/oauth2/**`와 `/login/oauth2/**`는 API 체인에 포함하지 않습니다.
+- 두 체인의 RequestMatcher가 겹치지 않아야 합니다. API 인증 실패가 로그인 리다이렉트로, 화면 인증 실패가 JSON으로 처리되지 않아야 합니다.
+
+쿠키와 로그아웃:
+- 쿠키 속성과 Path는 API_SPEC 1.1절을 따릅니다. `JSESSIONID`는 화면 세션, `access_token`은 Path `/api`, `refresh_token`은 Path `/api/auth`입니다.
+- 화면 로그아웃(`POST /logout`)은 세션을 무효화하고 JWT 쿠키를 만료시킵니다. `refresh_token`의 DB 행 폐기 방식은 Path 제약 때문에 아직 확정되지 않았습니다 (T12).
+- API 로그아웃(`POST /api/auth/logout`)은 Refresh Token을 폐기하고 JWT 쿠키를 만료시킵니다. 화면 세션은 종료하지 않습니다.
 
 ## 6. 코드 구조 규칙 (구현 단계)
 
@@ -240,6 +258,8 @@ com.busanlocalfood
   - 임시 세션이 없거나 만료되었으면 연결되지 않는지
   - 콜백 시점에 Access Token이 만료되어도 유효한 임시 세션이면 연결되는지
   - `/api/**` 요청이 임시 세션만으로는 인증되지 않는지
+  - 화면 요청이 JWT만으로 인증되지 않고, API 요청이 세션만으로 인증되지 않는지
+  - API 로그인과 API 회원가입이 세션을 만들지 않고, 화면 로그인·화면 회원가입·Google 로그인이 세션과 JWT를 모두 발급하는지
 - F1-02, F1-03은 다음을 테스트합니다.
   - 맛집 삭제 시 리뷰, 찜, 이미지, AI 요약이 함께 삭제되는지
   - S3 삭제 실패 시 `storage_delete_task`에 키가 남고, 재시도 후 행이 삭제되는지

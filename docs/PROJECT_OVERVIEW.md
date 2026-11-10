@@ -27,7 +27,7 @@
 
 | ID | 기능 |
 |----|------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, JWT(Access/Refresh Token), Google 로그인, 기존 계정에 Google 계정 직접 연동·해제 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 인증과 API JWT 인증(Access/Refresh Token), Google 로그인, 기존 계정에 Google 계정 직접 연동·해제 |
 | F1-02 | 맛집 등록, 수정, 삭제(관련 데이터와 S3 이미지 포함 완전 삭제), 목록, 카테고리, 검색 |
 | F1-03 | 맛집 이미지 AWS S3 업로드 |
 | F1-04 | 리뷰 작성 및 삭제, 평점, 평균 평점 |
@@ -57,7 +57,7 @@
 |------|------|
 | 언어 | Java 21 |
 | 프레임워크 | Spring Boot 3.x |
-| 보안 | Spring Security (JWT, OAuth2 Client for Google) |
+| 보안 | Spring Security (화면 세션 인증, API JWT 인증, OAuth2 Client for Google) |
 | 데이터 접근 | Spring Data JPA |
 | AI | Spring AI, OpenRouter (OpenAI 호환 API) |
 | 화면 | Thymeleaf, Bootstrap 5 |
@@ -74,7 +74,7 @@
     │  HTTP (HTML: Thymeleaf / JSON: REST)
     ▼
 [Spring Boot 애플리케이션 on AWS EC2]
-    ├─ Spring Security  : 회원 인증 (JWT, Google OAuth2)
+    ├─ Spring Security  : 회원 인증 (화면 세션, API JWT, Google OAuth2)
     ├─ Controller       : 화면 렌더링 + REST API
     ├─ Service          : 비즈니스 로직 (맛집, 리뷰, 찜, AI 요약·추천)
     ├─ Repository (JPA) : 데이터 접근
