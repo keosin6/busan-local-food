@@ -36,7 +36,7 @@
 | FR-01-24 | 폐기된 Refresh Token이 다시 사용되면 재사용으로 판단하고, 해당 회원의 모든 활성 Refresh Token을 같은 트랜잭션에서 폐기한다. 회원은 다시 로그인해야 한다. 폐기된 토큰의 해시 행은 삭제하지 않는다. 재발급과 재사용 탐지는 회원 행 잠금 안에서 재조회 후 판정하며, 재사용 탐지 결과는 커밋 후 응답한다 (T7 A안·T14 A안, DEVELOPMENT_RULES 5.7.4). | M |
 | FR-01-25 | 화면 로그아웃은 `POST /api/auth/logout`을 먼저 호출하여 Refresh Token을 폐기한 뒤, 성공한 경우에만 `POST /logout`으로 화면 세션을 무효화한다. 첫 요청이 실패하면 화면 세션을 종료하지 않고 재시도를 안내한다. `refresh_token` 쿠키의 Path는 `/api/auth`를 유지한다 (T12 A안, DEVELOPMENT_RULES 5.7.2). | M |
 | FR-01-26 | 화면에서 API 요청이 Access Token 만료로 401을 받으면 `POST /api/auth/refresh`를 한 번 호출하고 원래 요청을 최대 한 번 재시도한다. 동시에 여러 요청이 401을 받아도 재발급은 한 번만 실행한다. 재발급 실패 시 재로그인을 안내하며, 재발급 API가 다시 401을 반환하면 재호출하지 않는다. 화면 세션은 이 과정에서 갱신하지 않는다 (T13 A안, DEVELOPMENT_RULES 5.7.2). | M |
-| FR-01-27 | 같은 브라우저의 여러 탭이 동시에 401을 받으면 Web Locks API로 갱신을 직렬화하고, 잠금 안에서 인증 상태를 다시 확인하여 이미 갱신되었으면 Refresh 요청을 보내지 않는다. Web Locks를 지원하지 않는 브라우저에서는 같은 탭의 single-flight만 보장한다 (T14 A안, DEVELOPMENT_RULES 5.7.2). | M |
+| FR-01-27 | 같은 브라우저의 여러 탭이 동시에 401을 받으면 Web Locks API로 갱신을 직렬화하고, 잠금 안에서 인증 상태를 다시 확인하여 이미 갱신되었으면 Refresh 요청을 보내지 않는다. Web Locks API는 보안 컨텍스트(운영 HTTPS, 로컬 `localhost`)에서만 사용한다. 보안 컨텍스트가 아니거나 미지원인 환경에서는 같은 탭의 single-flight만 보장하며, 여러 탭의 동시 갱신은 완전히 방지하지 못한다 (T14 A안, DEVELOPMENT_RULES 5.7.2). | M |
 
 ### F1-02 맛집 관리
 
