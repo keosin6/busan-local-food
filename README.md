@@ -9,7 +9,7 @@
 
 | ID | 기능 | 요약 |
 |----|------|------|
-| F1-01 | 회원 | 회원가입, 이메일 로그인, 로그아웃, JWT 인증(Refresh Token 로테이션), Google 로그인, 기존 계정에 Google 계정 직접 연동 |
+| F1-01 | 회원 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 인증과 API JWT 인증(Refresh Token 로테이션), Google 로그인, 기존 계정에 Google 계정 직접 연동 |
 | F1-02 | 맛집 | 맛집 등록·수정·삭제, 목록, 카테고리, 검색 |
 | F1-03 | 이미지 | 맛집 이미지 AWS S3 업로드 |
 | F1-04 | 리뷰 | 리뷰 작성·삭제, 평점(1~5), 평균 평점 |
@@ -26,13 +26,15 @@
 | 구분 | 기술 |
 |------|------|
 | Language | Java 21 |
-| Framework | Spring Boot 3.x, Spring Security, Spring Data JPA, Spring AI |
-| AI | OpenRouter (Spring AI의 OpenAI 호환 클라이언트 사용) |
+| Framework | Spring Boot 3.x, Spring Security, Spring Data JPA, Spring AI (도입 예정) |
+| AI | Spring AI + OpenRouter 무료 모델 (Spring AI의 OpenAI 호환 클라이언트 사용). Spring AI는 AI 기능 구현 단계(F1-05, F1-07)에서 도입하며, 현재 `build.gradle`에는 없습니다 |
+| 인증 | 화면: Spring Security 세션 / API: JWT (Refresh Token 로테이션) / Google 로그인 (OAuth2) |
 | View | Thymeleaf, Bootstrap 5 |
-| Database | MySQL 8 (AWS EC2 내부 설치, RDS 미사용) |
+| Database | MySQL 8 (개발은 개발 PC에 직접 설치, 운영은 AWS EC2 내부 설치, RDS 미사용) |
 | Infra | AWS EC2 (Ubuntu, MySQL 포함), AWS S3 |
 | CI/CD | GitHub Actions |
-| Build | Gradle |
+| Build | Gradle (`./gradlew bootJar`) |
+| 개발 도구 | IntelliJ IDEA, Git, GitHub, Postman, MySQL Workbench |
 
 기술 스택은 고정입니다. 바꿔야 할 이유가 생기면 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md)의 설계 변경 절차를 따릅니다.
 

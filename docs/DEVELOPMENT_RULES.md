@@ -14,11 +14,16 @@
 
 ## 2. 기술 스택 (고정)
 
-Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI · OpenRouter · Thymeleaf · Bootstrap 5 · MySQL 8 · AWS EC2(Ubuntu) · AWS S3 · GitHub Actions · Gradle
+Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI 기능 구현 단계에서 도입) · OpenRouter 무료 모델 · Thymeleaf · Bootstrap 5 · MySQL 8 · AWS EC2(Ubuntu) · AWS S3 · GitHub Actions · Gradle
 
-- 위 목록 밖의 라이브러리나 프레임워크는 설계 변경 절차(4절)를 거쳐야 추가할 수 있습니다.
+인증: 화면은 Spring Security 세션 로그인, API는 JWT, 소셜 로그인은 Google 로그인 (5.7절)
+
+개발 도구: IntelliJ IDEA, Git, GitHub, Postman, MySQL Workbench
+
+- 위 목록 밖의 라이브러리나 프레임워크는 설계 변경 절차(4절)를 거쳐야 추가할 수 있습니다. 사용자 승인 없이 공식 스택 밖의 기술을 추가하지 않습니다.
+- Spring Boot Starter 내부에 포함되는 전이 의존성은 별도 기술 도입으로 보지 않습니다. Gradle의 Java 플러그인과 Spring Dependency Management 플러그인은 빌드 지원 도구로 유지합니다.
 - 라이브러리 버전은 Spring Boot BOM과 Spring AI BOM을 따르고, 임의로 고정하지 않습니다.
-- 테스트 도구(JUnit 5, Mockito, Testcontainers 등)는 테스트 목적의 추가로 보고, 추가 시 `PROGRESS.md`에 기록합니다. Testcontainers 등 기술 스택 밖의 도구 도입 여부는 T9에서 확정합니다.
+- 테스트 도구는 `spring-boot-starter-test`(JUnit 5, Mockito, AssertJ, Spring MockMvc)를 기준으로 합니다. Testcontainers, H2, Docker 기반 테스트 환경은 도입하지 않습니다 (T9 확정, 7절).
 
 ## 3. 브랜치·커밋·PR 규칙
 
@@ -93,10 +98,11 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI ·
 - 관리자 권한(`ADMIN`)은 Spring Security 규칙(`/admin/**`, `/api/admin/**`)과 서비스 계층 검사로 **서버에서** 검증합니다. URL을 숨기는 것만으로는 보호하지 않습니다 (FR-09-08).
 - 일반 회원이 자신의 `role`을 바꾸는 API나 입력 경로를 만들지 않습니다 (FR-09-09).
 - 쿠키 속성:
-  - `access_token`, `refresh_token`: `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`.
-  - `refresh_token`의 Path는 `/api/auth`로 제한합니다.
+  - `JSESSIONID`(화면 세션): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`.
+  - `access_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api`로 제한합니다.
+  - `refresh_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api/auth`로 제한합니다.
 - Refresh Token 원문은 쿠키에만 두고, DB에는 SHA-256 해시만 저장합니다 (FR-01-05). 로그와 응답 본문에도 원문을 남기지 않습니다.
-- CSRF: Cookie 기반 인증을 쓰므로 Spring Security CSRF 보호를 유지합니다. 상태 변경 요청은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 보냅니다.
+- CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청 모두에 Spring Security CSRF 보호를 유지합니다. 상태 변경 요청은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 보냅니다. Bearer 헤더 요청은 쿠키 기반 인증이 아니므로 CSRF 헤더를 요구하지 않습니다.
 - Thymeleaf의 `th:text`를 사용하고, `th:utext`로 사용자 입력을 출력하지 않습니다.
 - 파일 업로드는 MIME 타입과 확장자, 크기를 모두 검사합니다.
 - 에러 응답에 스택 트레이스나 SQL을 노출하지 않습니다.
@@ -125,7 +131,9 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI ·
 운영 DB는 **AWS EC2 내부에 설치한 MySQL 8**입니다. RDS는 사용하지 않습니다.
 
 - **환경 분리**
-  - 개발(`local`): 개발자 PC의 MySQL 8 (설치 또는 컨테이너, 개발자 선택). 운영 DB 접속 정보를 개발 환경에 두지 않습니다.
+  - 개발(`local`): 개발 PC에 MySQL 8을 직접 설치합니다. Docker나 컨테이너 기반 DB는 사용하지 않습니다. 운영 DB 접속 정보를 개발 환경에 두지 않습니다.
+  - 테스트: 개발 PC에 설치된 MySQL 8의 테스트 전용 데이터베이스를 사용합니다. 개발 데이터베이스와 분리합니다 (7절).
+  - Testcontainers, H2 등 테스트용 DB 라이브러리는 도입하지 않습니다 (T9 확정).
   - 운영(`prod`): EC2 내부 MySQL 8. 접속 정보는 서버 환경 변수로만 주입합니다.
   - 두 환경의 DB 설정은 Spring 프로필(`local`, `prod`)로 나눕니다 (NFR-11).
 - **네트워크**
@@ -152,24 +160,103 @@ DB와 S3는 분산 트랜잭션으로 묶지 않습니다. 아래 순서를 지�
 4. S3에 객체가 없으면 삭제 성공으로 처리합니다 (재시도가 중복되어도 안전해야 합니다).
 5. 문서와 코드 주석, 응답 메시지에서 "DB와 S3가 함께 롤백된다" 또는 "원자적으로 처리된다"고 표현하지 않습니다.
 
-### 5.7 인증 구조와 세션 정책 (JWT · OAuth2 임시 세션)
+### 5.7 인증 구조 (화면 세션 + API JWT, 2026-11-10 확정)
 
-인증은 두 역할로 나눕니다. 두 역할을 혼동하지 않습니다.
+최종 결정: **화면은 Spring Security 세션, API는 JWT로 인증합니다.** 두 인증 수단은 서로 독립적으로 동작하며 서로 대체할 수 없습니다.
 
-| 구분 | 역할 | 사용 범위 |
-|------|------|-----------|
-| JWT 기반 인증 (기본) | 일반 웹·API 요청의 회원 식별. Access Token(쿠키 또는 Bearer), Refresh Token(쿠키, DB에는 해시만 저장) | `/api/**`, 일반 화면 요청 |
-| OAuth2 임시 세션 | Google 인증 진행 중의 상태 관리: `state`, Authorization Request, 연동 요청 회원 ID, 흐름 종류(로그인/연동) | Google 로그인 및 계정 연동 흐름에만 사용 |
+| 구분 | 화면 인증 | API 인증 |
+|------|-----------|----------|
+| 기술 | Spring Security 세션 (`JSESSIONID`) | JWT (`access_token` 쿠키 또는 Bearer) |
+| 적용 경로 | 일반 화면 URL (`/`, `/login`, `/mypage` 등) | `/api/**` |
+| 인증 정보 | 세션에 저장된 회원 정보 | JWT Access Token |
+| 인증 유지 | 세션 만료 또는 화면 로그아웃까지 | Access Token 만료까지 (Refresh Token으로 재발급) |
+| 로그인 방식 | 화면 로그인(`POST /login`), 화면 회원가입(`POST /signup`), Google 로그인 | API 로그인(`POST /api/auth/login`), API 회원가입(`POST /api/auth/signup`) |
+| CSRF | 활성 | 쿠키 기반 상태 변경 요청에 활성 |
 
 원칙:
-1. 일반 API 인증은 JWT 기반으로 유지합니다.
-2. Google OAuth2 인증 과정에서만 필요한 임시 상태 관리를 위해 서버 세션을 사용할 수 있습니다.
-3. OAuth2 임시 세션은 일반 API 인증을 대체하지 않습니다. `/api/**` 요청은 임시 세션만으로 인증하지 않습니다.
-4. OAuth2 인증이 완료되면 기존 JWT 기반 인증 체계로 돌아갑니다.
-5. Spring Security 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다. OAuth2 인증 과정의 상태 관리가 막히지 않아야 합니다. 세부 설정 값(세션 생성 정책, 저장 위치, 만료 시간)은 구현 단계에서 확정합니다 (REQUIREMENTS T11).
-6. 임시 세션에는 로그인 상태(회원 권한)를 저장하지 않고 흐름 상태만 저장합니다. Access Token, Refresh Token 원문, 비밀번호는 저장하지 않습니다.
-7. 흐름이 끝나면(성공이든 실패든) 임시 상태를 제거합니다. `state` 값은 한 번만 사용할 수 있습니다.
-8. Google 계정 연결은 시작 시점에만 Access Token으로 회원을 검증하고, 검증된 회원 ID를 OAuth2 임시 세션에 저장합니다. 콜백은 `state`가 같은 임시 세션의 값인지 확인한 뒤 임시 세션의 회원 ID를 기준으로 연결합니다. 콜백은 Access Token 유효기간에 의존하지 않습니다 (FR-01-15).
+1. 화면 요청은 유효한 Spring Security 세션으로만 인증합니다. JWT만으로 화면 로그인 상태를 인정하지 않습니다.
+2. API 요청(`/api/**`)은 JWT 검증을 통과해야 합니다. 세션만으로 API 로그인 상태를 인정하지 않습니다 (FR-01-16, FR-01-18).
+3. 화면 로그인, 화면 회원가입 후 자동 로그인, Google 로그인이 성공하면 세션과 JWT를 동시에 발급합니다 (FR-01-17).
+4. API 로그인과 API 회원가입은 JWT만 발급합니다. Spring Security 세션을 만들지 않습니다.
+5. 화면 로그인으로 발급된 JWT는 API 인증에 사용할 수 있습니다.
+6. Google 계정 연동은 기존 로그인 세션의 회원을 대상으로 합니다. 연동 대상 회원 ID는 연동 시작 시점의 로그인 세션에서 확보합니다 (5.7.1, T11 A안).
+7. OAuth2 임시 세션은 Google 인증 진행 상태(`state`, Authorization Request, 흐름 종류, 연동 요청 회원 ID)만 담습니다. 로그인 상태(회원 권한)는 담지 않습니다. 흐름이 끝나면(성공이든 실패든) 제거하며, `state`는 한 번만 사용합니다 (FR-01-14).
+8. 화면 체인은 HTTP 세션을 사용하고, `/api/**` 체인은 STATELESS입니다. 세션 만료 시간 등 운영 설정 값은 구현 단계에서 정합니다 (T11 A안). 세션 정책을 전체적으로 Stateless로 고정하지 않습니다.
+
+SecurityFilterChain 분리 (구현 기준):
+- **API 체인**: RequestMatcher `/api/**`. JWT 인증 필터를 적용합니다. 세션 인증을 사용하지 않고 `STATELESS` 정책을 씁니다. 인증 실패는 JSON 오류 응답(API_SPEC 1.2)으로 반환합니다.
+- **화면 체인**: 나머지 화면 URL. Spring Security 세션 인증을 사용합니다. 화면 로그인(`/login`), 화면 로그아웃, Google OAuth2 로그인과 콜백(`/oauth2/**`, `/login/oauth2/**`)을 처리합니다. 인증 실패는 로그인 페이지로 리다이렉트합니다.
+- `/oauth2/**`와 `/login/oauth2/**`는 API 체인에 포함하지 않습니다.
+- 두 체인의 RequestMatcher가 겹치지 않아야 합니다. API 인증 실패가 로그인 리다이렉트로, 화면 인증 실패가 JSON으로 처리되지 않아야 합니다.
+
+쿠키와 로그아웃:
+- 쿠키 속성과 Path는 API_SPEC 1.1절을 따릅니다. `JSESSIONID`는 화면 세션, `access_token`은 Path `/api`, `refresh_token`은 Path `/api/auth`입니다.
+- 화면 로그아웃(`POST /logout`)은 세션을 무효화하고 JWT 쿠키를 만료시킵니다. `refresh_token`의 DB 행 폐기 방식은 Path 제약 때문에 아직 확정되지 않았습니다 (T12).
+- API 로그아웃(`POST /api/auth/logout`)은 Refresh Token을 폐기하고 JWT 쿠키를 만료시킵니다. 화면 세션은 종료하지 않습니다.
+
+### 5.7.1 OAuth2 임시 상태와 Google 계정 연동 (T11 A안 확정)
+
+확정 원칙:
+1. `/api/**` 체인은 기존 정책대로 JWT 인증만 허용합니다. Google 계정 연동 요청을 API JWT 전용 체인에 세션 인증으로 허용하지 않습니다.
+2. Google 계정 연동 시작은 화면 전용 URL에서 처리합니다. 화면 체인은 HTTP 세션으로 인증합니다. 연동 시작 요청은 CSRF 토큰을 포함한 POST입니다. 정확한 경로는 구현 단계에서 확정합니다.
+3. OAuth2 임시 인증 상태(`state`, Authorization Request)는 기존 HTTP 세션에 저장합니다. 기본 구현은 Spring Security의 `HttpSessionOAuth2AuthorizationRequestRepository`를 사용합니다. OAuth2 `state` 검증은 Spring Security의 기존 절차를 유지합니다.
+4. 연동 대상 회원 ID와 연동 진행 상태는 연동 시작 시점의 로그인 세션에서 확보하여 같은 세션에 저장합니다.
+5. Google 일반 로그인과 Google 계정 연동은 처리 경로를 분리합니다. 두 기능은 같은 콜백 URL을 사용하지만, 세션에 연동 진행 상태가 있을 때만 계정 연동 처리를 수행합니다. 계정 연동 처리는 일반 로그인 성공 처리(세션 발급, JWT 발급)를 호출하지 않습니다.
+6. 계정 연동 과정에서 기존 로그인 세션과 API JWT를 유지합니다. 세션 무효화, JWT 교체, Refresh Token 재발급을 하지 않습니다.
+7. 임시 상태는 흐름이 끝나면(성공이든 실패든) 제거합니다. `state`는 한 번만 사용합니다 (FR-01-14).
+8. 일반 로그인을 시작하면 남아 있는 연동 진행 상태를 제거합니다. 연동을 시작하면 남아 있는 일반 로그인 진행 상태를 제거합니다.
+
+계정 연동 콜백 처리 (기존 세션 기준):
+1. OAuth2 `state`를 검증합니다.
+2. 세션의 연동 진행 상태를 확인합니다. 없으면 계정 연동이 아니므로 일반 로그인 처리로 분기합니다.
+3. 세션에 저장된 연동 대상 회원 ID를 확인합니다. 확인할 수 없으면 연동을 거부합니다.
+4. Google 인증 코드를 교환하고 Google 사용자 정보를 조회합니다.
+5. Google `sub` 식별자를 확인합니다.
+6. 해당 `google_sub`가 다른 회원에게 이미 연결되어 있는지 확인합니다.
+7. 중복되지 않으면 연동 대상 회원의 `google_sub`를 저장합니다. `uk_member_google_sub` 제약이 중복 연결을 한 번 더 막습니다.
+8. 연동 완료로 처리합니다.
+9. 연동 관련 임시 세션 정보(연동 진행 상태, `state`)를 정리합니다.
+
+계정 연동 원칙:
+- 연동 대상 회원은 연동 시작 시점의 로그인 세션에 저장된 회원 ID로 정합니다. Callback 시점의 Google 이메일이나 새로 생성된 인증 주체로 판단하지 않습니다.
+- Google 이메일이 기존 회원과 같다는 이유만으로 자동 연결하지 않습니다.
+- 기존 세션을 새 Google 사용자 인증으로 대체하지 않습니다.
+- 실패하면 기존 세션과 JWT를 변경하지 않고, 임시 상태만 정리합니다.
+
+Google 일반 로그인 처리 (계정 연동과 분리):
+- Google `sub`로 회원을 조회합니다. 있으면 로그인합니다.
+- 없고 같은 이메일의 기존 회원이 있으면 자동 연결하지 않고 `email_account_exists`로 거부합니다 (FR-01-09).
+- 둘 다 없으면 새 회원을 만듭니다.
+- 성공하면 화면 세션과 API JWT를 함께 발급합니다 (FR-01-17).
+
+Callback 핸들러 원칙 (구현 필수 요구, T11 A안의 보존 조건):
+1. 일반 Google 로그인과 계정 연동은 같은 Callback URL을 사용하지만, 사용자 정의 `AuthenticationSuccessHandler`에서 세션의 연동 진행 상태로 처리 경로를 구분합니다.
+2. 연동 진행 상태가 없으면 일반 Google 로그인입니다. 기존 성공 처리 흐름을 유지하여 화면 세션과 API JWT를 발급합니다 (FR-01-17).
+3. 연동 진행 상태가 있으면 계정 연동입니다. Spring Security 기본 Google 로그인 성공 처리가 기존 로컬 회원의 `SecurityContext`를 대체하지 않도록 합니다. 기존 로컬 회원의 인증 상태와 세션을 보존하고, Google 인증 결과는 `member.google_sub` 연결에만 사용합니다.
+4. Spring Security의 OAuth2 로그인 필터는 인증 성공 시 Google 인증 객체를 SecurityContext에 먼저 설정할 수 있습니다. 계정 연동 모드에서는 이를 기존 로컬 회원의 인증 상태로 되돌리거나 저장을 막아야 합니다. 되돌리는 방법은 구현 단계에서 정하되, 결과 조건(기존 인증 상태 유지)은 반드시 지켜야 합니다.
+5. 계정 연동 모드에서는 기존 세션 ID를 바꾸는 세션 보호 처리를 호출하지 않습니다. 기존 Access Token과 Refresh Token을 재발급하거나 교체하지 않습니다. 쿠키도 다시 설정하지 않습니다.
+6. 사용자 정의 `AuthenticationFailureHandler`는 Google 인증 실패와 Callback 검증 실패를 처리합니다. 연동 모드에서는 연동 임시 상태(진행 상태, `state`)를 정리하고 기존 로그인 상태와 JWT를 유지한 채 `/mypage?error=...`로 이동합니다. Spring Security 필터가 인증 실패 시 SecurityContext를 비울 수 있으므로, 연동 모드 실패 처리는 기존 로그인 상태를 복원합니다.
+7. OAuth2 `state` 검증은 Spring Security의 기존 검증 절차를 그대로 사용합니다. 연동 모드의 업무 검증(연동 대상 회원 확인, `email_verified`, `google_sub` 중복)은 성공 핸들러 안에서 수행하고, 실패하면 `/mypage?error=...`로 이동하며 연동 임시 상태를 정리합니다.
+
+### 5.7.2 로그아웃과 토큰 재발급 (제안, 승인 대기)
+
+이 절의 내용은 사용자 승인 전까지 확정이 아닙니다. 승인 항목은 T12(로그아웃)와 T13(재발급)입니다.
+
+화면 로그아웃 (T12 제안):
+1. 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출합니다. 이 요청은 Refresh Token 행을 폐기하고 JWT 쿠키를 만료시킵니다.
+2. 1이 성공하면 `POST /logout`을 호출합니다. Spring Security 세션을 무효화하고 `JSESSIONID`를 만료시킵니다.
+3. 메인 페이지로 이동합니다.
+- 첫 번째 요청(1)이 실패하면 `POST /logout`을 호출하지 않습니다. 로그인 상태를 유지하고 "로그아웃에 실패했습니다. 다시 시도해 주세요."를 표시합니다. 오류 종류(네트워크, 서버)와 관계없이 같은 처리를 합니다.
+- 이유: `refresh_token` 쿠키는 `/api/auth` 경로에서만 만료시킬 수 있습니다. 1이 실패한 상태에서 세션만 끊으면 Refresh Token 행과 쿠키가 남습니다. API 로그아웃은 인증 없이 호출할 수 있고, 이미 폐기된 토큰이어도 `200`을 반환하므로 재시도가 안전합니다.
+- 1은 성공했지만 2가 실패한 경우: JWT 쿠키는 이미 만료되었고 세션은 남습니다. 사용자가 다시 시도하면 1은 `200`으로 끝나고 2가 다시 실행됩니다.
+
+Access Token 만료 대응 (T13 제안):
+1. 화면 스크립트가 API 요청에서 `401 TOKEN_INVALID`를 받으면 `POST /api/auth/refresh`를 1회 호출합니다. 쿠키를 함께 보내며 `X-XSRF-TOKEN` 헤더를 포함합니다.
+2. 재발급이 성공하면 원래 API 요청을 1회만 다시 보냅니다.
+3. 재발급이 실패하면 재로그인을 안내합니다. 제안: 로그인 페이지로 이동합니다. 화면 세션을 함께 끊을지는 T13 승인 시 정합니다.
+4. 무한 재시도 방지: 원래 요청의 재시도는 1회입니다. 재발급 요청이 실패하면 다시 시도하지 않습니다. 여러 요청이 동시에 401을 받아도 재발급은 한 번만 진행하고, 나머지 요청은 그 결과를 기다립니다.
+5. Refresh Token 원문은 JavaScript에서 읽지 않습니다. `refresh_token`은 HttpOnly 쿠키이므로 스크립트는 쿠키가 전송되도록 요청만 합니다.
+- 화면 세션은 재발급으로 갱신되지 않습니다. 화면 세션 만료는 T11 범위입니다.
 
 ## 6. 코드 구조 규칙 (구현 단계)
 
@@ -211,6 +298,17 @@ com.busanlocalfood
 
 ## 7. 테스트 규칙
 
+### 테스트 환경 (T9 확정, 2026-11-09)
+
+- 테스트 의존성은 `spring-boot-starter-test`입니다. JUnit 5, Mockito, AssertJ, Spring MockMvc를 사용합니다.
+- Testcontainers, H2, Docker 기반 테스트 환경은 도입하지 않습니다. Docker Desktop 설치를 요구하지 않습니다.
+- DB 연동 테스트는 개발 PC에 직접 설치한 MySQL 8의 테스트 전용 데이터베이스를 사용합니다. 개발 데이터베이스와 분리합니다. 테스트가 개발 데이터베이스의 데이터를 삭제하거나 변경하지 않도록 합니다.
+- 외부 서비스(Google, AWS S3, OpenRouter)는 모킹하거나 가짜 구현체를 사용합니다 (아래 마지막 항목 참조).
+- 위 목록 밖의 테스트 라이브러리가 필요하면 이유와 대안을 제안하고 사용자 승인을 받은 뒤 추가합니다.
+- CI 테스트는 기존 GitHub Actions 계획을 따릅니다. 이번 결정으로 새 테스트 인프라를 추가하지 않습니다.
+
+### 테스트 작성 기준
+
 - 기능마다 최소한 다음 테스트를 작성합니다.
   - 서비스 단위 테스트 (Mockito): 정상 흐름, 권한 없음, 중복, 없는 대상
   - 리포지토리·통합 테스트: JPA 제약 조건(UNIQUE, FK, CHECK), 집계 갱신
@@ -224,8 +322,15 @@ com.busanlocalfood
   - 비밀번호가 없는 회원이 Google 연동을 해제하면 `LAST_LOGIN_METHOD`가 나는지
   - `state`가 없거나 다르면 Google 계정이 연결되지 않는지, 같은 `state`를 두 번 쓸 수 없는지
   - 임시 세션이 없거나 만료되었으면 연결되지 않는지
-  - 콜백 시점에 Access Token이 만료되어도 유효한 임시 세션이면 연결되는지
+  - 연동 시작 시 로그인하지 않았으면 연동이 거부되는지
+  - 콜백이 Access Token 없이 세션의 연동 대상 회원 ID 기준으로만 연결하는지
+  - Google 이메일이 기존 회원과 같아도 자동 연결되지 않는지
+  - 계정 연동 콜백 후 기존 세션과 API JWT가 교체되지 않는지
+  - 연동 실패 시 기존 세션과 API JWT가 변경되지 않는지
+  - 일반 Google 로그인 처리가 계정 연동 콜백에서 실행되지 않는지
   - `/api/**` 요청이 임시 세션만으로는 인증되지 않는지
+  - 화면 요청이 JWT만으로 인증되지 않고, API 요청이 세션만으로 인증되지 않는지
+  - API 로그인과 API 회원가입이 세션을 만들지 않고, 화면 로그인·화면 회원가입·Google 로그인이 세션과 JWT를 모두 발급하는지
 - F1-02, F1-03은 다음을 테스트합니다.
   - 맛집 삭제 시 리뷰, 찜, 이미지, AI 요약이 함께 삭제되는지
   - S3 삭제 실패 시 `storage_delete_task`에 키가 남고, 재시도 후 행이 삭제되는지

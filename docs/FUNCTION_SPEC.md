@@ -14,39 +14,71 @@
 
 ## F1-01 회원 (인증)
 
+인증 구조 (2026-11-10 확정): 화면은 Spring Security 세션으로, API는 JWT로 인증합니다. 화면 로그인, 화면 회원가입, Google 로그인이 성공하면 세션과 JWT를 함께 발급합니다. 세부 규칙은 DEVELOPMENT_RULES 5.7을 따릅니다.
+
 ### 화면
-- `/signup` 회원가입 폼: 이메일, 비밀번호, 비밀번호 확인, 닉네임
-- `/login` 로그인 폼: 이메일, 비밀번호, "Google로 로그인" 버튼, 오류 메시지 (`error` 쿼리 값에 따라 표시)
-- `/mypage` 계정 설정 (로그인 필요): 내 정보, Google 계정 연동 버튼 또는 연동 해제 버튼
-- 헤더: 로그인 상태에 따라 "로그인/회원가입" 또는 "마이페이지/내 찜 목록/로그아웃" 표시. 관리자에게는 "관리자" 메뉴 추가
+- `/signup` 회원가입 폼 (제출: `POST /signup`): 이메일, 비밀번호, 비밀번호 확인, 닉네임
+- `/login` 로그인 폼 (제출: `POST /login`): 이메일, 비밀번호, "Google로 로그인" 버튼, 오류 메시지 (`error` 쿼리 값에 따라 표시)
+- `/mypage` 계정 설정 (세션 로그인 필요): 내 정보, Google 계정 연동 버튼 또는 연동 해제 버튼
+- 헤더: 로그인 상태(세션 기준)에 따라 "로그인/회원가입" 또는 "마이페이지/내 찜 목록/로그아웃" 표시. 관리자에게는 "관리자" 메뉴 추가
 
-### 회원가입 흐름
-1. 이메일 형식, 비밀번호 길이(8자 이상), 비밀번호 확인 일치, 닉네임(2~20자)을 검증합니다.
-2. 이메일이 이미 존재하면 `EMAIL_DUPLICATED`(409) 오류를 반환합니다. Google로만 가입된 계정과 이메일이 같은 경우도 같습니다.
+### 회원가입 흐름 (화면)
+1. 이메일 형식, 비밀번호 길이(8자 이상), 비밀번호 확인 일치, 닉네임(2~20자)을 검증합니다. 실패하면 `/signup?error=validation_failed`로 이동합니다.
+2. 이메일이 이미 존재하면 `/signup?error=email_duplicated`로 이동합니다. Google로만 가입된 계정과 이메일이 같은 경우도 같습니다.
 3. 비밀번호를 BCrypt로 해시하여 `member`에 저장합니다 (`role = USER`, `google_sub = NULL`).
-4. 가입 완료 후 자동 로그인합니다. 두 쿠키를 설정하고 메인 페이지로 이동합니다.
+4. 자동 로그인합니다. Spring Security 세션을 생성하고, JWT Access Token과 Refresh Token을 발급합니다 (Refresh Token의 SHA-256 해시는 `refresh_token`에 저장). 쿠키를 설정하고 메인 페이지(`/`)로 이동합니다.
 
-### 이메일 로그인 흐름
-1. 이메일로 회원을 조회합니다. 없거나, 비밀번호가 틀리거나, `password_hash`가 없는(Google 전용) 경우 같은 메시지(`INVALID_CREDENTIALS`, 401)를 반환합니다. 계정 존재 여부와 가입 방식을 노출하지 않습니다.
-2. 성공 시 JWT 액세스 토큰(만료 기본 30분)을 발급하여 `access_token` 쿠키(HttpOnly)에 담습니다.
-3. Refresh Token 원문을 발급하여 `refresh_token` 쿠키(HttpOnly, Path `/api/auth`)에 담고, SHA-256 해시를 `refresh_token` 테이블에 저장합니다 (FR-01-05). 만료 기본 14일.
-4. 액세스 토큰이 만료되면 Refresh Token으로 재발급합니다 (아래 "재발급 흐름").
+### 회원가입 흐름 (API)
+1. 1~3번은 화면 회원가입과 같습니다 (`POST /api/auth/signup`). 실패는 JSON 오류(400 `VALIDATION_FAILED`, 409 `EMAIL_DUPLICATED`)로 응답합니다.
+2. 4번에서 Spring Security 세션을 만들지 않습니다. JWT 쿠키만 발급하고 201 JSON으로 응답합니다.
 
-### 재발급 흐름 (Refresh Token 로테이션, FR-01-06)
+### 로그인 흐름 (화면)
+1. `POST /login`으로 이메일과 비밀번호를 검증합니다. 없거나, 비밀번호가 틀리거나, `password_hash`가 없는(Google 전용) 경우 같은 결과(`/login?error=invalid_credentials`)를 반환합니다. 계정 존재 여부와 가입 방식을 노출하지 않습니다.
+2. 성공하면 Spring Security 세션을 생성합니다. 세션 ID 변경 등 Spring Security의 기본 세션 보호 정책을 적용합니다 (세부 값은 T11).
+3. JWT Access Token을 발급하여 `access_token` 쿠키(HttpOnly, Path `/api`)에 담습니다. 기본 만료 30분.
+4. Refresh Token 원문을 발급하여 `refresh_token` 쿠키(HttpOnly, Path `/api/auth`)에 담고, SHA-256 해시를 `refresh_token` 테이블에 저장합니다 (FR-01-05). 기본 만료 14일.
+5. 메인 페이지(`/`)로 이동합니다.
+
+### 로그인 흐름 (API)
+1. `POST /api/auth/login`으로 이메일과 비밀번호를 검증합니다. 실패는 401 `INVALID_CREDENTIALS`입니다.
+2. JWT Access Token과 Refresh Token을 발급합니다. 쿠키를 설정하고 JSON으로 응답합니다.
+3. Spring Security 세션을 생성하지 않습니다. 세션이 있더라도 API 인증을 대신하지 않습니다.
+
+### 재발급 흐름 (API, Refresh Token 로테이션, FR-01-06)
 1. 요청의 `refresh_token` 쿠키 원문을 SHA-256으로 해시합니다.
-2. `refresh_token`에서 해시가 일치하는 행을 찾습니다. 없거나, `revoked_at`이 있거나, 만료되었으면 `TOKEN_INVALID`(401)를 반환하고 두 쿠키를 제거합니다.
+2. `refresh_token`에서 해시가 일치하는 행을 찾습니다. 없거나, `revoked_at`이 있거나, 만료되었으면 `TOKEN_INVALID`(401)를 반환하고 두 JWT 쿠키를 제거합니다.
 3. 기존 행의 `revoked_at`을 현재 시각으로 기록합니다.
 4. 새 Refresh Token 원문을 발급하고, 해시를 새 행으로 INSERT합니다.
 5. 새 `access_token` 쿠키와 새 `refresh_token` 쿠키를 설정합니다.
+- 화면 세션은 재발급 대상이 아닙니다. 화면 세션의 만료 정책은 T11에서 정합니다.
 - 재사용 탐지(폐기된 토큰의 재사용)에 따른 추가 조치는 T7에서 확정합니다.
 
-### 로그아웃 흐름 (FR-01-07)
+### 로그아웃 흐름 (화면, FR-01-07)
+
+T12 제안(승인 대기, DEVELOPMENT_RULES 5.7.2)입니다.
+1. 화면 로그아웃 화면이 `POST /api/auth/logout`을 먼저 호출합니다. Refresh Token 행을 폐기하고 JWT 쿠키를 만료시킵니다.
+2. 1이 성공하면 `POST /logout`을 호출합니다 (CSRF 토큰 필요). Spring Security 세션을 무효화하고 SecurityContext를 제거하며 `JSESSIONID`를 만료시킵니다.
+3. 메인 페이지(`/`)로 이동합니다.
+- 1이 실패하면 `POST /logout`을 호출하지 않습니다. 로그인 상태를 유지하고 재시도를 안내합니다.
+- 1이 성공하고 2가 실패하면 JWT 쿠키는 만료되고 세션은 남습니다. 재시도하면 1은 `200`으로 끝나고 2가 다시 실행됩니다.
+- `refresh_token` 쿠키의 Path는 `/api/auth`이므로 `/logout` 요청에서는 전송되지 않습니다. 이것이 T12의 원인입니다.
+
+### Access Token 만료 대응 (화면, T13 제안)
+
+화면 세션이 유효해도 Access Token은 만료될 수 있습니다. T13 제안(승인 대기)은 다음과 같습니다 (DEVELOPMENT_RULES 5.7.2).
+1. API 요청이 `401 TOKEN_INVALID`를 받으면 `POST /api/auth/refresh`를 1회 호출합니다.
+2. 재발급이 성공하면 원래 요청을 1회만 다시 보냅니다.
+3. 재발급이 실패하면 재로그인을 안내합니다.
+4. 재시도는 요청당 1회입니다. 재발급은 동시에 한 번만 진행합니다.
+5. Refresh Token 원문은 JavaScript에서 읽지 않습니다.
+
+### 로그아웃 흐름 (API)
 1. `POST /api/auth/logout`을 호출합니다. 인증을 요구하지 않으므로 Access Token이 만료되었어도 호출할 수 있습니다.
 2. `refresh_token` 쿠키가 있으면 해당 행의 `revoked_at`을 기록합니다. 쿠키가 없거나 이미 폐기되었어도 실패로 보지 않습니다.
 3. `access_token`, `refresh_token` 쿠키를 만료시킵니다.
-4. 메인 페이지로 이동합니다.
+4. 화면 세션은 종료하지 않습니다. API 로그아웃은 화면 로그인 상태를 바꾸지 않습니다.
 
-### Google 로그인 흐름 (FR-01-09)
+### Google 로그인 흐름 (FR-01-09, FR-01-17)
 1. "Google로 로그인" 클릭 → Spring Security OAuth2 Client가 Google 인증 페이지로 이동합니다. 이때 `state` 값과 흐름 종류(로그인)를 OAuth2 임시 세션에 보관합니다.
 2. 콜백에서 `state`가 임시 세션에 보관한 값과 일치하고 아직 사용되지 않았는지 확인합니다 (CSRF 방지). 일치하면 Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다. 일치하지 않으면 로그인하지 않고 `/login?error=google_failed`로 이동합니다.
 3. 처리 규칙:
@@ -54,38 +86,54 @@
    - 없고 같은 `email`의 기존 회원이 있으면 **자동으로 연결하지 않습니다.** 로그인하지 않고 `/login?error=email_account_exists`로 이동합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요."를 표시합니다.
    - `email_verified`가 아니면 `/login?error=google_unverified`로 이동합니다.
    - 둘 다 없으면 새 회원을 만듭니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`). 닉네임 생성 규칙은 T3에서 정합니다.
-4. 로그인에 성공하면 이메일 로그인과 같은 방식으로 쿠키를 발급합니다.
+4. 로그인에 성공하면 화면 로그인과 같은 방식으로 Spring Security 세션과 JWT를 모두 발급합니다. 메인 페이지(`/`)로 이동합니다.
 
-### Google OAuth2 임시 세션과 JWT 인증의 관계
-
-Google 인증 과정에서는 서버 임시 세션에 인증 진행 상태만 보관합니다. 일반 API 인증은 계속 JWT가 담당합니다 (DEVELOPMENT_RULES 5.7).
+### 화면 세션, API JWT, OAuth2 임시 세션의 관계
 
 | 구분 | 역할 | 수명 |
 |------|------|------|
-| 일반 API 인증 (JWT) | `/api/**` 요청의 회원 식별. Access Token(쿠키 또는 Bearer), Refresh Token(쿠키, DB에는 해시) | Access Token 30분, Refresh Token 14일 |
-| OAuth2 임시 세션 | Google 인증 진행 상태만 보관: `state`, Authorization Request, 연동 요청 회원 ID, 흐름 종류 | 인증 흐름이 끝날 때까지. 만료 시간은 T11 |
+| 화면 세션 (Spring Security) | 일반 화면 요청의 회원 식별 | 세션 만료 또는 화면 로그아웃까지 (세부 값 T11) |
+| API JWT | `/api/**` 요청의 회원 식별. Access Token(쿠키 또는 Bearer), Refresh Token(쿠키, DB에는 해시) | Access Token 30분, Refresh Token 14일 |
+| OAuth2 임시 상태 (HTTP 세션 내) | Google 인증 진행 상태만 보관: `state`, Authorization Request, 연동 대상 회원 ID, 흐름 종류 | 인증 흐름이 끝날 때까지 (T11 A안) |
 
 규칙:
-1. 임시 세션은 회원의 로그인 상태를 나타내지 않습니다. `/api/**` 요청을 임시 세션만으로 인증하지 않습니다.
-2. 임시 세션에는 흐름 상태만 저장합니다. Access Token, Refresh Token 원문, 비밀번호는 저장하지 않습니다.
-3. 인증 흐름이 끝나면(성공이든 실패든) 해당 흐름의 임시 상태를 제거합니다. 같은 `state`는 한 번만 사용할 수 있습니다.
-4. 흐름이 끝난 뒤의 로그인 상태는 JWT 체계로 돌아갑니다. 로그인 흐름이면 JWT 쿠키를 발급합니다. 연동 흐름이면 연동 대상은 시작 시점에 검증된 회원 ID이며, 콜백에서 JWT를 다시 확인하지 않습니다.
-5. 세션 저장 방식(Spring Security OAuth2 기본 저장소 사용 여부), 만료 시간, 세션 정책 세부 값은 구현 단계에서 확정합니다 (T11). 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다. 대신 `/api/**` 경로가 JWT로만 인증되도록 구분합니다.
+1. 화면 요청은 화면 세션으로만 인증합니다. JWT만으로 화면 로그인 상태를 인정하지 않습니다.
+2. `/api/**` 요청은 JWT로만 인증합니다. 세션만으로 API 로그인 상태를 인정하지 않습니다.
+3. OAuth2 임시 세션은 회원의 로그인 상태를 나타내지 않습니다. `/api/**` 요청을 임시 세션만으로 인증하지 않습니다.
+4. OAuth2 임시 세션에는 흐름 상태만 저장합니다. Access Token, Refresh Token 원문, 비밀번호는 저장하지 않습니다.
+5. 인증 흐름이 끝나면(성공이든 실패든) 해당 흐름의 임시 상태를 제거합니다. 같은 `state`는 한 번만 사용할 수 있습니다.
+6. Google 로그인 흐름이 성공하면 화면 세션과 JWT를 발급합니다. Google 계정 연동 흐름에서는 기존 로그인 세션과 JWT를 교체하지 않습니다.
+7. OAuth2 임시 상태는 HTTP 세션에 저장합니다 (T11 A안). 세션 만료 시간 등 운영 설정 값은 구현 단계에서 정합니다. 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다. 대신 `/api/**` 경로가 JWT로만 인증되도록 구분합니다.
 
-### Google 계정 연동 흐름 (FR-01-10, FR-01-11, FR-01-12)
-1. 이메일로 로그인한 회원이 `/mypage`에서 "Google 계정 연동"을 누릅니다.
-2. `GET /api/me/google/link`는 요청의 `access_token`으로 현재 회원을 확인합니다. 이 검증은 연동 시작 시점에만 합니다. 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 세션에 저장하고, `state` 값을 함께 보관한 뒤 Google 인증 페이지로 이동합니다. Access Token이 없거나 만료되었으면 흐름을 시작하지 않습니다.
-3. 콜백에서 다음을 검증합니다. (a) 콜백의 `state`가 임시 세션에 보관된 값과 일치하고 아직 사용되지 않았는지 (CSRF 방지). (b) 임시 세션이 존재하고 만료되지 않았는지. (c) 임시 세션에 저장된 회원 ID의 회원이 존재하는지. 하나라도 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다. 콜백은 `access_token`을 요구하지 않습니다. Google 인증 중 Access Token이 만료되어도 임시 세션이 유효하면 연동을 완료합니다.
-4. `email_verified`가 아니면 `/mypage?error=google_unverified`로 이동합니다.
-5. `google_sub`가 다른 회원에게 이미 연결되어 있으면 `/mypage?error=google_already_linked`로 이동합니다 (FR-01-11, 409 `GOOGLE_ALREADY_LINKED`에 해당).
-6. 이미 대상 회원에게 연결되어 있으면 변경하지 않고 `/mypage?google=linked`로 이동합니다.
-7. 그 밖의 경우 임시 세션에 저장된 회원의 `google_sub`에 `sub`를 저장하고 `/mypage?google=linked`로 이동합니다.
+### Google 계정 연동 흐름 (FR-01-10, FR-01-11, FR-01-12, FR-01-15, T11 A안)
+
+연동 시작 (화면):
+1. 로그인된 회원이 `/mypage`에서 "Google 계정 연동"을 누릅니다. 연동 시작 요청은 CSRF 토큰을 포함한 화면 POST입니다. 정확한 경로는 구현 단계에서 확정합니다.
+2. 세션에서 로그인 회원 ID를 확인합니다. 로그인되지 않았으면 `/login`으로 이동합니다.
+3. 세션에 연동 진행 상태(연동 대상 회원 ID, 흐름 = 계정 연동)를 저장하고, 남아 있던 일반 로그인 진행 상태는 제거합니다.
+4. Spring Security의 기본 OAuth2 Authorization Request 저장 방식으로 `state`와 Authorization Request를 HTTP 세션에 저장한 뒤 Google 인증 페이지로 이동합니다.
+5. 기존 로그인 세션과 API JWT는 변경하지 않습니다.
+
+콜백 (API_SPEC 2.6.1과 같은 절차):
+1. OAuth2 `state`를 검증합니다. 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다.
+2. 세션의 연동 진행 상태가 있을 때만 계정 연동으로 처리합니다. 없으면 일반 로그인 처리입니다.
+3. 세션에 저장된 연동 대상 회원 ID를 확인합니다. 없거나 회원이 존재하지 않으면 거부합니다.
+4. Google 인증 코드를 교환하고 Google 사용자 정보를 조회합니다. `email_verified`가 아니면 `/mypage?error=google_unverified`로 이동합니다.
+5. Google `sub`가 다른 회원에게 이미 연결되어 있으면 `/mypage?error=google_already_linked`로 이동합니다 (FR-01-11, 409 `GOOGLE_ALREADY_LINKED`에 해당).
+6. 중복이 없으면 연동 대상 회원의 `google_sub`에 `sub`를 저장하고 `/mypage?google=linked`로 이동합니다. 이미 대상 회원에게 연결되어 있으면 변경 없이 같은 결과로 이동합니다.
+7. 연동 진행 상태와 `state`를 세션에서 제거합니다. 성공과 실패 모두 수행합니다.
+
+원칙:
+- 연동 대상 회원은 연동 시작 시점의 로그인 세션에 저장된 회원 ID입니다. Callback 시점의 Google 이메일이나 새로 만든 인증 주체로 판단하지 않습니다.
+- Google 이메일이 기존 회원과 같다는 이유만으로 자동 연결하지 않습니다.
+- 연동 과정에서 기존 로그인 세션을 무효화하거나 Google 인증 주체로 대체하지 않습니다. API JWT를 재발급하거나 교체하지 않습니다.
+- 연동 실패 시 기존 세션과 JWT를 변경하지 않고, 임시 상태만 정리합니다.
 - 연동은 로그인된 본인 세션에서 시작한 흐름만 허용합니다. 다른 회원의 계정에 연동할 수 없습니다.
 - 본인 확인 강도(추가 인증 등)는 T8에서 확정합니다.
 
 ### Google 계정 연동 해제 흐름 (FR-01-12, FR-01-13)
 1. `/mypage`에서 "Google 계정 연동 해제"를 누르고 현재 비밀번호를 입력합니다.
-2. `DELETE /api/me/google`이 요청을 처리합니다.
+2. `DELETE /api/me/google`이 요청을 처리합니다. JWT로 회원을 확인합니다.
 3. 연동된 Google 계정이 없으면 `GOOGLE_NOT_LINKED`(404)를 반환합니다.
 4. 비밀번호가 없는 회원(Google 전용 계정)이면 해제 후 로그인 수단이 없어지므로 `LAST_LOGIN_METHOD`(409)로 거부합니다.
 5. 비밀번호가 틀리면 `INVALID_CREDENTIALS`(401)로 거부합니다.
@@ -93,20 +141,24 @@ Google 인증 과정에서는 서버 임시 세션에 인증 진행 상태만 �
 
 ### 인증 처리 규칙
 - JWT 서명 키는 환경 변수 `JWT_SECRET`에서 읽습니다.
-- 인증 필터는 `access_token` 쿠키 또는 `Authorization: Bearer` 헤더를 읽습니다.
-- Cookie 기반 상태 변경 요청(POST, PUT, DELETE)은 CSRF 토큰(`XSRF-TOKEN` 쿠키, `X-XSRF-TOKEN` 헤더)을 검증합니다 (NFR-04). Bearer 헤더 요청은 CSRF 헤더를 요구하지 않습니다.
-- 쿠키 속성: `access_token`과 `refresh_token`은 HttpOnly, SameSite=Lax, 운영에서는 Secure. `refresh_token`의 Path는 `/api/auth`입니다.
-- 토큰이 만료되거나 위조되면 401을 반환하고, 화면 요청은 로그인 페이지로 리다이렉트합니다.
-- OAuth2 임시 세션은 일반 API 인증(JWT)을 대체하지 않습니다. 임시 세션의 흐름 상태는 Google 인증 과정이 끝나면 제거합니다.
+- API 인증 필터는 `/api/**`에만 적용합니다. `access_token` 쿠키 또는 `Authorization: Bearer` 헤더를 읽습니다. 세션만으로 인증하지 않습니다.
+- 화면 인증은 Spring Security 세션으로 처리합니다. 인증이 필요한 화면은 세션이 없으면 `/login`으로 리다이렉트합니다.
+- CSRF 보호는 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청(POST, PUT, DELETE)에 적용합니다 (NFR-04). Bearer 헤더 요청은 CSRF 헤더를 요구하지 않습니다.
+- 쿠키 속성과 Path는 API_SPEC 1.1절을 따릅니다. 운영 환경에서는 모든 인증 쿠키에 Secure를 설정합니다.
+- 토큰이 만료되거나 위조되면 API는 401 JSON으로 응답합니다. 화면은 로그인 페이지로 리다이렉트합니다. 화면 인증 실패가 JSON으로, API 인증 실패가 리다이렉트로 처리되지 않습니다.
 - 로그에 비밀번호, 토큰 원문, Refresh Token 원문을 남기지 않습니다 (NFR-10).
 
 ### 예외
 | 상황 | 응답 |
 |------|------|
-| 이메일 중복 | 409 `EMAIL_DUPLICATED` |
-| 입력값 검증 실패 | 400 `VALIDATION_FAILED` |
-| 자격 증명 불일치 (Google 전용 계정 포함) | 401 `INVALID_CREDENTIALS` |
-| 토큰 없음·만료·폐기·위조 | 401 `TOKEN_INVALID` |
+| 이메일 중복 (API) | 409 `EMAIL_DUPLICATED` |
+| 이메일 중복 (화면) | `/signup?error=email_duplicated` |
+| 입력값 검증 실패 (API) | 400 `VALIDATION_FAILED` |
+| 입력값 검증 실패 (화면) | `/signup?error=validation_failed` |
+| 자격 증명 불일치 (API, Google 전용 계정 포함) | 401 `INVALID_CREDENTIALS` |
+| 자격 증명 불일치 (화면, Google 전용 계정 포함) | `/login?error=invalid_credentials` |
+| 토큰 없음·만료·폐기·위조 (API) | 401 `TOKEN_INVALID` |
+| 세션 없음 (화면 인증 필요 페이지) | `/login`으로 리다이렉트 |
 | 재인증 실패 (연동 해제) | 401 `INVALID_CREDENTIALS` |
 | Google 인증 실패 | `/login?error=google_failed` |
 | 기존 이메일 계정과 충돌 (자동 연결 없음) | `/login?error=email_account_exists` |
