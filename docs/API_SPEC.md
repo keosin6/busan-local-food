@@ -75,7 +75,13 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 | HTTP | code | 의미 |
 |------|------|------|
-| 400 | VALIDATION_FAILED | 입력값 검증 실패 |
+| 400 | VALIDATION_FAILED | 일반 입력값 검증 실패. 회원가입·로그인 입력 오류는 아래 세부 코드를 사용한다 |
+| 400 | EMAIL_REQUIRED | 이메일 미입력 (회원가입·로그인) |
+| 400 | EMAIL_INVALID | 이메일 형식 또는 길이(255자) 오류 (회원가입·로그인) |
+| 400 | NICKNAME_REQUIRED | 닉네임 미입력 (회원가입) |
+| 400 | NICKNAME_INVALID | 닉네임 길이(2~20자) 또는 허용 문자(한글·영문·숫자) 오류 (회원가입) |
+| 400 | PASSWORD_REQUIRED | 비밀번호 미입력. 회원가입과 로컬 비밀번호 설정에서는 비밀번호 또는 비밀번호 확인값 미입력도 포함. 로그인에서는 비밀번호 미입력만 해당 |
+| 400 | PASSWORD_INVALID | 회원가입·로컬 비밀번호 설정: 비밀번호 정책 위반 또는 확인값 불일치. 로그인: 사용하지 않음 (로그인은 비밀번호 조합 규칙을 검증하지 않음) |
 | 400 | CATEGORY_NOT_FOUND | 존재하지 않는 카테고리 |
 | 400 | IMAGE_TYPE_NOT_ALLOWED | 허용되지 않은 이미지 형식 |
 | 400 | IMAGE_TOO_LARGE | 이미지 크기 초과 |
@@ -116,7 +122,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 ```json
 {
   "email": "user@example.com",
-  "password": "<8자 이상>",
+  "password": "<8~20자, 영문·숫자·특수문자 각 1자 이상, 공백 불가>",
   "passwordConfirm": "<동일 값>",
   "nickname": "부산먹보"
 }
@@ -129,7 +135,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "timestamp": "..."
 }
 ```
-- 주요 오류: 400 VALIDATION_FAILED, 409 EMAIL_DUPLICATED, 409 NICKNAME_DUPLICATED
+- 주요 오류: 400 EMAIL_REQUIRED, 400 EMAIL_INVALID, 400 NICKNAME_REQUIRED, 400 NICKNAME_INVALID, 400 PASSWORD_REQUIRED, 400 PASSWORD_INVALID, 409 EMAIL_DUPLICATED, 409 NICKNAME_DUPLICATED. 세부 검증 규칙은 FUNCTION_SPEC F1-01 "회원가입·로그인 검증 규칙"을 따른다.
 
 ### 2.2 로그인 (API)
 
@@ -149,7 +155,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 - 처리: Refresh Token 원문은 쿠키로만 내려주고, DB `refresh_token`에는 SHA-256 해시를 저장합니다 (FR-01-05). Spring Security 세션은 만들지 않습니다. 화면 로그인은 2.10을 사용합니다.
-- 주요 오류: 401 INVALID_CREDENTIALS (Google 전용 계정의 비밀번호 로그인 시도도 같은 응답)
+- 주요 오류: 400 EMAIL_REQUIRED, 400 EMAIL_INVALID, 400 PASSWORD_REQUIRED (입력 누락·형식 오류에만 사용), 401 INVALID_CREDENTIALS. 미가입 이메일, 비밀번호 불일치, Google 전용 계정은 모두 같은 401 INVALID_CREDENTIALS로 응답한다.
 
 ### 2.3 Access Token 재발급 (Refresh Token 로테이션)
 
@@ -221,10 +227,10 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증: 불필요. 대신 OAuth2 임시 세션에 신규 가입 진행 상태가 있어야 합니다. 없으면 `/login`으로 이동합니다.
 - 권한: Google 신규 가입을 진행 중인 사용자
 - CSRF: 제출(POST)에 필요
-- 요청: 폼 필드 `nickname` (2~20자)
+- 요청: 폼 필드 `nickname` (닉네임 규칙은 FUNCTION_SPEC F1-01 참조)
 - 처리:
   1. 가입 진행 상태를 확인합니다. 없으면 `/login`으로 이동합니다.
-  2. 닉네임 길이(2~20자)를 검증합니다. 실패하면 `<닉네임 설정 화면 경로>?error=validation_failed`로 이동합니다.
+  2. 닉네임 규칙(길이, 허용 문자, 앞뒤 공백 제거)을 검증합니다. 실패하면 `<닉네임 설정 화면 경로>?error=validation_failed`로 이동합니다.
   3. 닉네임 중복을 검사합니다. 중복이면 `<닉네임 설정 화면 경로>?error=nickname_duplicated`로 이동합니다.
   4. 회원을 생성합니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`).
   5. 화면 세션과 JWT 쿠키(`access_token`, `refresh_token`)를 발급하고, 가입 진행 상태를 제거합니다 (FR-01-17).
@@ -294,7 +300,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 인증: 화면 세션 필요 (로그인된 회원)
 - 권한: 회원 본인. `password_hash`가 없는 회원만 설정할 수 있습니다.
 - CSRF: 제출(POST)에 필요
-- 요청: 폼 필드 `password` (8자 이상), `passwordConfirm` (일치)
+- 요청: 폼 필드 `password`, `passwordConfirm`. 비밀번호 규칙은 회원가입과 같다 (8~20자, 영문·숫자·특수문자 각 1자 이상, 공백 불가, 두 값 일치).
 - 처리:
   1. 세션에서 회원을 확인합니다.
   2. `password_hash`가 이미 있으면 `/mypage?error=password_already_set`으로 이동합니다. 비밀번호 변경은 이번 명세 범위가 아닙니다.
