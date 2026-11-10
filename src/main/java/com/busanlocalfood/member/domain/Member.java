@@ -83,7 +83,8 @@ public class Member {
                 hasGoogle ? googleSub : null);
     }
 
-    static String normalizeEmail(String email) {
+    /** 이메일 정규화 규칙. 저장과 조회에 같은 규칙을 사용한다 (Locale.ROOT 소문자, 앞뒤 공백 제거). */
+    public static String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 

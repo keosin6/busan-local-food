@@ -26,15 +26,33 @@
 - 헤더: 로그인 상태(세션 기준)에 따라 "로그인/회원가입" 또는 "마이페이지/내 찜 목록/로그아웃" 표시. 관리자에게는 "관리자" 메뉴 추가
 
 ### 회원가입 흐름 (화면)
-1. 이메일 형식, 비밀번호 길이(8자 이상), 비밀번호 확인 일치, 닉네임(2~20자)을 검증합니다. 실패하면 `/signup?error=validation_failed`로 이동합니다.
+1. 입력값을 검증합니다 (아래 "회원가입·로그인 검증 규칙"). 실패하면 `/signup?error=validation_failed`로 이동합니다.
 2. 이메일이 이미 존재하면 `/signup?error=email_duplicated`로 이동합니다. Google로만 가입된 계정과 이메일이 같은 경우도 같습니다.
    닉네임이 이미 사용 중이면 `/signup?error=nickname_duplicated`로 이동합니다. 저장 시점에 `uk_member_nickname`이 위반되면 같은 결과로 처리합니다 (ERD 2.1).
 3. 비밀번호를 BCrypt로 해시하여 `member`에 저장합니다 (`role = USER`, `google_sub = NULL`).
 4. 자동 로그인합니다. Spring Security 세션을 생성하고, JWT Access Token과 Refresh Token을 발급합니다 (Refresh Token의 SHA-256 해시는 `refresh_token`에 저장). 쿠키를 설정하고 메인 페이지(`/`)로 이동합니다.
 
 ### 회원가입 흐름 (API)
-1. 1~3번은 화면 회원가입과 같습니다 (`POST /api/auth/signup`). 실패는 JSON 오류(400 `VALIDATION_FAILED`, 409 `EMAIL_DUPLICATED`)로 응답합니다.
+1. 1~3번은 화면 회원가입과 같습니다 (`POST /api/auth/signup`). 실패는 JSON 오류로 응답합니다. 세부 코드는 400 `EMAIL_REQUIRED`·`EMAIL_INVALID`·`NICKNAME_REQUIRED`·`NICKNAME_INVALID`·`PASSWORD_REQUIRED`·`PASSWORD_INVALID`, 409 `EMAIL_DUPLICATED`·`NICKNAME_DUPLICATED`입니다.
 2. 4번에서 Spring Security 세션을 만들지 않습니다. JWT 쿠키만 발급하고 201 JSON으로 응답합니다.
+
+### 회원가입·로그인 검증 규칙 (Stage 2-2 구현 기준)
+
+이 규칙은 `member.service`의 입력 검증에 구현되어 있습니다. 실패는 `BusinessException`으로 세부 오류 코드를 던지며, 응답 형식은 API_SPEC 1.2를 따릅니다. 화면 폼은 기존 리다이렉트 규칙을 유지합니다.
+
+| 항목 | 규칙 | 오류 코드 |
+|------|------|-----------|
+| 이메일 | 필수. 앞뒤 공백 제거 후 소문자 정규화(Locale.ROOT). 공백 없이 `@`와 도메인 점을 포함하는 단순 형식. 최대 255자. 중복 불가 | `EMAIL_REQUIRED`, `EMAIL_INVALID`, `EMAIL_DUPLICATED` |
+| 닉네임 | 필수. 앞뒤 공백 제거 후 검증. 2~20자. 허용 문자는 한글 완성형(가-힣), 영문(A-Z, a-z), 숫자(0-9). 특수문자와 내부 공백 불가. 중복 불가 | `NICKNAME_REQUIRED`, `NICKNAME_INVALID`, `NICKNAME_DUPLICATED` |
+| 비밀번호 (가입) | 필수. 8~20자. 영문 1자 이상, 숫자 1자 이상, 특수문자 1자 이상(ASCII 문장부호·기호). 공백 불가. 앞뒤 공백 제거와 소문자 변환을 하지 않는다. `passwordConfirm`과 일치. 저장은 BCrypt 해시 | `PASSWORD_REQUIRED`, `PASSWORD_INVALID` |
+| 로그인 이메일 | 필수. 가입과 같은 정규화와 형식 검사 | `EMAIL_REQUIRED`, `EMAIL_INVALID` |
+| 로그인 비밀번호 | 필수 여부만 확인. 가입 조합 규칙은 적용하지 않음 | `PASSWORD_REQUIRED` |
+
+검증 순서와 중복 처리:
+1. 이메일, 닉네임, 비밀번호 순서로 형식을 검증합니다. 이메일과 닉네임의 중복 검사는 형식 검증 후에 수행합니다.
+2. 이메일 중복을 먼저 확인하고, 이어서 닉네임 중복을 확인합니다. 둘 다 중복이면 `EMAIL_DUPLICATED`를 반환합니다.
+3. 사전 검사 후 저장 시점에 DB UNIQUE 제약(`uk_member_email`, `uk_member_nickname`)이 위반되면 제약 이름으로 구분하여 `EMAIL_DUPLICATED` 또는 `NICKNAME_DUPLICATED`로 바꿉니다. 제약 이름을 알 수 없는 무결성 오류는 중복으로 바꾸지 않고 그대로 전파합니다.
+4. 로그인 실패(미가입, 비밀번호 불일치, Google 전용 계정)는 모두 `INVALID_CREDENTIALS`(401)입니다. 미가입 이메일에도 BCrypt 비교를 한 번 수행하여 응답 시간으로 가입 여부를 추측하기 어렵게 합니다.
 
 ### 로그인 흐름 (화면)
 1. `POST /login`으로 이메일과 비밀번호를 검증합니다. 없거나, 비밀번호가 틀리거나, `password_hash`가 없는(Google 전용) 경우 같은 결과(`/login?error=invalid_credentials`)를 반환합니다. 계정 존재 여부와 가입 방식을 노출하지 않습니다.
@@ -99,7 +117,7 @@
 2. 회원을 만들지 않습니다. OAuth2 임시 세션에 가입 진행 상태(Google `sub`, 이메일)를 저장합니다.
 3. Spring Security 세션과 JWT를 발급하지 않습니다. Google 인증 객체를 로그인 상태로 남기지 않습니다. 닉네임 설정 화면으로 이동합니다.
 4. 닉네임 설정 화면에서 닉네임을 입력하고 제출합니다 (CSRF 토큰 필요). Google 프로필 이름을 닉네임으로 자동 사용하지 않습니다.
-5. 닉네임이 2~20자가 아니면 `validation_failed`, 중복이면 `nickname_duplicated`로 같은 화면에 다시 입력하도록 합니다. 회원은 만들지 않습니다.
+5. 닉네임 규칙(길이, 허용 문자)을 벗어나면 `validation_failed`, 중복이면 `nickname_duplicated`로 같은 화면에 다시 입력하도록 합니다. 회원은 만들지 않습니다. 닉네임 규칙은 회원가입과 같습니다.
 6. 검증이 끝나면 회원을 만들고(`role = USER`, `password_hash = NULL`, `google_sub = sub`), 화면 세션과 JWT를 함께 발급한 뒤 메인 페이지(`/`)로 이동합니다. 가입 진행 상태를 제거합니다.
 7. 닉네임 설정 전에 이탈하면 회원은 만들어지지 않습니다. 가입 진행 상태는 흐름이 끝나면 제거합니다.
 - `nickname`에는 `uk_member_nickname` UNIQUE 제약이 있습니다. 중복 검사는 저장 직전에 수행하고, 저장 시 위반은 `nickname_duplicated`로 처리합니다 (DEVELOPMENT_RULES 5.7.3, 6.4).
@@ -147,7 +165,7 @@
 
 ### 로컬 비밀번호 설정 흐름 (Google 전용 회원, FR-01-22)
 1. `/mypage`에서 "비밀번호 설정"을 선택합니다 (Google 전용 회원에게만 표시). 화면 세션과 CSRF 토큰이 필요합니다.
-2. 비밀번호(8자 이상)와 비밀번호 확인을 입력합니다. 검증에 실패하면 같은 화면에 오류를 표시합니다.
+2. 비밀번호와 비밀번호 확인을 입력합니다. 회원가입과 같은 규칙(8~20자, 영문·숫자·특수문자 각 1자 이상, 공백 불가)을 적용합니다. 검증에 실패하면 같은 화면에 오류를 표시합니다.
 3. 비밀번호를 BCrypt로 해시하여 `password_hash`에 저장합니다. 이미 비밀번호가 있으면 설정하지 않습니다 (비밀번호 변경은 이번 명세 범위가 아닙니다).
 4. 설정이 끝나면 `/mypage?password=set`으로 이동합니다. 이후 연동 해제를 할 수 있습니다.
 
@@ -167,8 +185,15 @@
 | 닉네임 중복 (API) | 409 `NICKNAME_DUPLICATED` |
 | 닉네임 중복 (화면 회원가입) | `/signup?error=nickname_duplicated` |
 | 이메일 중복 (화면) | `/signup?error=email_duplicated` |
-| 입력값 검증 실패 (API) | 400 `VALIDATION_FAILED` |
-| 입력값 검증 실패 (화면) | `/signup?error=validation_failed` |
+| 이메일 미입력 (API) | 400 `EMAIL_REQUIRED` |
+| 이메일 형식·길이 오류 (API) | 400 `EMAIL_INVALID` |
+| 닉네임 미입력 (API) | 400 `NICKNAME_REQUIRED` |
+| 닉네임 규칙 위반 (API) | 400 `NICKNAME_INVALID` |
+| 비밀번호 미입력 (API) | 400 `PASSWORD_REQUIRED` |
+| 비밀번호 규칙 위반 또는 확인 불일치 (API) | 400 `PASSWORD_INVALID` |
+| 닉네임 중복 (API) | 409 `NICKNAME_DUPLICATED` |
+| 로그인 입력 누락 (API) | 400 `EMAIL_REQUIRED`·`PASSWORD_REQUIRED`, 형식 오류 400 `EMAIL_INVALID` |
+| 입력값 검증 실패 (화면) | `/signup?error=validation_failed` (화면은 세부 코드를 쿼리로 노출하지 않음) |
 | 자격 증명 불일치 (API, Google 전용 계정 포함) | 401 `INVALID_CREDENTIALS` |
 | 자격 증명 불일치 (화면, Google 전용 계정 포함) | `/login?error=invalid_credentials` |
 | 토큰 없음·만료·폐기·위조 (API) | 401 `TOKEN_INVALID` |

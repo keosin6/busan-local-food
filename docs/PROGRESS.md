@@ -20,7 +20,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중 (Stage 2-1 회원·DB 기반 구현 완료, 인증 기능은 미구현) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중 (Stage 2-1 회원·DB 기반, Stage 2-2 회원가입·로그인 검증 서비스 구현 완료. 인증 기능 연결은 미구현) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -35,7 +35,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | Stage 2-1 기반 테스트 완료 (29개 중 DB 테스트 10개는 테스트 DB 환경 변수 설정 시 실행) | 명세 반영 완료 (Q1, Q3, 인증 구조 2026-11-10). 인증 설계 확정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 구현 미완료 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | Stage 2-2 단위 테스트 완료 (87개 중 DB 테스트 13개는 테스트 DB 환경 변수 설정 시 실행) | 명세 반영 완료 (Q1, Q3, 인증 구조 2026-11-10). 인증 설계 확정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 구현 미완료 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -154,10 +154,37 @@
   - 자동 토큰 갱신 JavaScript
 - 기타: 격리 테스트용 MySQL 인스턴스(포트 3307)는 작업 디렉터리 밖 데이터 경로에만 두었고, 기존 개발 DB에는 접속하지 않았습니다. 테스트 계정 비밀번호는 저장소에 기록하지 않았습니다.
 
+### 6.2 Stage 2-2 기록 (회원가입·로그인 자격 증명 검증 서비스)
+
+- 작업 브랜치: `feat/f1-01-signup-login-service` (기준: `main` bcdac46, Stage 2-1 병합 커밋 `Feat/f1 01 member foundation (#7)`)
+- 범위: 회원가입 서비스, 로그인 자격 증명 검증 서비스, 입력 검증 규칙, 오류 코드, 단위 테스트, DB 제약 위반 변환. 컨트롤러, JWT, 세션, Refresh Token, Google OAuth2, SecurityFilterChain은 미구현.
+- 구현:
+  - `member.service.MemberRegistrationService`: `register(email, password, passwordConfirm, nickname)`. 검증 → 이메일 중복 → 닉네임 중복 → BCrypt 해시 → `Member.create` → `saveAndFlush`. 저장 시 UNIQUE 위반은 제약 이름(`uk_member_email`, `uk_member_nickname`)으로 구분해 `EMAIL_DUPLICATED`, `NICKNAME_DUPLICATED`로 바꾸고, 그 외 무결성 오류는 그대로 전파.
+  - `member.service.MemberLoginService`: `authenticate(email, password)`. 미가입·비밀번호 불일치·Google 전용 계정은 모두 `INVALID_CREDENTIALS`. Google 전용 계정은 BCrypt 비교를 하지 않음. 미가입 이메일은 더미 BCrypt 비교를 수행.
+  - `member.service.MemberInputRules` (패키지 전용): 이메일·닉네임·비밀번호 규칙. 이메일 정규화는 `Member.normalizeEmail`(public으로 변경)을 재사용.
+  - `global.exception.ErrorCode`: `EMAIL_REQUIRED`, `EMAIL_INVALID`, `EMAIL_DUPLICATED`, `NICKNAME_REQUIRED`, `NICKNAME_INVALID`, `NICKNAME_DUPLICATED`, `PASSWORD_REQUIRED`, `PASSWORD_INVALID`, `INVALID_CREDENTIALS` 추가 (HTTP 상태는 지시서 표 기준).
+- 검증 규칙 요약: FUNCTION_SPEC F1-01 "회원가입·로그인 검증 규칙" 참조. 비밀번호는 8~20자, 영문·숫자·특수문자 각 1자 이상, 공백 불가, 확인값 일치. 로그인은 필수 여부만 확인.
+- 추가·변경한 테스트:
+  - `MemberRegistrationServiceTest` (40개): 정상 가입, 정규화, BCrypt 해시 저장, 필수·형식·길이·중복 오류, 이메일 우선 순위, UNIQUE 위반 변환, 다른 무결성 오류 전파, 오류 메시지에 원문 미포함.
+  - `MemberLoginServiceTest` (15개): 정상 로그인, 로그인에 가입 규칙 미적용, 필수·형식 오류, 미가입·불일치·Google 전용의 동일 오류 코드, 메시지에 해시·원문 미포함.
+  - `MemberRegistrationDbTest` (3개, DB 테스트): 정상 저장(BCrypt 해시), 사전 검사를 spy로 우회한 이메일·닉네임 경합에서 실제 MySQL UNIQUE 위반이 중복 오류로 변환되는지 확인. 환경 변수 `TEST_DB_*`가 없으면 건너뜀.
+- 테스트 결과:
+  - `./gradlew clean test` (테스트 DB 변수 미설정): 87개 중 74개 통과, 13개 건너뜀(DB 테스트), 실패 0개.
+  - `./gradlew clean test` (테스트 DB 설정, DDL 적용, 격리된 MySQL 8.0.46): 87개 모두 통과. 테스트 후 `member`, `refresh_token` 행 0개 확인.
+  - `./gradlew bootJar`: 성공.
+- 설계와 다른 점 및 결정 사항:
+  - API_SPEC 1.3의 `VALIDATION_FAILED`는 일반 입력 검증 실패로 남기고, 회원가입·로그인 입력 오류는 세부 코드를 사용하도록 정리. 다른 API의 `VALIDATION_FAILED` 사용은 그대로 유지.
+  - 비밀번호 규칙이 기존 문서의 "8자 이상"보다 강화됨. FUNCTION_SPEC, API_SPEC 2.1·2.7.1, DEVELOPMENT_RULES 5.7.5를 함께 수정. 로컬 비밀번호 설정과 Google 신규 가입 닉네임 규칙도 같은 기준을 사용.
+  - 비밀번호 확인값이 없으면 `PASSWORD_REQUIRED`로 처리. 지시서에 명시되지 않은 부분이므로 확인 필요.
+  - 이메일 형식은 단순 정규식. 필요 시 정책 재검토.
+  - 닉네임 중복은 테이블 collation(`utf8mb4_unicode_ci`)에 따라 대소문자와 악센트를 구분하지 않음. 사전 검사와 UNIQUE 제약이 같은 기준을 따른다.
+  - 타이밍 차이 잔여: 미가입은 더미 BCrypt 비교를 하지만 Google 전용 계정은 지시서 규칙에 따라 BCrypt를 하지 않아 응답 시간이 짧을 수 있음. 응답 메시지는 같음. 완화 방법은 후속 결정 필요.
+- 미완료 항목: 컨트롤러와 화면 폼 연결, JWT·Refresh Token, Google OAuth2, SecurityFilterChain 분리, 신규 가입 닉네임 설정 화면.
+
 ## 7. 다음 작업
 
-1. Stage 2-2: 회원가입·로그인 서비스 (이메일 소문자 정규화, 닉네임 2~20자 검증, BCrypt 비밀번호 검증, DB UNIQUE 위반을 `NICKNAME_DUPLICATED`·`EMAIL_DUPLICATED`로 변환). 화면과 API는 설계 문서 2.1·2.9·2.10을 따른다.
-2. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안, 잠금 순서 DEVELOPMENT_RULES 5.7.4), API 로그아웃과 화면 로그아웃(T12 A안).
-3. Stage 2-4: Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
+1. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안, 잠금 순서 DEVELOPMENT_RULES 5.7.4), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안). Stage 2-2 서비스를 재사용한다.
+2. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
+3. 확인 필요: 비밀번호 확인값 누락 처리(`PASSWORD_REQUIRED`), Google 전용 계정의 응답 시간 차이 완화 방법, 닉네임 대소문자 구분 정책.
 4. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
 5. 실제 MySQL 스키마 적용 절차(개발·운영 DB)는 사용자가 `db/manual/001_create_member_refresh_token.sql`을 직접 실행합니다. 이 작업에서는 실행하지 않았습니다.

@@ -7,6 +7,17 @@ import org.springframework.http.HttpStatus;
  */
 public enum ErrorCode {
 
+    // 회원가입·로그인 검증 (FUNCTION_SPEC F1-01, API_SPEC 1.3)
+    EMAIL_REQUIRED(HttpStatus.BAD_REQUEST, "이메일을 입력해 주세요."),
+    EMAIL_INVALID(HttpStatus.BAD_REQUEST, "올바른 이메일 형식이 아닙니다. 255자 이하로 입력해 주세요."),
+    EMAIL_DUPLICATED(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
+    NICKNAME_REQUIRED(HttpStatus.BAD_REQUEST, "닉네임을 입력해 주세요."),
+    NICKNAME_INVALID(HttpStatus.BAD_REQUEST, "닉네임은 한글, 영문, 숫자로 2~20자 입력해 주세요."),
+    NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
+    PASSWORD_REQUIRED(HttpStatus.BAD_REQUEST, "비밀번호를 입력해 주세요."),
+    PASSWORD_INVALID(HttpStatus.BAD_REQUEST, "비밀번호 조건을 확인해 주세요. 8~20자, 영문·숫자·특수문자 각 1자 이상, 공백 불가, 확인 값 일치."),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
+
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
 
     private final HttpStatus status;
