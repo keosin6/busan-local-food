@@ -229,7 +229,14 @@ Google 일반 로그인 처리 (계정 연동과 분리):
 - 둘 다 없으면 새 회원을 만듭니다.
 - 성공하면 화면 세션과 API JWT를 함께 발급합니다 (FR-01-17).
 
-구현 시 필수 요구: Spring Security OAuth2 로그인의 기본 성공 처리는 Google 사용자를 새 인증 주체로 설정합니다. 계정 연동 콜백에서는 이 기본 처리가 기존 로그인 세션을 대체하지 않도록 분기해야 합니다.
+Callback 핸들러 원칙 (구현 필수 요구, T11 A안의 보존 조건):
+1. 일반 Google 로그인과 계정 연동은 같은 Callback URL을 사용하지만, 사용자 정의 `AuthenticationSuccessHandler`에서 세션의 연동 진행 상태로 처리 경로를 구분합니다.
+2. 연동 진행 상태가 없으면 일반 Google 로그인입니다. 기존 성공 처리 흐름을 유지하여 화면 세션과 API JWT를 발급합니다 (FR-01-17).
+3. 연동 진행 상태가 있으면 계정 연동입니다. Spring Security 기본 Google 로그인 성공 처리가 기존 로컬 회원의 `SecurityContext`를 대체하지 않도록 합니다. 기존 로컬 회원의 인증 상태와 세션을 보존하고, Google 인증 결과는 `member.google_sub` 연결에만 사용합니다.
+4. Spring Security의 OAuth2 로그인 필터는 인증 성공 시 Google 인증 객체를 SecurityContext에 먼저 설정할 수 있습니다. 계정 연동 모드에서는 이를 기존 로컬 회원의 인증 상태로 되돌리거나 저장을 막아야 합니다. 되돌리는 방법은 구현 단계에서 정하되, 결과 조건(기존 인증 상태 유지)은 반드시 지켜야 합니다.
+5. 계정 연동 모드에서는 기존 세션 ID를 바꾸는 세션 보호 처리를 호출하지 않습니다. 기존 Access Token과 Refresh Token을 재발급하거나 교체하지 않습니다. 쿠키도 다시 설정하지 않습니다.
+6. 사용자 정의 `AuthenticationFailureHandler`는 Google 인증 실패와 Callback 검증 실패를 처리합니다. 연동 모드에서는 연동 임시 상태(진행 상태, `state`)를 정리하고 기존 로그인 상태와 JWT를 유지한 채 `/mypage?error=...`로 이동합니다. Spring Security 필터가 인증 실패 시 SecurityContext를 비울 수 있으므로, 연동 모드 실패 처리는 기존 로그인 상태를 복원합니다.
+7. OAuth2 `state` 검증은 Spring Security의 기존 검증 절차를 그대로 사용합니다. 연동 모드의 업무 검증(연동 대상 회원 확인, `email_verified`, `google_sub` 중복)은 성공 핸들러 안에서 수행하고, 실패하면 `/mypage?error=...`로 이동하며 연동 임시 상태를 정리합니다.
 
 ### 5.7.2 로그아웃과 토큰 재발급 (제안, 승인 대기)
 

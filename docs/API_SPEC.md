@@ -203,6 +203,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   5. `email_verified`가 아니면 `/login?error=google_unverified`로 리다이렉트합니다.
   6. 둘 다 없으면 새 회원을 만듭니다 (`role = USER`, `password_hash = NULL`, `google_sub = sub`). 닉네임 규칙은 T3에서 정합니다. 화면 세션과 JWT 쿠키를 함께 발급하고 `/`로 리다이렉트합니다.
 - 실패(Google 인증 오류 등): `/login?error=google_failed`로 리다이렉트합니다.
+- 콜백 처리는 사용자 정의 `AuthenticationSuccessHandler`(성공)와 `AuthenticationFailureHandler`(실패)가 담당합니다. 세션의 연동 진행 상태가 없으면 위 일반 로그인 처리를 유지합니다 (DEVELOPMENT_RULES 5.7.1 Callback 핸들러 원칙).
 - 발급: 성공하면 화면 세션과 JWT를 함께 발급합니다 (FR-01-17).
 - 주요 오류(리다이렉트 쿼리): `email_account_exists`, `google_unverified`, `google_failed`
 
@@ -226,7 +227,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진행 상태로 나눕니다 (T11 A안, DEVELOPMENT_RULES 5.7.1).
 
-1. OAuth2 `state`를 검증합니다. Spring Security의 기존 절차를 유지합니다. 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다.
+1. OAuth2 `state`를 검증합니다. Spring Security의 기존 절차를 유지합니다. 실패하면 연동 임시 상태만 정리하고, 기존 로그인 상태와 JWT는 유지한 채 `/mypage?error=google_failed`로 이동합니다 (11번 원칙).
 2. 세션의 연동 진행 상태를 확인합니다. 없으면 계정 연동이 아니므로 2.5의 일반 로그인 처리로 분기합니다.
 3. 세션에 저장된 연동 대상 회원 ID를 확인합니다. 없거나 회원이 존재하지 않으면 거부합니다 (`google_failed`).
 4. Google 인증 코드를 교환하고 Google 사용자 정보를 조회합니다.
@@ -235,6 +236,8 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 7. 중복되지 않으면 연동 대상 회원의 `google_sub`를 저장합니다. `uk_member_google_sub` 제약이 중복 연결을 한 번 더 막습니다.
 8. 연동 완료로 처리하고 `/mypage?google=linked`로 이동합니다. 이미 대상 회원에게 연결되어 있으면 변경 없이 같은 결과로 이동합니다.
 9. 연동 진행 상태와 `state`를 세션에서 제거합니다. 성공과 실패 모두 수행합니다.
+10. Callback 핸들러 원칙(DEVELOPMENT_RULES 5.7.1)을 따릅니다. 연동 모드의 성공 처리는 기존 로컬 회원의 인증 상태와 세션을 보존하며, 세션 ID를 바꾸지 않고, 쿠키를 다시 설정하지 않습니다. Google 인증 결과는 `member.google_sub` 연결에만 사용합니다.
+11. 연동 모드의 실패(Google 인증 실패, `state` 검증 실패, 업무 검증 실패)는 사용자 정의 실패 처리에서 연동 임시 상태를 정리하고 기존 로그인 상태와 JWT를 유지한 채 `/mypage?error=...`로 이동합니다.
 
 계정 식별과 보호 규칙:
 - 연동 대상 회원은 연동 시작 시점의 로그인 세션에 저장된 회원 ID입니다. Google 이메일이나 Callback에서 새로 만든 인증 주체로 판단하지 않습니다.
