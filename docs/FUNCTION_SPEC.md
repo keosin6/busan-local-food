@@ -94,7 +94,7 @@ T12 제안(승인 대기, DEVELOPMENT_RULES 5.7.2)입니다.
 |------|------|------|
 | 화면 세션 (Spring Security) | 일반 화면 요청의 회원 식별 | 세션 만료 또는 화면 로그아웃까지 (세부 값 T11) |
 | API JWT | `/api/**` 요청의 회원 식별. Access Token(쿠키 또는 Bearer), Refresh Token(쿠키, DB에는 해시) | Access Token 30분, Refresh Token 14일 |
-| OAuth2 임시 세션 | Google 인증 진행 상태만 보관: `state`, Authorization Request, 연동 요청 회원 ID, 흐름 종류 | 인증 흐름이 끝날 때까지. 만료 시간은 T11 |
+| OAuth2 임시 상태 (HTTP 세션 내) | Google 인증 진행 상태만 보관: `state`, Authorization Request, 연동 대상 회원 ID, 흐름 종류 | 인증 흐름이 끝날 때까지 (T11 A안) |
 
 규칙:
 1. 화면 요청은 화면 세션으로만 인증합니다. JWT만으로 화면 로그인 상태를 인정하지 않습니다.
@@ -103,17 +103,32 @@ T12 제안(승인 대기, DEVELOPMENT_RULES 5.7.2)입니다.
 4. OAuth2 임시 세션에는 흐름 상태만 저장합니다. Access Token, Refresh Token 원문, 비밀번호는 저장하지 않습니다.
 5. 인증 흐름이 끝나면(성공이든 실패든) 해당 흐름의 임시 상태를 제거합니다. 같은 `state`는 한 번만 사용할 수 있습니다.
 6. Google 로그인 흐름이 성공하면 화면 세션과 JWT를 발급합니다. Google 계정 연동 흐름에서는 기존 로그인 세션과 JWT를 교체하지 않습니다.
-7. 세션 저장 방식(Spring Security OAuth2 기본 저장소 사용 여부), 만료 시간, 세션 정책 세부 값은 구현 단계에서 확정합니다 (T11). 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다.
+7. OAuth2 임시 상태는 HTTP 세션에 저장합니다 (T11 A안). 세션 만료 시간 등 운영 설정 값은 구현 단계에서 정합니다. 세션 정책을 무조건 완전 Stateless로 고정하지 않습니다. 대신 `/api/**` 경로가 JWT로만 인증되도록 구분합니다.
 
-### Google 계정 연동 흐름 (FR-01-10, FR-01-11, FR-01-12, FR-01-15)
-1. 이메일로 로그인한 회원이 `/mypage`에서 "Google 계정 연동"을 누릅니다.
-2. `GET /api/me/google/link`는 요청의 `access_token`으로 현재 회원을 확인합니다. 이 검증은 연동 시작 시점에만 합니다. 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 상태로 저장하고, `state` 값을 함께 보관한 뒤 Google 인증 페이지로 이동합니다. Access Token이 없거나 만료되었으면 흐름을 시작하지 않습니다. 이 API는 `/api/**` STATELESS 체인에 속하므로 임시 상태 저장 방식은 미확정입니다 (DEVELOPMENT_RULES 5.7.1, T11 옵션 승인 대기).
-3. 콜백에서 다음을 검증합니다. (a) 콜백의 `state`가 임시 세션에 보관된 값과 일치하고 아직 사용되지 않았는지 (CSRF 방지). (b) 임시 세션이 존재하고 만료되지 않았는지. (c) 임시 세션에 저장된 회원 ID의 회원이 존재하는지. 하나라도 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다. 콜백은 `access_token`을 요구하지 않습니다. Google 인증 중 Access Token이 만료되어도 임시 세션이 유효하면 연동을 완료합니다.
-4. `email_verified`가 아니면 `/mypage?error=google_unverified`로 이동합니다.
-5. `google_sub`가 다른 회원에게 이미 연결되어 있으면 `/mypage?error=google_already_linked`로 이동합니다 (FR-01-11, 409 `GOOGLE_ALREADY_LINKED`에 해당).
-6. 이미 대상 회원에게 연결되어 있으면 변경하지 않고 `/mypage?google=linked`로 이동합니다.
-7. 그 밖의 경우 임시 세션에 저장된 회원의 `google_sub`에 `sub`를 저장하고 `/mypage?google=linked`로 이동합니다.
-- 연동 흐름은 화면 세션의 로그인 회원을 다른 회원으로 바꾸지 않습니다. 다른 회원의 계정에 연동할 수 없습니다.
+### Google 계정 연동 흐름 (FR-01-10, FR-01-11, FR-01-12, FR-01-15, T11 A안)
+
+연동 시작 (화면):
+1. 로그인된 회원이 `/mypage`에서 "Google 계정 연동"을 누릅니다. 연동 시작 요청은 CSRF 토큰을 포함한 화면 POST입니다. 정확한 경로는 구현 단계에서 확정합니다.
+2. 세션에서 로그인 회원 ID를 확인합니다. 로그인되지 않았으면 `/login`으로 이동합니다.
+3. 세션에 연동 진행 상태(연동 대상 회원 ID, 흐름 = 계정 연동)를 저장하고, 남아 있던 일반 로그인 진행 상태는 제거합니다.
+4. Spring Security의 기본 OAuth2 Authorization Request 저장 방식으로 `state`와 Authorization Request를 HTTP 세션에 저장한 뒤 Google 인증 페이지로 이동합니다.
+5. 기존 로그인 세션과 API JWT는 변경하지 않습니다.
+
+콜백 (API_SPEC 2.6.1과 같은 절차):
+1. OAuth2 `state`를 검증합니다. 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다.
+2. 세션의 연동 진행 상태가 있을 때만 계정 연동으로 처리합니다. 없으면 일반 로그인 처리입니다.
+3. 세션에 저장된 연동 대상 회원 ID를 확인합니다. 없거나 회원이 존재하지 않으면 거부합니다.
+4. Google 인증 코드를 교환하고 Google 사용자 정보를 조회합니다. `email_verified`가 아니면 `/mypage?error=google_unverified`로 이동합니다.
+5. Google `sub`가 다른 회원에게 이미 연결되어 있으면 `/mypage?error=google_already_linked`로 이동합니다 (FR-01-11, 409 `GOOGLE_ALREADY_LINKED`에 해당).
+6. 중복이 없으면 연동 대상 회원의 `google_sub`에 `sub`를 저장하고 `/mypage?google=linked`로 이동합니다. 이미 대상 회원에게 연결되어 있으면 변경 없이 같은 결과로 이동합니다.
+7. 연동 진행 상태와 `state`를 세션에서 제거합니다. 성공과 실패 모두 수행합니다.
+
+원칙:
+- 연동 대상 회원은 연동 시작 시점의 로그인 세션에 저장된 회원 ID입니다. Callback 시점의 Google 이메일이나 새로 만든 인증 주체로 판단하지 않습니다.
+- Google 이메일이 기존 회원과 같다는 이유만으로 자동 연결하지 않습니다.
+- 연동 과정에서 기존 로그인 세션을 무효화하거나 Google 인증 주체로 대체하지 않습니다. API JWT를 재발급하거나 교체하지 않습니다.
+- 연동 실패 시 기존 세션과 JWT를 변경하지 않고, 임시 상태만 정리합니다.
+- 연동은 로그인된 본인 세션에서 시작한 흐름만 허용합니다. 다른 회원의 계정에 연동할 수 없습니다.
 - 본인 확인 강도(추가 인증 등)는 T8에서 확정합니다.
 
 ### Google 계정 연동 해제 흐름 (FR-01-12, FR-01-13)

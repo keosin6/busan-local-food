@@ -15,7 +15,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 날짜·시간: ISO 8601, 시간대는 서버 기준 `Asia/Seoul` 로컬 시각 (`2026-11-06T10:00:00`)
 - 인증 수단 (2026-11-10 확정): 화면은 Spring Security 세션(`JSESSIONID`), API(`/api/**`)는 JWT로 인증합니다. 두 수단은 서로 대체하지 않습니다 (DEVELOPMENT_RULES 5.7).
 - API 인증: `access_token` 쿠키 또는 `Authorization: Bearer <accessToken>` 헤더
-- OAuth2 임시 세션은 Google 로그인과 계정 연동 흐름에서만 사용합니다. `/api/**` 요청 인증에는 사용하지 않습니다 (DEVELOPMENT_RULES 5.7).
+- OAuth2 임시 상태(`state`, Authorization Request)는 기존 HTTP 세션에 저장합니다. Google 로그인과 계정 연동 흐름에서만 사용하며, `/api/**` 요청 인증에는 사용하지 않습니다 (DEVELOPMENT_RULES 5.7.1).
 - CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청(POST, PUT, DELETE)은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 함께 보냅니다. Bearer 헤더 요청은 CSRF 헤더를 요구하지 않습니다.
 - 권한 표기:
   - `누구나`: 인증 없이 접근 가능
@@ -27,11 +27,11 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 | 쿠키 | 내용 | HttpOnly | SameSite | Secure | Path | 만료 |
 |------|------|----------|----------|--------|------|------|
-| `JSESSIONID` | 화면 로그인 세션 (Spring Security 세션) | 예 | Lax | 운영만 | `/` | 세션 만료 또는 로그아웃까지 (T11) |
+| `JSESSIONID` | 화면 로그인 세션 (Spring Security 세션) | 예 | Lax | 운영만 | `/` | 세션 만료 또는 로그아웃까지 (만료 값은 구현 단계 설정) |
 | `access_token` | API 인증용 Access Token(JWT) | 예 | Lax | 운영만 | `/api` | 30분 |
 | `refresh_token` | Refresh Token 원문 | 예 | Lax | 운영만 | `/api/auth` | 14일 |
 | `XSRF-TOKEN` | CSRF 토큰 | 아니오 (JS가 헤더에 실어야 함) | Lax | 운영만 | `/` | 세션 |
-| OAuth2 임시 세션 쿠키 (이름은 구현 단계에서 확정) | Google 인증 흐름의 상태 식별자. API 인증에 사용하지 않음 | 예 | Lax | 운영만 | `/` | 인증 흐름 종료까지 (T11) |
+| 별도 쿠키 없음 | OAuth2 임시 상태는 HTTP 세션(`JSESSIONID`)에 저장 | - | - | - | - | 세션과 같음 |
 
 - `access_token`의 Path는 `/api`로 제한합니다. API 요청에서만 전송됩니다. 화면 요청은 `JSESSIONID`로 인증합니다.
 - `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다 (T12).
@@ -196,7 +196,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 권한: 누구나
 - 요청: 브라우저 리다이렉트. Google 인증 페이지로 이동합니다.
 - 콜백 처리 (FR-01-09, Q1):
-  1. 콜백의 `state`가 OAuth2 임시 세션에 보관된 값과 일치하고 아직 사용되지 않았는지 확인합니다 (CSRF 방지). 일치하지 않으면 로그인하지 않고 `/login?error=google_failed`로 이동합니다.
+  1. OAuth2 `state`를 검증합니다. 세션의 연동 진행 상태가 있으면 2.6.1 계정 연동 콜백 절차로, 없으면 아래 일반 로그인 절차로 처리합니다. `state`가 일치하지 않으면 로그인하지 않고 `/login?error=google_failed`로 이동합니다.
   2. Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다.
   3. `google_sub`가 같은 회원이 있으면 로그인합니다. Spring Security 화면 세션을 생성하고 JWT 쿠키(`access_token`, `refresh_token`)를 설정한 뒤 `/`로 리다이렉트합니다.
   4. 없고 같은 `email`의 기존 회원이 있으면 **자동 연결하지 않습니다.** `/login?error=email_account_exists`로 리다이렉트합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요." 를 표시합니다.
@@ -206,28 +206,43 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 발급: 성공하면 화면 세션과 JWT를 함께 발급합니다 (FR-01-17).
 - 주요 오류(리다이렉트 쿼리): `email_account_exists`, `google_unverified`, `google_failed`
 
-### 2.6 Google 계정 연동 시작
+### 2.6 Google 계정 연동 시작 (화면, 세션 기반)
 
-- 메서드·URL: `GET /api/me/google/link`
-- 인증: 필요 (`access_token`)
-- 권한: 회원 본인 (로그인한 회원 자신의 계정에만 연동)
-- 화면 `/mypage`에서 호출하더라도 이 API는 JWT로 회원을 확인합니다. 화면 세션만으로는 연동을 시작할 수 없습니다.
-- 연동 흐름은 화면 세션의 로그인 회원을 다른 회원으로 교체하지 않습니다.
-- 인증 조건: 요청의 `access_token`으로 회원을 확인합니다. 이 검증은 연동 시작 시점에만 수행합니다. Access Token이 없거나 만료되었으면 401 TOKEN_INVALID로 거부하고 흐름을 시작하지 않습니다.
-- 요청: 본문 없음. 브라우저 리다이렉트 API입니다.
-- 처리 (FR-01-10, FR-01-12):
-  1. Access Token으로 검증된 회원 ID와 흐름 종류(연동)를 OAuth2 임시 상태로 저장하고, OAuth2 `state` 값을 함께 보관합니다. 이 API는 `/api/**` STATELESS 체인에 속하므로 저장 방식은 DEVELOPMENT_RULES 5.7.1의 옵션 중 사용자 결정 후 확정합니다 (T11). 승인 전에는 구현하지 않습니다.
-  2. Google 인증 페이지로 리다이렉트합니다.
-  3. 콜백(2.5와 같은 URL)에서 다음을 검증합니다. (a) 콜백의 `state`가 현재 브라우저의 OAuth2 임시 세션에 보관된 값과 일치하고 한 번만 사용되는지 (CSRF 방지). (b) 임시 세션이 존재하고 만료되지 않았는지. 하나라도 실패하면 연동하지 않습니다.
-  4. 연동 대상 회원은 임시 세션에 저장된 회원 ID로 정합니다. 그 회원이 아직 존재하는지 확인하고, 없으면 연동하지 않습니다. 콜백은 `access_token`을 요구하지 않으며, Google 인증 중 Access Token이 만료되어도 임시 세션이 유효하면 연동을 완료합니다 (FR-01-15).
-  5. 해당 `google_sub`가 다른 회원에게 연결되어 있으면 연동하지 않습니다. 기존 UNIQUE 제약(`uk_member_google_sub`)으로도 중복 연결을 막습니다.
-  6. 성공하면 `member.google_sub = sub`를 저장하고 `/mypage?google=linked`로 리다이렉트합니다.
-- 실패 리다이렉트:
-  - `/mypage?error=google_already_linked` — 이미 다른 회원에게 연결된 Google 계정 (409 GOOGLE_ALREADY_LINKED에 해당)
-  - `/mypage?error=google_unverified` — 검증되지 않은 Google 계정
-  - `/mypage?error=google_failed` — 인증 실패, `state` 불일치, 임시 세션 없음 또는 만료, 연동 대상 회원 없음
-- 주요 오류: 401 TOKEN_INVALID (연동 시작 시 Access Token 없음 또는 만료 → 로그인 페이지로 이동), 409 GOOGLE_ALREADY_LINKED
-- 이미 자신에게 연동된 경우에는 변경 없이 `/mypage?google=linked`로 리다이렉트합니다.
+- 메서드·URL: `POST <연동 시작 화면 경로>`. 경로는 구현 단계에서 확정합니다. 화면 경로이며 `/api/**`가 아닙니다.
+- 인증: 화면 세션 필요 (로그인된 회원). 세션이 없으면 `/login`으로 이동합니다.
+- 권한: 로그인된 회원 본인. 세션의 회원만 연동을 시작할 수 있습니다.
+- CSRF: 필요. 상태를 바꾸는 POST이므로 CSRF 토큰을 포함합니다.
+- 요청: 본문 없음 (CSRF 토큰만).
+- 처리 (FR-01-10, FR-01-12, FR-01-15, T11 A안):
+  1. 세션에서 로그인 회원 ID를 확인합니다. 없으면 연동을 거부합니다.
+  2. 세션에 연동 진행 상태(연동 대상 회원 ID, 흐름 종류 = 계정 연동)를 저장합니다. 남아 있던 일반 로그인 진행 상태는 제거합니다.
+  3. Spring Security의 기본 OAuth2 Authorization Request 저장 방식(`HttpSessionOAuth2AuthorizationRequestRepository`)으로 `state`와 Authorization Request를 HTTP 세션에 저장합니다.
+  4. Google 인증 페이지로 `302` 리다이렉트합니다.
+- 응답: `302` → Google 인증 페이지.
+- 기존 로그인 세션과 API JWT는 변경하지 않습니다. 재발급하거나 교체하지 않습니다.
+- 주요 오류: 세션 없음 → `/login`으로 리다이렉트.
+
+### 2.6.1 Google 계정 연동 콜백 (콜백 URL `/login/oauth2/code/google`)
+
+Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진행 상태로 나눕니다 (T11 A안, DEVELOPMENT_RULES 5.7.1).
+
+1. OAuth2 `state`를 검증합니다. Spring Security의 기존 절차를 유지합니다. 실패하면 아무것도 바꾸지 않고 `/mypage?error=google_failed`로 이동합니다.
+2. 세션의 연동 진행 상태를 확인합니다. 없으면 계정 연동이 아니므로 2.5의 일반 로그인 처리로 분기합니다.
+3. 세션에 저장된 연동 대상 회원 ID를 확인합니다. 없거나 회원이 존재하지 않으면 거부합니다 (`google_failed`).
+4. Google 인증 코드를 교환하고 Google 사용자 정보를 조회합니다.
+5. Google `sub` 식별자를 확인합니다. `email_verified`가 아니면 `/mypage?error=google_unverified`로 이동합니다.
+6. 해당 `google_sub`가 다른 회원에게 이미 연결되어 있으면 거부합니다 (`/mypage?error=google_already_linked`, 409 `GOOGLE_ALREADY_LINKED`에 해당).
+7. 중복되지 않으면 연동 대상 회원의 `google_sub`를 저장합니다. `uk_member_google_sub` 제약이 중복 연결을 한 번 더 막습니다.
+8. 연동 완료로 처리하고 `/mypage?google=linked`로 이동합니다. 이미 대상 회원에게 연결되어 있으면 변경 없이 같은 결과로 이동합니다.
+9. 연동 진행 상태와 `state`를 세션에서 제거합니다. 성공과 실패 모두 수행합니다.
+
+계정 식별과 보호 규칙:
+- 연동 대상 회원은 연동 시작 시점의 로그인 세션에 저장된 회원 ID입니다. Google 이메일이나 Callback에서 새로 만든 인증 주체로 판단하지 않습니다.
+- Google 이메일이 기존 회원과 같다는 이유만으로 자동 연결하지 않습니다.
+- 기존 로그인 세션을 무효화하거나 새 Google 인증 주체로 대체하지 않습니다.
+- API JWT를 재발급하거나 교체하지 않습니다. 일반 로그인 성공 처리(세션 발급, JWT 발급)를 실행하지 않습니다.
+- 실패하면 기존 세션과 JWT를 변경하지 않고, 임시 상태만 정리합니다.
+- 주요 오류(리다이렉트 쿼리): `google_failed`, `google_unverified`, `google_already_linked`.
 
 ### 2.7 Google 계정 연동 해제
 
@@ -861,7 +876,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | POST | /signup | 불필요 | 누구나 | F1-01 (화면, 2.9) |
 | POST | /login | 불필요 | 누구나 | F1-01 (화면, 2.10) |
 | POST | /logout | 세션 | 누구나 | F1-01 (화면, 2.11) |
-| GET | /api/me/google/link | 필요 | 회원 본인 | F1-01 |
+| POST | <연동 시작 화면 경로, 구현 단계 확정> | 세션 | 로그인 회원 본인 | F1-01 (화면, 2.6) |
 | DELETE | /api/me/google | 필요 | 회원 본인 (비밀번호 재확인) | F1-01 |
 | GET | /api/auth/me | 필요 | 회원 본인 | F1-01 |
 | GET | /api/categories | 불필요 | 누구나 | F1-02, F1-08 |

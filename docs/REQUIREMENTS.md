@@ -24,12 +24,13 @@
 | FR-01-12 | Google 계정 연동과 해제는 로그인된 본인 세션에서만 수행하며, 본인 확인과 권한 검증을 거친다 (확인 방식은 T8 참조). | M |
 | FR-01-13 | 회원에게 남은 로그인 수단이 없게 되는 Google 연동 해제 요청은 거부한다. | M |
 | FR-01-14 | Google OAuth2 인증 진행 중의 `state`와 연동 요청 회원 정보는 서버 임시 세션에만 보관하고, 인증 흐름이 끝나면 제거한다. 임시 세션은 회원의 로그인 상태를 나타내지 않는다. | M |
-| FR-01-15 | Google 계정 연결은 시작 시점에 Access Token으로 회원을 검증하고, 검증된 회원 ID를 OAuth2 임시 세션에 저장한다. 콜백은 `state`가 같은 임시 세션의 값인지 확인하고, 임시 세션에 저장된 회원 ID를 연동 대상으로 사용한다. 콜백은 Access Token의 유효기간에 의존하지 않는다. 임시 세션이 없거나 만료되었거나 `state`가 일치하지 않으면 연결하지 않는다. 기존 UNIQUE 제약으로 다른 회원과의 중복 연결을 막는다. | M |
+| FR-01-15 | Google 계정 연동은 로그인된 회원의 HTTP 세션에서 시작하고, 세션의 회원 ID를 연동 대상으로 저장한다. 연동 시작 요청은 CSRF 토큰을 포함한 화면 POST로 처리한다. 콜백은 OAuth2 `state`를 검증한 뒤 세션의 연동 진행 상태와 연동 대상 회원 ID를 기준으로 처리하며, Access Token의 유효기간에 의존하지 않는다. Google 이메일로 회원을 판단하지 않는다. 기존 UNIQUE 제약으로 다른 회원과의 중복 연결을 막는다. | M |
 | FR-01-16 | 일반 API 인증은 JWT 기반을 유지한다. OAuth2 임시 세션은 Google 인증 과정에만 사용하며 API 인증을 대체하지 않는다. 인증 완료 후에는 JWT 체계로 돌아간다. | M |
 | FR-01-17 | 화면 로그인, 화면 회원가입 후 자동 로그인, Google 로그인이 성공하면 Spring Security 세션과 JWT(Access Token, Refresh Token)를 함께 발급한다. | M |
 | FR-01-18 | API 로그인과 API 회원가입은 JWT만 발급하며 Spring Security 세션을 만들지 않는다. 화면 세션은 API 인증을 대체하지 않는다. | M |
 | FR-01-19 | API 인증 경로(`/api/**`)와 화면 인증 경로를 Spring Security 필터 체인으로 분리한다. OAuth2 경로(`/oauth2/**`, `/login/oauth2/**`)는 화면 체인에서 처리하며 API 체인에 포함하지 않는다. | M |
 | FR-01-20 | CSRF 보호는 화면 세션 쿠키 기반 요청과 JWT 쿠키 기반 API 상태 변경 요청 모두에 적용한다. Bearer 헤더 요청은 CSRF 헤더를 요구하지 않는다. | M |
+| FR-01-21 | Google 일반 로그인과 Google 계정 연동은 처리 경로를 분리한다. 계정 연동 처리는 기존 로그인 세션과 API JWT를 교체하거나 재발급하지 않는다. 계정 연동 콜백에서 일반 로그인 성공 처리를 실행하지 않는다. | M |
 
 ### F1-02 맛집 관리
 
@@ -157,9 +158,9 @@
 
 ## 4. 결정 사항 및 미확정 사항
 
-### 4.1 확정된 결정 (Q1~Q6, T9)
+### 4.1 확정된 결정 (Q1~Q6, T9, T11)
 
-아래 결정은 확정되었으며(Q1~Q6은 2026-11-06, T9는 2026-11-09), 임의로 바꾸지 않습니다. 바꾸려면 설계 변경 절차를 거칩니다.
+아래 결정은 확정되었으며(Q1~Q6은 2026-11-06, T9는 2026-11-09, T11은 2026-11-10), 임의로 바꾸지 않습니다. 바꾸려면 설계 변경 절차를 거칩니다.
 
 | 번호 | 주제 | 상태 | 확정 내용 | 주요 반영 위치 |
 |------|------|------|-----------|----------------|
@@ -170,6 +171,7 @@
 | Q5 | 관리자 기능 | 결정됨 | 관리자 기능을 필수 범위(F1-09)에 포함한다. 권한은 `USER`/`ADMIN`으로 구분하며 `member.role`로 관리한다. 관리자 전용 화면·API 영역을 분리하고, 권한은 서버에서 검증한다. 일반 회원은 권한을 스스로 바꿀 수 없다. | F1-09, FR-02-03, FR-04-03, FR-09-01~10, DATABASE_ERD `member`, API_SPEC 11 |
 | Q6 | AI 모델 관리 | 결정됨 | OpenRouter를 사용한다. API 키는 `OPENROUTER_API_KEY`, 모델 ID는 `OPENROUTER_MODEL` 환경 변수로 관리한다. 모델 ID를 Java 코드에 고정하지 않으며, 개발과 운영에서 다른 모델을 쓸 수 있다. 이번 문서에서는 특정 모델 ID를 확정하지 않는다. | NFR-18, DEVELOPMENT_RULES 5.2·5.4, README |
 | T9 | 테스트 라이브러리 | 결정됨 | Testcontainers, H2, Docker 기반 테스트 환경을 도입하지 않는다. 기존 `spring-boot-starter-test`(JUnit 5, Mockito, AssertJ)를 유지한다. DB 연동 테스트는 테스트 전용 MySQL 8을 사용하고 개발 DB와 분리한다. 추가 테스트 라이브러리는 사용자 승인 후 도입한다. | DEVELOPMENT_RULES 2·7절, README, PROGRESS |
+| T11 | OAuth2 임시 상태 저장 방식 | 결정됨 (A안, 화면 세션 기반 Google 계정 연동) | 연동 시작은 화면 전용 URL에서 CSRF 포함 POST로 처리하고, 로그인 세션에서 연동 대상 회원 ID를 확인한다. OAuth2 `state`와 Authorization Request는 기존 HTTP 세션에 저장한다(`HttpSessionOAuth2AuthorizationRequestRepository` 기본 구현). 일반 Google 로그인과 계정 연동은 처리 경로를 분리하고, 연동 과정에서 기존 세션과 API JWT를 유지한다. `/api/**`는 JWT 인증만 허용한다. 세션 만료 시간 등 운영 설정 값은 구현 단계에서 정한다. 구현은 Stage 2에서 진행하며 이번 결정은 구현 완료를 뜻하지 않는다. | DEVELOPMENT_RULES 5.7·5.7.1, API_SPEC 2.6·2.6.1, FUNCTION_SPEC F1-01, FR-01-15·21 |
 
 ### 4.2 미확정 사항 (TODO)
 
@@ -186,7 +188,6 @@
 | T7 | Refresh Token 재사용(탈취 의심) 탐지 시 정책 | 미확정. 폐기된 토큰이 다시 사용되면 해당 회원의 모든 Refresh Token을 폐기할지 결정해야 한다. | Stage 2 (F1-01) |
 | T8 | Google 연동·해제 시 본인 확인 강도 | 현재 제안: 해제 시 비밀번호 재입력(비밀번호가 있는 계정). 연동 시에는 로그인된 세션과 OAuth `state` 검증. 추가 인증(2단계 인증 등) 필요 여부는 미정. | Stage 2 (F1-01) |
 | T10 | OpenRouter 사용 모델 ID 선정 | 운영자가 환경 변수로 설정하는 값이며, 문서 확정 대상이 아니다. | Stage 8 (F1-07) 전 |
-| T11 | OAuth2 임시 세션 구현 세부 | 미확정. Authorization Request 저장 위치, 임시 상태 만료 시간, Spring Security 세션 생성 정책 값, 세션 고정 공격 방지 방식을 구현 단계에서 정한다. 구조 원칙(FR-01-14~16)은 확정이며, 완전 Stateless로 고정하지 않는다. 추가 쟁점: `/api/**` STATELESS 체인에서 연동 시작(`GET /api/me/google/link`)의 임시 상태를 어떻게 저장할지 옵션 A·B·C 중 사용자 결정이 필요하다 (DEVELOPMENT_RULES 5.7.1). | Stage 2 (F1-01) 전 |
 | T12 | 화면 로그아웃 시 Refresh Token 폐기 방식 | 미확정 (제안 있음, 승인 대기). 제안: 화면 로그아웃이 `POST /api/auth/logout`을 먼저 호출하고, 성공 후 `POST /logout`을 호출한다. 첫 요청이 실패하면 `/logout`을 호출하지 않고 재시도를 안내한다 (DEVELOPMENT_RULES 5.7.2). | Stage 2 (F1-01) 전 |
 | T13 | Access Token 만료 시 화면의 API 자동 재발급 방식 | 미확정 (제안 있음, 승인 대기). 제안: 401 수신 → refresh 1회 → 원요청 1회 재시도, 실패 시 재로그인 안내, 재발급은 동시에 한 번만 수행, Refresh Token 원문은 JavaScript에서 읽지 않는다 (DEVELOPMENT_RULES 5.7.2). | Stage 2 (F1-01) 전 |
 
