@@ -20,7 +20,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중 (Stage 2-1 회원·DB 기반, Stage 2-2 회원가입·로그인 검증 서비스 구현 완료. 인증 기능 연결은 미구현) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중 (Stage 2-1 회원·DB 기반, Stage 2-2 회원가입·로그인 검증 서비스 구현 완료. DB 스키마 002·003 확정과 수동 SQL 작성 완료, 인증 기능 연결은 미구현) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -238,10 +238,27 @@
 - T20: 429는 재로그인 사유가 아닙니다. 쿠키와 인증 상태를 유지하고 `Retry-After`에 따라 재시도합니다. Refresh 429에서 자동 로그아웃하지 않습니다 (R10).
 - 미확정 Rate Limit 항목은 없습니다. 기존 확정 정책(임계값, 집계 단위, T7·T14, 429 쿠키 유지, Flyway 미사용)은 바꾸지 않았습니다.
 
+### 6.7 Stage 2-3 요청 제한 DB 스키마 확정 (2026-11-11)
+
+- 브랜치: `docs/stage2-3-rate-limit-db-schema` (기준: `main` 53b131b, PR #9 병합 커밋).
+- 범위: 수동 SQL 002, 003 작성과 ERD 확정. 코드, Entity, Repository, Controller, JWT, Refresh 회전, Rate Limit 서비스, Spring Security 설정, 테스트 코드, Gradle, 애플리케이션 설정은 변경하지 않았습니다.
+- SQL 002 (`db/manual/002_add_refresh_token_family_id.sql`): `refresh_token.family_id`를 `CHAR(36) ascii_bin`으로 추가합니다. NULL 허용으로 추가한 뒤 행마다 UUID를 부여하고, NOT NULL로 바꾸고, `idx_refresh_family`를 만듭니다. 기존 001 파일과 기존 행의 나머지 컬럼은 변경하지 않습니다.
+- SQL 003 (`db/manual/003_create_auth_rate_limit_tables.sql`): `login_failure_event`, `signup_request_event`, `refresh_request_event`, `google_oauth_request_event`와 `auth_rate_limit_counter`를 생성합니다. FK는 두지 않습니다. 원문 이메일, 원문 IP, 원문 Refresh Token 컬럼은 없습니다.
+- ERD: 2.8의 `family_id`를 확정 타입으로 표시하고 `idx_refresh_family`를 확정했습니다. 2.10을 확정 스키마 표로 바꾸고, 다이어그램에 요청 제한 엔티티를 추가했습니다. 6.1절에 SQL 적용 순서를 기록했습니다.
+- 검증 (격리된 MySQL 8.0.46 테스트 DB, 개발 DB와 운영 DB에는 실행하지 않음):
+  - SQL 002 실행 후 샘플 5행 모두 `family_id`가 NOT NULL이고 서로 다른 값을 가졌습니다. 나머지 컬럼의 체크섬은 실행 전후 같았습니다.
+  - SQL 003 실행 후 5개 테이블의 컬럼 타입, 문자셋, NULL 조건, 인덱스 이름과 대상 컬럼이 ERD와 일치하며 FK는 0개입니다.
+  - 카운터 잠금 패턴(`INSERT ... ON DUPLICATE KEY UPDATE` 후 `SELECT ... FOR UPDATE`)은 같은 키로 두 번 실행해도 행이 하나만 남았습니다.
+  - SQL 002와 003을 다시 실행하면 중복 컬럼과 기존 테이블 오류로 중단됩니다.
+- 미검증 사항: 운영 DB와 개발 DB에서의 실제 적용, 애플리케이션과 DB 연동 테스트, 정리 작업과 카운터 정리 절차는 구현 단계에서 검증합니다.
+- 확인 필요:
+  - 002의 `UUID()`는 버전 1 형식이며 시각 정보와 서버 노드 값을 포함합니다. 마이그레이션 시점의 한 번 채우는 값으로만 사용합니다.
+  - 애플리케이션의 신규 `family_id`를 버전 4(난수 기반)로 만드는 방식은 구현 단계에서 정합니다. MySQL `RANDOM_BYTES()`는 8.0.18부터 지원되므로 최소 버전 8.0.16과 맞지 않아 쓰지 않았습니다.
+
 ## 7. 다음 작업
 
 1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
-2. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안), `family_id`, 요청 제한(R1~R10), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안). DB 변경은 새 순번의 수동 SQL로 진행합니다.
+2. Stage 2-3: 다음 작업은 JWT 발급·검증 설계와 구현입니다. DB 스키마(SQL 002·003)는 확정되었고 수동 SQL은 작성 완료했습니다. 실제 DB 적용은 사용자가 수행합니다. 이후 Refresh Token 발급·로테이션·재사용 탐지(T7 A안, `family_id` 포함), 요청 제한 서비스(R1~R10), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안) 순으로 진행합니다.
 3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
