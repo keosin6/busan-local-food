@@ -296,16 +296,16 @@ S3 삭제 실패 키를 추적하고 재시도하려면 영속 기록이 필요�
 
 | 테이블 | 역할 | 저장 정보 (최소) | 관계 | 인덱스 요구 |
 |--------|------|------------------|------|-------------|
-| `login_failure_event` | 로그인 실패 이벤트. 요청마다 1행 | `pair_key_hash`: 정규화 이메일+IP의 HMAC-SHA256 (확정), `ip_key`: IP 키 (T16 결정에 따름), `failed_at` | 독립. FK 없음 | (`pair_key_hash`, `failed_at`), (`ip_key`, `failed_at`), (`failed_at`) 정리용 |
-| `signup_request_event` | 회원가입 요청 이벤트. 화면, API, Google 신규 가입 닉네임 제출 공통 | `ip_key` (T16), `requested_at` | 독립 | (`ip_key`, `requested_at`), (`requested_at`) |
+| `login_failure_event` | 로그인 실패 이벤트. 요청마다 1행 | `pair_key_hash`: 정규화 이메일+IP의 HMAC-SHA256, `ip_key`: IP 식별자의 HMAC-SHA256 (T16 확정), `failed_at` | 독립. FK 없음 | (`pair_key_hash`, `failed_at`), (`ip_key`, `failed_at`), (`failed_at`) 정리용 |
+| `signup_request_event` | 회원가입 요청 이벤트. 화면, API, Google 신규 가입 닉네임 제출 공통. JSON 파싱과 DTO 검증 이전에 집계 (T15 확정) | `ip_key`: IP 식별자의 HMAC-SHA256 (T16 확정), `requested_at` | 독립 | (`ip_key`, `requested_at`), (`requested_at`) |
 | `refresh_request_event` | Refresh 요청 이벤트. 계열을 확인할 수 있는 요청만 기록 | `family_id`, `requested_at` | `refresh_token.family_id`를 논리적으로 참조. FK 없음 | (`family_id`, `requested_at`), (`requested_at`) |
-| `google_oauth_request_event` | Google OAuth2 시작·콜백 및 계정 연동 콜백 이벤트 | `ip_key` (T16), `requested_at` | 독립 | (`ip_key`, `requested_at`), (`requested_at`) |
+| `google_oauth_request_event` | Google OAuth2 로그인 시작, 계정 연동 시작, 콜백 요청 이벤트 (요청 1회당 1행, 24시간 보관) | `ip_key`: IP 식별자의 HMAC-SHA256 (T16 확정), `requested_at` | 독립 | (`ip_key`, `requested_at`), (`requested_at`) |
 | `auth_rate_limit_counter` | 같은 키의 동시 요청을 직렬화하는 잠금 행 | `counter_key` (키 종류와 값의 해시), `updated_at` | 이벤트 테이블과 키 값으로 연결. FK 없음 | PK (`counter_key`) |
 
 - 제한 판단의 원천은 이벤트 테이블입니다. `auth_rate_limit_counter`는 같은 키의 요청을 한 번에 하나씩 처리하도록 잠그는 행입니다.
-- 로그인 이벤트 테이블에는 원문 이메일과 원문 IP를 저장하지 않습니다 (확정, R2). 회원가입과 Google 제한의 IP 키 저장 형식은 T16 결정 전까지 확정하지 않습니다 (권장: HMAC-SHA256).
+- 이벤트 테이블에는 원문 이메일과 원문 IP를 저장하지 않습니다 (R2). 모든 IP 기반 식별자는 HMAC-SHA256 값으로 저장합니다 (T16 확정).
 - HMAC 키를 교체하면 기존 키로 만든 `pair_key_hash`와 IP 키는 새 키로 조회되지 않습니다. 교체 전 정리 절차는 DEVELOPMENT_RULES 5.8을 따릅니다. Refresh 계열 키(`family_id`)는 HMAC을 쓰지 않으므로 영향을 받지 않습니다.
-- 보존 기간: 로그인, 회원가입, Refresh 이벤트는 24시간 보관 후 삭제합니다 (확정, R3). Google OAuth2 이벤트의 24시간 보존은 권장안입니다 (T18).
+- 보존 기간: 로그인, 회원가입, Refresh, Google OAuth2 이벤트는 생성 시점으로부터 24시간 후 삭제합니다 (R3, T18 확정).
 - 조회 범위(15분, 1시간, 1분)를 벗어났다는 이유만으로 이벤트를 즉시 삭제하지 않습니다. 삭제는 보존 기간 기준으로만 합니다.
 - 정리 방식: 요청 시 정리와 Spring Scheduling 기반 주기적 정리를 병행합니다. 요청 시 정리는 인덱스를 사용하고 한 번에 삭제하는 행 수를 제한합니다.
 
