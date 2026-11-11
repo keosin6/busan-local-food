@@ -206,7 +206,7 @@
 - 브랜치: `docs/finalize-auth-rate-limit-security` (기준: `main` 65a29b3, PR #8 병합 커밋).
 - 범위: 문서 전용. 코드, 테스트, DDL, SQL 파일, 의존성, Gradle 설정은 변경하지 않았습니다.
 - 반영 내용:
-  - 요청 제한 정책 (API_SPEC 1.4, FR-01-28~FR-01-36, R1~R4). 로그인, 회원가입, Refresh, Google OAuth2 기준, `RATE_LIMITED`와 `Retry-After`, 429 응답의 쿠키 보존.
+  - 요청 제한 정책 (API_SPEC 1.4, FR-01-28~FR-01-36, 당시 기준 R1~R4). 로그인, 회원가입, Refresh, Google OAuth2 기준, `RATE_LIMITED`와 `Retry-After`, 429 응답의 쿠키 보존.
   - Refresh 계열 UUID `family_id`. 회전 시 유지, 새 기기 로그인에서 새로 생성 (DATABASE_ERD 2.8).
   - 재사용 탐지(T7)를 요청 제한보다 먼저 처리하고, 커밋 후 401 응답 (API_SPEC 2.3, DEVELOPMENT_RULES 5.7.4).
   - 개인정보: 로그인 이벤트에는 정규화 이메일과 IP의 HMAC-SHA256만 저장. 원문 이메일과 원문 IP 미저장. 프록시 전달 IP는 신뢰 설정된 프록시만 사용.
@@ -240,8 +240,8 @@
 
 ## 7. 다음 작업
 
-1. 확정된 Rate Limit 정책(T15~T18, T20, 2026-11-11)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
-2. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안), `family_id`, 요청 제한(R1~R4), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안). DB 변경은 새 순번의 수동 SQL로 진행합니다.
+1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
+2. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안), `family_id`, 요청 제한(R1~R10), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안). DB 변경은 새 순번의 수동 SQL로 진행합니다.
 3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
