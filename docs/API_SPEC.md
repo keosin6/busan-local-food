@@ -123,21 +123,28 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 로그인 IP 보조 | 최근 15분 실패 20회 | 21번째 요청부터 429 | 같은 로그인 요청 |
 | 회원가입 | IP별 최근 1시간 5회 | 6번째 요청부터 429 | 화면 `POST /signup`, API `POST /api/auth/signup`, Google 신규 가입 닉네임 제출 (2.5.1) |
 | Refresh | Refresh Token 계열별 최근 1분 10회 | 11번째 요청부터 429 | `POST /api/auth/refresh` |
-| Google OAuth2 | IP별 최근 15분 10회 | 11번째 요청부터 429 | `GET /oauth2/authorization/google`, `GET /login/oauth2/code/google`, 계정 연동 콜백 (2.6.1) |
+| Google OAuth2 | IP별 최근 15분 10회 | 11번째 요청부터 429 | `GET /oauth2/authorization/google` (로그인 시작), `POST <연동 시작 화면 경로>` (연동 시작, 2.6), `GET /login/oauth2/code/google` (콜백, 로그인·연동 공통, 2.6.1) |
 
 규칙:
 - 로그인: 키는 정규화한 이메일과 클라이언트 IP의 조합입니다. 실패 5회까지는 `INVALID_CREDENTIALS`를 반환합니다. 6번째 요청부터는 비밀번호를 검증하지 않고 `429`를 반환합니다. IP 보조 제한은 실패 20회까지 `INVALID_CREDENTIALS`를 반환하고 21번째부터 `429`를 반환합니다. 두 제한을 함께 적용합니다.
 - 로그인 성공 시 해당 이메일+IP 조합의 실패 기록을 즉시 초기화합니다.
 - 회원가입: 입력값 검증 실패도 회원가입 요청으로 계산합니다. 화면, API, Google 신규 가입 닉네임 제출은 같은 IP 카운터를 공유합니다.
 - Refresh: 계열 확인이 가능한 요청만 계열별 이벤트로 기록합니다. 처리 순서는 2.3을 따릅니다. 재사용 탐지(T7)를 먼저 수행하며, 429 때문에 전체 토큰 폐기가 생략되지 않습니다. 계열을 확인할 수 없는 요청은 계열별 제한 대상이 아닙니다 (T17 권장안, 미결정).
-- Google OAuth2: 시작 요청과 콜백 요청이 같은 IP 카운터를 공유합니다. 계정 연동 콜백도 같은 정책을 따릅니다. 제한을 초과하면 OAuth2 임시 상태만 정리합니다. 기존 화면 세션과 API JWT는 유지합니다. `state` 검증 등 기존 절차는 그대로 둡니다. 계정 연동 시작 POST를 이 카운터에 포함할지는 미결정입니다 (T19).
+- Google OAuth2 (R1, R5): 집계 단위는 사용자 시작 요청 1회 또는 콜백 요청 1회입니다.
+  - 로그인 시작: `GET /oauth2/authorization/google` 1회.
+  - 계정 연동 시작: `POST <연동 시작 화면 경로>` 1회 (2.6).
+  - 콜백: `GET /login/oauth2/code/google` 1회. 로그인 콜백과 계정 연동 콜백은 같은 엔드포인트이므로 같은 방식으로 1회 집계합니다.
+  - 세 종류 모두 같은 IP 카운터(15분 10회)를 공유합니다.
+  - 요청 경계: 연동 시작 POST가 응답으로 보내는 Google 인증 페이지 `302`와 브라우저의 그 리다이렉트는 별도 요청으로 세지 않습니다. 서버 내부 전달이나 리다이렉트로 OAuth2 authorization endpoint가 다시 호출되더라도 같은 사용자 시작 요청의 일부로 보고 추가로 세지 않습니다.
+  - 제한을 초과하면 시작 요청(POST와 GET)은 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태를 만들지 않습니다. 콜백은 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태만 정리합니다. 기존 화면 세션과 API JWT는 어느 경우에도 유지합니다. 초과 요청은 이벤트를 만들지 않습니다.
+  - `state` 검증 등 기존 절차는 그대로 둡니다.
 - 제한된 요청은 새 제한 이벤트를 만들지 않습니다.
 - 429 응답은 JWT 쿠키를 만료시키거나 새로 설정하지 않습니다. 기존 쿠키를 그대로 둡니다.
 - 화면 경로도 같은 상태 코드(`429`)와 `Retry-After`를 사용합니다. 화면에 어떻게 표시할지는 구현 단계에서 정합니다 (T20).
 - 이 표에 없는 엔드포인트(예: 로그아웃)는 이번 정책의 제한 대상이 아닙니다.
 
 개인정보와 저장 (확정 R2, 보류 T16):
-- 로그인 제한 이벤트에는 정규화 이메일과 IP의 HMAC-SHA256 값만 저장합니다. 원문 이메일과 원문 IP는 저장하지 않습니다. HMAC 비밀키는 EC2 환경 변수로 주입하며 Git에 커밋하지 않습니다.
+- 로그인 제한 이벤트에는 정규화 이메일과 IP의 HMAC-SHA256 값만 저장합니다. 원문 이메일과 원문 IP는 저장하지 않습니다. HMAC 비밀키는 EC2 환경 변수로 주입하며 Git에 커밋하지 않습니다. 키 교체 절차는 DEVELOPMENT_RULES 5.8을 따릅니다.
 - 프록시 뒤에서는 신뢰하도록 설정된 프록시가 전달한 IP만 사용합니다. 임의의 `X-Forwarded-For` 값은 신뢰하지 않습니다.
 - 회원가입, Google OAuth2, 로그인 IP 보조 제한의 IP 키 저장 형식은 T16 결정 전까지 확정하지 않았습니다. 권장안은 세 항목 모두 HMAC-SHA256 저장입니다.
 
@@ -201,7 +208,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
 - 권한: 유효한 Refresh Token을 가진 회원
 - 요청: 본문 없음. `refresh_token` 쿠키를 전송합니다.
-- 계열: 모든 Refresh Token 행은 서버가 만든 UUID `family_id`를 가집니다. 회전할 때 같은 값을 유지하고, 새 기기 로그인에서는 새 값을 만듭니다 (FR-01-36, DATABASE_ERD 2.8).
+- 계열: 모든 Refresh Token 행은 서버가 만든 UUID `family_id`를 가집니다. 회전할 때 같은 값을 유지하고, 새 기기 로그인에서는 새 값을 만듭니다 (FR-01-36, DATABASE_ERD 2.8). `family_id`는 가명 식별자이므로 응답 본문에 포함하지 않으며, 외부 노출을 막습니다 (DEVELOPMENT_RULES 5.3).
 - 처리 (FR-01-06, FR-01-24, FR-01-30, T7 A안, T14 A안):
   1. 쿠키 원문의 SHA-256 해시로 `refresh_token` 행을 잠금 없이 조회하여 회원 ID와 `family_id`를 확인합니다. 행이 없으면 `401 TOKEN_INVALID`를 반환합니다. 어떤 행도 변경하지 않으며 제한 이벤트도 만들지 않습니다.
   2. 트랜잭션을 시작하고 회원 행을 잠금 조회합니다.
@@ -271,7 +278,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 콜백 처리는 사용자 정의 `AuthenticationSuccessHandler`(성공)와 `AuthenticationFailureHandler`(실패)가 담당합니다. 세션의 연동 진행 상태가 없으면 위 일반 로그인 처리를 유지합니다 (DEVELOPMENT_RULES 5.7.1 Callback 핸들러 원칙).
 - 발급: 성공하면 화면 세션과 JWT를 함께 발급합니다 (FR-01-17).
 - 주요 오류(리다이렉트 쿼리): `email_account_exists`, `google_unverified`, `google_failed`
-- 요청 제한 (1.4): 시작 요청과 콜백 요청은 같은 IP 카운터(15분 10회)를 공유합니다. 초과하면 HTTP 429와 `Retry-After`를 반환합니다. OAuth2 임시 상태만 정리하고 기존 세션과 JWT는 유지합니다.
+- 요청 제한 (1.4): 로그인 시작(GET)과 콜백(GET)은 Google OAuth2 IP 카운터(15분 10회)를 공유합니다. 초과하면 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태만 정리합니다. 기존 세션과 JWT는 유지합니다. 요청 경계는 1.4를 따릅니다.
 
 ### 2.5.1 Google 신규 가입 닉네임 설정 (화면, T3 A안)
 
@@ -307,7 +314,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 응답: `302` → Google 인증 페이지.
 - 기존 로그인 세션과 API JWT는 변경하지 않습니다. 재발급하거나 교체하지 않습니다.
 - 주요 오류: 세션 없음 → `/login`으로 리다이렉트.
-- 요청 제한 (1.4): 계정 연동 시작 POST를 Google OAuth2 카운터에 포함할지는 미결정입니다 (T19). 포함하기로 하면 같은 IP 카운터를 공유합니다.
+- 요청 제한 (1.4, R5): 연동 시작 POST는 Google OAuth2 IP 카운터(15분 10회)에 포함합니다. 이 POST는 1회로 집계하며, 이어지는 Google 인증 페이지 `302`는 별도 요청으로 세지 않습니다. 초과하면 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태를 만들지 않으며, 기존 세션과 JWT는 유지합니다.
 
 ### 2.6.1 Google 계정 연동 콜백 (콜백 URL `/login/oauth2/code/google`)
 

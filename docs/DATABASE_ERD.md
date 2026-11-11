@@ -253,7 +253,7 @@ erDiagram
 | id | BIGINT | N | AUTO_INCREMENT | PK |
 | member_id | BIGINT | N | | FK → member.id |
 | token_hash | CHAR(64) | N | | Refresh Token의 SHA-256 해시 (원문 저장 금지) |
-| family_id | CHAR(36) (구현 전 검토) | N | | 토큰 계열 식별 UUID. 서버가 생성한다. 같은 로그인 세션의 회전에서는 같은 값을 유지하고, 새 기기 로그인에서는 새로 생성한다 (FR-01-36) |
+| family_id | CHAR(36) (구현 전 검토) | N | | 토큰 계열 식별 UUID (가명 식별자). 서버가 생성한다. 직접 식별 정보는 없지만 회원 및 인증 세션과 연결될 수 있으므로 외부 노출을 막는다. 같은 로그인 세션의 회전에서는 같은 값을 유지하고, 새 기기 로그인에서는 새로 생성한다 (FR-01-36) |
 | expires_at | DATETIME(6) | N | | 만료 시각 |
 | revoked_at | DATETIME(6) | Y | | 로그아웃·재발급 등으로 폐기된 시각 |
 | created_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) | |
@@ -262,7 +262,7 @@ erDiagram
 - UNIQUE: `uk_refresh_token_hash (token_hash)`
 - INDEX: `idx_refresh_member (member_id, revoked_at)`
 - INDEX (설계안): `idx_refresh_family (family_id)`. 계열 단위 요청 제한 조회용. 구현 전 검토 대상이다.
-- 계열(`family_id`): 회전할 때 기존 행의 값을 새 행에 그대로 복사한다. 새 기기 로그인은 새 UUID를 만든다. 계열 값은 요청 제한의 키로 쓰며 (API_SPEC 1.4), 개인정보가 아니다.
+- 계열(`family_id`): 회전할 때 기존 행의 값을 새 행에 그대로 복사한다. 새 기기 로그인은 새 UUID를 만든다. `family_id`는 서버가 생성하는 UUID다. 직접적인 개인 식별 정보는 포함하지 않지만, 회원 및 인증 세션과 연결될 수 있는 가명 식별자다. 따라서 개인정보 및 보안 정보에 준하여 접근을 통제하고 로그를 관리하며, 원본 Refresh Token과 마찬가지로 외부 노출을 막는다. 요청 제한의 키로도 쓴다 (API_SPEC 1.4). 기존 계열 구조와 T7·T14 정책은 바뀌지 않는다.
 - 원문 저장 위치: 브라우저의 HttpOnly Cookie만 (FR-01-05). DB에는 해시만 저장합니다.
 - 로테이션 (FR-01-06): 재발급 시 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT합니다. 행을 물리 삭제하지 않습니다. 만료되거나 폐기된 행을 정리하는 방식은 구현 단계에서 정합니다.
 - 재사용 탐지 (T7 A안 확정): 폐기된 Refresh Token의 재사용이 실제로 탐지되면 해당 회원의 모든 활성 Refresh Token(`revoked_at IS NULL`)을 폐기합니다. 원문은 저장하지 않고 SHA-256 해시만 저장합니다. 폐기된 행은 재사용 탐지를 위해 보존합니다.
@@ -304,6 +304,7 @@ S3 삭제 실패 키를 추적하고 재시도하려면 영속 기록이 필요�
 
 - 제한 판단의 원천은 이벤트 테이블입니다. `auth_rate_limit_counter`는 같은 키의 요청을 한 번에 하나씩 처리하도록 잠그는 행입니다.
 - 로그인 이벤트 테이블에는 원문 이메일과 원문 IP를 저장하지 않습니다 (확정, R2). 회원가입과 Google 제한의 IP 키 저장 형식은 T16 결정 전까지 확정하지 않습니다 (권장: HMAC-SHA256).
+- HMAC 키를 교체하면 기존 키로 만든 `pair_key_hash`와 IP 키는 새 키로 조회되지 않습니다. 교체 전 정리 절차는 DEVELOPMENT_RULES 5.8을 따릅니다. Refresh 계열 키(`family_id`)는 HMAC을 쓰지 않으므로 영향을 받지 않습니다.
 - 보존 기간: 로그인, 회원가입, Refresh 이벤트는 24시간 보관 후 삭제합니다 (확정, R3). Google OAuth2 이벤트의 24시간 보존은 권장안입니다 (T18).
 - 조회 범위(15분, 1시간, 1분)를 벗어났다는 이유만으로 이벤트를 즉시 삭제하지 않습니다. 삭제는 보존 기간 기준으로만 합니다.
 - 정리 방식: 요청 시 정리와 Spring Scheduling 기반 주기적 정리를 병행합니다. 요청 시 정리는 인덱스를 사용하고 한 번에 삭제하는 행 수를 제한합니다.
