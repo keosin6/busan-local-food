@@ -83,6 +83,7 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
 | `JWT_SECRET` | JWT 서명 키 (최소 256비트) |
 | `JWT_ACCESS_TOKEN_EXPIRY_SECONDS` | 액세스 토큰 만료 초 (기본 1800) |
 | `JWT_REFRESH_TOKEN_EXPIRY_SECONDS` | 리프레시 토큰 만료 초 (기본 1209600) |
+| (구현 단계에서 이름 확정) | 요청 제한 키의 HMAC-SHA256 비밀키. EC2 환경 변수로만 주입하며 Git에 커밋하지 않는다 (R2) |
 | `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 클라이언트 시크릿 |
 | `AWS_REGION` | S3 리전 |
@@ -101,8 +102,14 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
   - `JSESSIONID`(화면 세션): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`.
   - `access_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api`로 제한합니다.
   - `refresh_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api/auth`로 제한합니다.
+- 모든 인증 쿠키는 `Domain`을 설정하지 않습니다. 쿠키 속성은 API_SPEC 1.1을 따릅니다.
 - Refresh Token 원문은 쿠키에만 두고, DB에는 SHA-256 해시만 저장합니다 (FR-01-05). 로그와 응답 본문에도 원문을 남기지 않습니다.
 - CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청 모두에 Spring Security CSRF 보호를 유지합니다. 상태 변경 요청은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 보냅니다. Bearer 헤더 요청은 쿠키 기반 인증이 아니므로 CSRF 헤더를 요구하지 않습니다.
+- JWT 원문(Access Token, Refresh Token)은 응답 본문과 로그에 남기지 않습니다. 쿠키로만 전달합니다.
+- 요청 제한: 로그인, 회원가입, Refresh, Google OAuth2는 API_SPEC 1.4의 기준을 따릅니다. 429 응답은 JWT 쿠키를 바꾸지 않습니다.
+- 로그인 제한 이벤트에는 정규화 이메일과 IP를 HMAC-SHA256 값으로만 저장합니다. 원문 이메일과 원문 IP는 저장하지 않습니다 (R2). HMAC 비밀키는 EC2 환경 변수로 주입하고 Git에 커밋하지 않습니다.
+- 클라이언트 IP는 신뢰하도록 설정된 프록시가 전달한 값만 사용합니다. 임의의 `X-Forwarded-For` 값은 신뢰하지 않습니다.
+- 회원가입 제한, Google OAuth2 제한, 로그인 IP 보조 제한의 IP 키 저장 형식은 T16 결정 전까지 확정하지 않습니다 (권장: HMAC-SHA256).
 - Thymeleaf의 `th:text`를 사용하고, `th:utext`로 사용자 입력을 출력하지 않습니다.
 - 파일 업로드는 MIME 타입과 확장자, 크기를 모두 검사합니다.
 - 에러 응답에 스택 트레이스나 SQL을 노출하지 않습니다.
@@ -269,6 +276,7 @@ Access Token 만료 시 자동 재발급 (T13 A안):
 - 재발급 API(`/api/auth/refresh`)가 401을 반환하면 재발급 API를 다시 호출하지 않습니다.
 - 여러 API 요청이 동시에 401을 받아도 재발급 요청은 한 번만 실행합니다. 나머지 요청은 그 결과를 기다린 뒤 같은 결과를 사용합니다.
 - 재발급이 실패하면 재로그인을 안내합니다. 재발급 실패 원인이 Refresh Token 재사용 탐지(5.7.4)로 전체 토큰이 폐기된 경우에도 같은 안내를 합니다.
+- 재발급 요청이 429를 받으면 쿠키는 유지합니다. 화면 처리는 T20 결정 전까지 확정하지 않습니다.
 - Refresh Token 원문은 JavaScript에서 읽거나 저장하지 않습니다. `refresh_token`은 HttpOnly 쿠키로만 관리하며, 스크립트는 쿠키가 전송되도록 요청만 합니다.
 - 화면 Spring Security 세션은 API 토큰 재발급으로 갱신하지 않습니다.
 
@@ -319,6 +327,7 @@ Access Token 만료 시 자동 재발급 (T13 A안):
 - 폐기된 Refresh Token이 다시 사용되면 토큰 재사용으로 판단합니다. 로그아웃으로 폐기된 토큰도 같은 규칙을 따릅니다.
 - 재사용이 탐지되면 해당 회원의 모든 활성 Refresh Token을 폐기합니다. 해당 회원은 모든 기기에서 Refresh Token으로 재발급할 수 없으며 다시 로그인해야 합니다.
 - DB에는 Refresh Token 원문이 아닌 SHA-256 해시만 저장합니다.
+- 토큰 계열 UUID(`family_id`)를 행마다 저장합니다. 회전할 때 같은 값을 유지하고, 새 기기 로그인에서만 새 값을 만듭니다 (FR-01-36).
 - 폐기된 토큰의 해시 행은 재사용 탐지를 위해 보존합니다. 삭제하지 않습니다.
 - 재사용 탐지와 활성 토큰 일괄 폐기는 같은 트랜잭션에서 처리합니다.
 - 동시 재발급과 경쟁 상태를 고려합니다. 중복 발급이나 일부 토큰이 살아남는 상태가 없도록 설계합니다.
@@ -340,6 +349,7 @@ Access Token 만료 시 자동 재발급 (T13 A안):
 - 재사용 탐지 결과를 예외로 던지지 않습니다. 예외가 전파되면 트랜잭션이 롤백되어 전체 폐기가 사라집니다. 서비스는 결과 값을 반환하고, 트랜잭션이 커밋된 뒤 컨트롤러가 `401`을 응답합니다.
 - HTTP 응답 전송과 DB 커밋은 별개입니다. 커밋이 끝난 뒤에 응답을 보내므로, 응답이 유실되어도 폐기 결과는 DB에 남습니다.
 - 잠금 구간은 짧게 유지합니다. 외부 호출(Google, S3, OpenRouter)을 잠금 안에서 하지 않습니다.
+- 요청 제한은 재사용 탐지 이후, 토큰 회전 이전에 판정합니다. 재사용 탐지 결과는 429 때문에 생략되지 않습니다. 제한된 요청은 토큰을 바꾸지 않고 이벤트도 만들지 않습니다 (API_SPEC 2.3, R4).
 
 한계와 범위:
 - Access Token은 이미 발급된 JWT이므로 Refresh Token 폐기만으로 즉시 무효화되지 않을 수 있습니다. 이 결정은 모든 활성 Refresh Token 폐기 정책입니다. Access Token의 즉시 무효화 체계를 새로 도입하지 않습니다.
@@ -487,6 +497,11 @@ com.busanlocalfood
   - 화면 로그아웃에서 API 로그아웃이 실패하면 `/logout`이 호출되지 않는지
   - 동시 401 응답에서 재발급이 한 번만 실행되고 원래 요청은 한 번만 재시도되는지
   - 화면 세션 쿠키 기반 연동 해제가 비밀번호 불일치 시 해제하지 않는지
+  - 로그인 6번째 요청이 429이고 비밀번호를 검증하지 않는지, 성공 시 이메일+IP 실패 기록이 초기화되는지
+  - 429 응답이 JWT 쿠키를 바꾸지 않는지
+  - Refresh 재사용 탐지가 요청 제한과 겹쳐도 회원의 모든 활성 토큰 폐기가 커밋되는지
+  - 제한된 요청이 새 이벤트를 만들지 않는지
+  - 로그인 제한 이벤트에 원문 이메일과 원문 IP가 저장되지 않는지
   - `/api/**` 요청이 임시 세션만으로는 인증되지 않는지
   - 화면 요청이 JWT만으로 인증되지 않고, API 요청이 세션만으로 인증되지 않는지
   - API 로그인과 API 회원가입이 세션을 만들지 않고, 화면 로그인·화면 회원가입·Google 로그인이 세션과 JWT를 모두 발급하는지

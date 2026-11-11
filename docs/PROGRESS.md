@@ -73,6 +73,12 @@
 | T5 | MySQL 설치 방식과 영속 저장소 구성 | Stage 11 전 |
 | T6 | S3 삭제 재시도 자동화 여부 | Stage 4 이후 |
 | T10 | OpenRouter 사용 모델 ID 선정 (운영 설정 값) | Stage 8 전 |
+| T15 | 회원가입 요청 제한의 계산 범위 (권장: JSON 파싱과 DTO 검증 이전에 계산) | Stage 2-3 전 |
+| T16 | IP 키의 HMAC 처리 (로그인 IP 보조, 회원가입, Google OAuth2). 권장: HMAC-SHA256 | Stage 2-3 전 |
+| T17 | 계열을 확인할 수 없는 Refresh 요청의 처리 (권장: 계열 기준 이벤트 제외, 기존 실패 처리 유지) | Stage 2-3 전 |
+| T18 | Google OAuth2 이벤트의 24시간 보존 (권장: 24시간) | Stage 2-4 전 |
+| T19 | 계정 연동 시작 POST의 요청 제한 포함 여부 | Stage 2-4 전 |
+| T20 | 429 응답의 화면 처리와 Refresh 429에 대한 T13 절차 적용 여부 | Stage 2-3 전 |
 
 ## 5. 설계 변경 이력
 
@@ -196,10 +202,28 @@
   - 보완 ②의 테스트가 실제로 결함을 잡는지 확인: 수정 전 `\s` 검사로 되돌리면 NBSP, EM SPACE, IDEOGRAPHIC SPACE 케이스가 실패함을 확인한 뒤 수정본을 복원.
 - 참고 (이번 범위 밖): 이메일 형식 정규식과 `trim()`은 Unicode 공백을 완전히 다루지 않는다. 예: 이메일 로컬 파트의 NBSP는 현재 형식 검사를 통과할 수 있다. 정책 결정 후 별도 보완이 필요하다. Java의 `isWhitespace`에 포함되지 않는 제로 폭 공백(U+200B)은 이번 검사 대상이 아니다.
 
+### 6.4 인증 보안 설계 통합 반영 기록 (2026-11-11)
+
+- 브랜치: `docs/finalize-auth-rate-limit-security` (기준: `main` 65a29b3, PR #8 병합 커밋).
+- 범위: 문서 전용. 코드, 테스트, DDL, SQL 파일, 의존성, Gradle 설정은 변경하지 않았습니다.
+- 반영 내용:
+  - 요청 제한 정책 (API_SPEC 1.4, FR-01-28~FR-01-36, R1~R4). 로그인, 회원가입, Refresh, Google OAuth2 기준, `RATE_LIMITED`와 `Retry-After`, 429 응답의 쿠키 보존.
+  - Refresh 계열 UUID `family_id`. 회전 시 유지, 새 기기 로그인에서 새로 생성 (DATABASE_ERD 2.8).
+  - 재사용 탐지(T7)를 요청 제한보다 먼저 처리하고, 커밋 후 401 응답 (API_SPEC 2.3, DEVELOPMENT_RULES 5.7.4).
+  - 개인정보: 로그인 이벤트에는 정규화 이메일과 IP의 HMAC-SHA256만 저장. 원문 이메일과 원문 IP 미저장. 프록시 전달 IP는 신뢰 설정된 프록시만 사용.
+  - 이벤트 보존 24시간 (로그인, 회원가입, Refresh). Google 이벤트 보존은 권장안 (T18).
+  - 요청 제한 테이블 5개의 설계안과 MySQL 행 잠금 구조 (DATABASE_ERD 2.10). 정확한 컬럼 타입과 인덱스는 구현 전 검토.
+  - 쿠키 Domain 미설정 명시, JWT 원문은 응답 본문에 포함하지 않음 명시 (API_SPEC 1.1).
+- 정정: DATABASE_ERD 6의 Flyway 정책을 `db/manual/` 수동 SQL 정책으로 바꿨습니다. 프로젝트는 Flyway를 사용하지 않습니다 (REQUIREMENTS 3과 일치).
+- 미결정: T15~T20 (REQUIREMENTS 4.2에 권장안 기록).
+- 코드 범위 밖 확인 사항: `src/main/resources/application.yml`의 주석이 Flyway를 언급합니다. 코드 변경 금지 조건에 따라 수정하지 않았습니다.
+- 기존 DDL `db/manual/001_create_member_refresh_token.sql`은 변경하지 않았습니다. 신규 컬럼과 테이블은 구현 단계에서 새 순번 SQL로 추가합니다.
+
 ## 7. 다음 작업
 
-1. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안, 잠금 순서 DEVELOPMENT_RULES 5.7.4), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안). Stage 2-2 서비스를 재사용한다.
-2. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
-3. 확인 필요: 비밀번호 확인값 누락 처리(`PASSWORD_REQUIRED`), 닉네임 대소문자 구분 정책, 이메일 형식 검사에 남아 있는 Unicode 공백 허용 여부(아래 참고).
-4. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
-5. 실제 MySQL 스키마 적용 절차(개발·운영 DB)는 사용자가 `db/manual/001_create_member_refresh_token.sql`을 직접 실행합니다. 이 작업에서는 실행하지 않았습니다.
+1. 구현 전에 미결정 T15~T20을 결정합니다 (REQUIREMENTS 4.2). 권장안이 있습니다.
+2. Stage 2-3: JWT 발급·검증, Refresh Token 발급·로테이션·재사용 탐지(T7 A안), `family_id`, 요청 제한(R1~R4), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안). DB 변경은 새 순번의 수동 SQL로 진행합니다.
+3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
+4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
+5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
+6. 실제 MySQL 스키마 적용은 사용자가 `db/manual/`의 SQL 파일을 직접 실행합니다. 이번 작업에서는 실행하지 않았습니다.

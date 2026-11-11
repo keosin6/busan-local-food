@@ -16,7 +16,7 @@
 
 인증 구조 (2026-11-10 확정): 화면은 Spring Security 세션으로, API는 JWT로 인증합니다. 화면 로그인, 화면 회원가입, Google 로그인이 성공하면 세션과 JWT를 함께 발급합니다. 세부 규칙은 DEVELOPMENT_RULES 5.7을 따릅니다.
 
-확정 결정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 기능 구현 상태: 미착수 (Stage 2).
+확정 결정: T3, T7, T8, T11, T12, T13, T14 A안 (2026-11-10). 요청 제한 R1~R4 (2026-11-11, 아래 "요청 제한" 절). 구현 상태는 PROGRESS.md를 따릅니다.
 
 ### 화면
 - `/signup` 회원가입 폼 (제출: `POST /signup`): 이메일, 비밀번호, 비밀번호 확인, 닉네임
@@ -31,6 +31,7 @@
    닉네임이 이미 사용 중이면 `/signup?error=nickname_duplicated`로 이동합니다. 저장 시점에 `uk_member_nickname`이 위반되면 같은 결과로 처리합니다 (ERD 2.1).
 3. 비밀번호를 BCrypt로 해시하여 `member`에 저장합니다 (`role = USER`, `google_sub = NULL`).
 4. 자동 로그인합니다. Spring Security 세션을 생성하고, JWT Access Token과 Refresh Token을 발급합니다 (Refresh Token의 SHA-256 해시는 `refresh_token`에 저장). 쿠키를 설정하고 메인 페이지(`/`)로 이동합니다.
+5. 요청 제한: 입력값 검증 실패를 포함한 모든 제출을 회원가입 요청으로 계산합니다. IP별 최근 1시간 5회를 넘으면 `429 RATE_LIMITED`를 반환하고 회원을 만들지 않습니다 (API_SPEC 1.4, 미결정 T15: 계산 범위).
 
 ### 회원가입 흐름 (API)
 1. 1~3번은 화면 회원가입과 같습니다 (`POST /api/auth/signup`). 실패는 JSON 오류로 응답합니다. 세부 코드는 400 `EMAIL_REQUIRED`·`EMAIL_INVALID`·`NICKNAME_REQUIRED`·`NICKNAME_INVALID`·`PASSWORD_REQUIRED`·`PASSWORD_INVALID`, 409 `EMAIL_DUPLICATED`·`NICKNAME_DUPLICATED`입니다.
@@ -56,6 +57,7 @@
 
 ### 로그인 흐름 (화면)
 1. `POST /login`으로 이메일과 비밀번호를 검증합니다. 없거나, 비밀번호가 틀리거나, `password_hash`가 없는(Google 전용) 경우 같은 결과(`/login?error=invalid_credentials`)를 반환합니다. 계정 존재 여부와 가입 방식을 노출하지 않습니다.
+   - 요청 제한: 정규화 이메일+IP 실패 5회 뒤 6번째 요청부터, IP 보조 제한은 실패 20회 뒤 21번째부터 `429`를 반환합니다. 제한된 요청은 비밀번호를 검증하지 않습니다 (API_SPEC 1.4).
 2. 성공하면 Spring Security 세션을 생성합니다. 세션 ID 변경 등 Spring Security의 기본 세션 보호 정책을 적용합니다 (세부 값은 T11).
 3. JWT Access Token을 발급하여 `access_token` 쿠키(HttpOnly, Path `/api`)에 담습니다. 기본 만료 30분.
 4. Refresh Token 원문을 발급하여 `refresh_token` 쿠키(HttpOnly, Path `/api/auth`)에 담고, SHA-256 해시를 `refresh_token` 테이블에 저장합니다 (FR-01-05). 기본 만료 14일.
@@ -66,18 +68,21 @@
 2. JWT Access Token과 Refresh Token을 발급합니다. 쿠키를 설정하고 JSON으로 응답합니다.
 3. Spring Security 세션을 생성하지 않습니다. 세션이 있더라도 API 인증을 대신하지 않습니다.
 
-### 재발급 흐름 (API, Refresh Token 로테이션, FR-01-06, FR-01-24, T14 A안)
-1. 요청의 `refresh_token` 쿠키 원문을 SHA-256으로 해시하고, 잠금 없이 조회하여 회원을 확인합니다. 행이 없으면 `TOKEN_INVALID`(401)를 반환합니다. 어떤 행도 변경하지 않습니다.
+### 재발급 흐름 (API, Refresh Token 로테이션, FR-01-06, FR-01-24, FR-01-30, FR-01-36, T14 A안)
+1. 요청의 `refresh_token` 쿠키 원문을 SHA-256으로 해시하고, 잠금 없이 조회하여 회원과 `family_id`를 확인합니다. 행이 없으면 `TOKEN_INVALID`(401)를 반환합니다. 어떤 행도 변경하지 않습니다.
 2. 트랜잭션을 시작하고 회원 행을 잠금 조회합니다. 같은 트랜잭션에서 `refresh_token` 행을 다시 조회합니다.
-3. 재조회한 행으로 판정합니다.
-   - 활성 토큰이면 기존 행의 `revoked_at`을 기록하고, 새 Refresh Token 원문을 발급하여 해시를 새 행으로 INSERT한 뒤 커밋합니다.
-   - 만료되었으면 `TOKEN_INVALID`(401)를 반환합니다. 다른 행은 변경하지 않습니다.
-   - 폐기된 토큰이면 재사용입니다. 해당 회원의 모든 활성 Refresh Token에 `revoked_at`을 기록하고 커밋한 뒤, `TOKEN_INVALID`(401)를 반환하고 두 JWT 쿠키를 제거합니다. 회원은 다시 로그인해야 합니다 (T7 A안).
-4. 정상 갱신일 때만 새 `access_token`, `refresh_token` 쿠키를 설정합니다.
-- 재사용 탐지 결과는 예외로 던지지 않습니다. 롤백을 막기 위해 커밋 후 응답합니다.
-- 폐기된 행은 재사용 탐지를 위해 보존합니다. 삭제하지 않습니다.
+3. 재조회한 행으로 아래 순서로 판정합니다.
+   - 폐기된 행이면 재사용입니다. 요청 제한보다 먼저 처리합니다. 해당 회원의 모든 활성 Refresh Token에 `revoked_at`을 기록하고 커밋한 뒤, `TOKEN_INVALID`(401)를 반환하고 두 JWT 쿠키를 제거합니다. 회원은 다시 로그인해야 합니다 (T7 A안).
+   - 폐기되지 않았으면 같은 `family_id`의 최근 1분 요청 수를 확인합니다. 이미 10회가 기록되어 있으면 이번이 11번째 요청이므로 `RATE_LIMITED`(429)를 반환합니다. 쿠키는 그대로 두고, 토큰과 이벤트도 변경하지 않습니다.
+   - 제한을 통과하면 계열 요청 이벤트를 한 건 기록합니다. 만료되었으면 `TOKEN_INVALID`(401)를 반환하고 두 JWT 쿠키를 제거합니다.
+   - 활성이고 만료되지 않았으면 기존 행을 폐기하고, 같은 `family_id`로 새 Refresh Token 행을 만들어 커밋합니다. 새 Refresh Token 원문은 해시로만 저장합니다.
+4. 정상 갱신일 때만 새 쿠키를 설정합니다.
+- 재사용 탐지 결과는 예외로 던지지 않습니다. 커밋한 뒤 응답합니다. 그래야 응답 전에 롤백되지 않습니다.
+- 폐기된 행은 재사용 탐지를 위해 삭제하지 않습니다.
+- 새 기기 로그인에서만 새 `family_id`를 만듭니다. 회전에서는 값을 유지합니다.
 - 화면 세션은 재발급 대상이 아닙니다. 화면 세션의 만료 정책은 T11에서 정합니다.
 - 응답이 네트워크에서 유실되면 클라이언트는 새 쿠키를 받지 못합니다. 이후 이전 토큰이 재사용으로 판정될 수 있으며, 이는 T14 A안이 수용한 한계입니다 (재로그인 필요).
+- 계열을 확인할 수 없는 요청은 계열별 제한 대상이 아닙니다 (T17 권장안, 미결정).
 
 ### 로그아웃 흐름 (화면, FR-01-07, FR-01-25, T12 A안)
 1. 브라우저가 `POST /api/auth/logout`을 먼저 호출합니다. 서버는 Refresh Token 행을 폐기하고 JWT 쿠키를 만료시킵니다.
@@ -100,6 +105,7 @@
 8. 재시도한 요청도 401이면 추가 갱신을 하지 않고 재로그인을 안내합니다. 재발급 API가 401을 반환해도 재호출하지 않습니다.
 9. Web Locks API는 보안 컨텍스트에서만 사용할 수 있습니다. 운영 환경은 HTTPS를 전제로 하고, 로컬 개발은 `localhost`를 사용할 수 있습니다. 보안 컨텍스트가 아니거나 Web Locks API를 지원하지 않으면 같은 탭의 single-flight만 보장합니다. 이때 여러 탭의 동시 갱신은 완전히 방지하지 못하며 S2 오탐이 생길 수 있습니다. 이 fallback은 T14 A안의 정책과 보안 수준을 바꾸지 않습니다. 외부 라이브러리는 추가하지 않습니다.
 10. Refresh Token 원문은 JavaScript에서 읽거나 저장하지 않습니다.
+11. 재발급이 `429`를 받으면 쿠키는 그대로 둡니다. 화면 처리(재시도 안내 등)는 T20에서 정합니다. 재로그인 안내를 기계적으로 적용하지 않습니다.
 
 ### 동시 갱신과 재사용 처리 (T14 A안 확정)
 
@@ -169,6 +175,25 @@
 3. 비밀번호를 BCrypt로 해시하여 `password_hash`에 저장합니다. 이미 비밀번호가 있으면 설정하지 않습니다 (비밀번호 변경은 이번 명세 범위가 아닙니다).
 4. 설정이 끝나면 `/mypage?password=set`으로 이동합니다. 이후 연동 해제를 할 수 있습니다.
 
+### 요청 제한 (Rate Limit, FR-01-28~FR-01-36)
+
+기준의 원본은 API_SPEC 1.4입니다. 이 절은 기능별 동작을 요약합니다. 모든 제한은 Rolling Window로 계산하며, 초과 응답은 `429`, `RATE_LIMITED`, `Retry-After`입니다.
+
+| 대상 | 제한 | 초과 시 |
+|------|------|---------|
+| 로그인 | 정규화 이메일+IP 최근 15분 실패 5회, IP 보조 최근 15분 실패 20회 | 429. 비밀번호를 검증하지 않음 |
+| 회원가입 (화면, API, Google 신규 가입 닉네임 제출 공통) | IP별 최근 1시간 5회. 입력값 검증 실패도 포함 | 429. 회원을 만들지 않음 |
+| Refresh | Refresh Token 계열별 최근 1분 10회 | 429. 쿠키 유지. 재사용 탐지는 생략되지 않음 |
+| Google OAuth2 (시작, 콜백, 계정 연동 콜백) | IP별 최근 15분 10회 (시작과 콜백 공유) | 429. OAuth2 임시 상태만 정리하고 세션과 JWT 유지 |
+
+- 로그인 성공 시 해당 이메일+IP의 실패 기록을 초기화합니다.
+- 제한된 요청은 새 이벤트를 만들지 않습니다.
+- 429 응답은 JWT 쿠키를 바꾸지 않습니다.
+- 로그인 이벤트에는 정규화 이메일과 IP의 HMAC-SHA256 값만 저장합니다 (R2). 원문 이메일과 원문 IP는 저장하지 않습니다.
+- 이벤트는 로그인, 회원가입, Refresh 모두 24시간 보관 후 삭제합니다 (R3). Google 이벤트 보존은 T18 권장안입니다.
+- 미결정 항목: 회원가입 요청 계산 범위 (T15, 권장: JSON 파싱과 DTO 검증 이전에 계산), IP 키 HMAC 처리 (T16), 계열을 확인할 수 없는 Refresh 요청 (T17), Google 이벤트 보존 (T18), 계정 연동 시작 POST 포함 여부 (T19), 429 응답의 화면 처리와 Refresh 429의 자동 재발급 처리 (T20).
+
+
 ### 인증 처리 규칙
 - JWT 서명 키는 환경 변수 `JWT_SECRET`에서 읽습니다.
 - API 인증 필터는 `/api/**`에만 적용합니다. `access_token` 쿠키 또는 `Authorization: Bearer` 헤더를 읽습니다. 세션만으로 인증하지 않습니다.
@@ -198,6 +223,8 @@
 | 자격 증명 불일치 (API, Google 전용 계정 포함) | 401 `INVALID_CREDENTIALS` |
 | 자격 증명 불일치 (화면, Google 전용 계정 포함) | `/login?error=invalid_credentials` |
 | 토큰 없음·만료·폐기·위조 (API) | 401 `TOKEN_INVALID` |
+| 요청 제한 초과 (로그인, 회원가입, Refresh, Google OAuth2) | 429 `RATE_LIMITED` (`Retry-After`). 쿠키·세션·JWT 유지 (Google은 OAuth2 임시 상태만 정리) |
+| 폐기된 Refresh Token 재사용 | 401 `TOKEN_INVALID`. 회원의 모든 활성 Refresh Token 폐기 (429보다 먼저 처리) |
 | 세션 없음 (화면 인증 필요 페이지) | `/login`으로 리다이렉트 |
 | 재인증 실패 (연동 해제) | `/mypage?error=invalid_credentials` (해제하지 않음) |
 | 비밀번호 없는 회원의 연동 해제 | `/mypage?error=password_required` (해제하지 않음) |
