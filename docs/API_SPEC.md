@@ -37,6 +37,9 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다. 화면 로그아웃은 먼저 `POST /api/auth/logout`을 호출합니다 (T12, 2.11).
 - 쿠키를 만료시킬 때는 발급 당시와 같은 Path와 Domain을 사용합니다.
 - 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
+- 모든 인증 쿠키는 `Domain`을 설정하지 않습니다.
+- JWT 원문(Access Token, Refresh Token)은 JSON 응답 본문에 포함하지 않습니다. 쿠키로만 전달합니다.
+- 쿠키 속성(`HttpOnly`, `SameSite=Lax`, 운영에서 `Secure`)과 Path는 이 표를 따릅니다. 요청 제한 응답(429)은 쿠키를 바꾸지 않습니다 (1.4).
 
 ### 1.2 공통 응답 형식
 
@@ -88,6 +91,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 400 | IMAGE_LIMIT_EXCEEDED | 맛집당 이미지 개수 초과 |
 | 401 | INVALID_CREDENTIALS | 이메일 또는 비밀번호 불일치 (재인증 실패 포함) |
 | 401 | TOKEN_INVALID | 토큰 없음, 만료, 폐기 또는 위조 |
+| 429 | RATE_LIMITED | 요청 제한 초과. `Retry-After` 헤더에 재시도까지 남은 초를 담는다 (1.4) |
 | 403 | FORBIDDEN | 권한 없음 (작성자 아님, 또는 ADMIN 아님) |
 | 404 | MEMBER_NOT_FOUND | 회원 없음 |
 | 404 | RESTAURANT_NOT_FOUND | 맛집 없음 |
@@ -108,6 +112,56 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 > S3 객체 삭제 실패는 오류 코드가 아닙니다. DB 삭제는 완료된 상태이므로 `200`과 함께 결과 필드(`storageDeleted`, `storageDeleteFailedCount`)로 알립니다 (FUNCTION_SPEC F1-02, F1-03).
 
 ---
+
+### 1.4 요청 제한 (Rate Limit)
+
+모든 제한은 Rolling Window로 계산합니다. 즉 고정된 시간대가 아니라 "최근 N분(또는 N시간)"을 기준으로 셉니다. 초과한 요청은 HTTP `429`, 오류 코드 `RATE_LIMITED`로 응답하고 `Retry-After` 헤더에 재시도까지 남은 초를 담습니다. 제한 기준이나 내부 키 정보는 응답에 노출하지 않습니다.
+
+| 구분 | 제한 기준 | 제한 초과 시점 | 적용 대상 |
+|------|-----------|----------------|-----------|
+| 로그인 이메일+IP | 최근 15분 실패 5회 | 6번째 요청부터 429 | 화면 `POST /login`, API `POST /api/auth/login` |
+| 로그인 IP 보조 | 최근 15분 실패 20회 | 21번째 요청부터 429 | 같은 로그인 요청 |
+| 회원가입 | IP별 최근 1시간 5회 | 6번째 요청부터 429 | 화면 `POST /signup`, API `POST /api/auth/signup`, Google 신규 가입 닉네임 제출 (2.5.1) |
+| Refresh | Refresh Token 계열별 최근 1분 10회 | 11번째 요청부터 429 | `POST /api/auth/refresh` |
+| Google OAuth2 | IP별 최근 15분 10회 | 11번째 요청부터 429 | `GET /oauth2/authorization/google` (로그인 시작), `POST <연동 시작 화면 경로>` (연동 시작, 2.6), `GET /login/oauth2/code/google` (콜백, 로그인·연동 공통, 2.6.1) |
+
+규칙:
+- 로그인: 키는 정규화한 이메일과 클라이언트 IP의 조합입니다. 실패 5회까지는 `INVALID_CREDENTIALS`를 반환합니다. 6번째 요청부터는 비밀번호를 검증하지 않고 `429`를 반환합니다. IP 보조 제한은 실패 20회까지 `INVALID_CREDENTIALS`를 반환하고 21번째부터 `429`를 반환합니다. 두 제한을 함께 적용합니다.
+- 로그인 성공 시 해당 이메일+IP 조합의 실패 기록을 즉시 초기화합니다.
+- 회원가입 (T15 확정): 집계는 JSON 파싱과 DTO 검증 이전에 합니다. 잘못된 입력, JSON 파싱 실패, DTO 검증 실패, 지원하지 않는 Content-Type 요청도 모두 회원가입 요청으로 집계합니다. 요청 제한을 먼저 확인하고, 초과한 요청은 `429 RATE_LIMITED`로 응답하며 이벤트를 추가하지 않습니다. 정상 요청이 입력 검증에 실패하면 기존 검증 오류 응답을 유지합니다. 화면, API, Google 신규 가입 닉네임 제출은 같은 IP 카운터를 공유합니다.
+  - 구현 주의: 요청 제한은 필터 또는 이에 준하는 처리 계층에서 집계합니다. 구현 단계에서 Spring Security의 CSRF 검사와 요청 처리 순서를 확인하고 처리 위치를 확정합니다. CSRF 검사가 집계보다 먼저 실행되어 실패한 요청이 집계되지 않는 경우에는 이 차이를 구현 시 명시적으로 확인합니다.
+- Refresh (T17 확정): 해시로 DB를 조회합니다. 유효한 토큰의 계열을 확인할 수 있는 요청만 `family_id` 기준으로 제한합니다. 계열을 확인할 수 없는 요청(행 없음, 위조 등)에는 별도 IP 기반 제한을 추가하지 않습니다. 잘못된 토큰의 응답은 기존 인증 실패 정책(401)을 유지합니다. 처리 순서는 2.3을 따릅니다. 재사용이 확인되면 T7을 먼저 수행하여 해당 회원의 모든 활성 토큰을 폐기하고 커밋한 뒤 401을 반환합니다. Rate Limit이 이 재사용 탐지를 가리거나 우회하지 않습니다.
+- Google OAuth2 (R1, R5, T18): 집계 단위는 사용자 시작 요청 1회 또는 콜백 요청 1회입니다.
+  - 로그인 시작: `GET /oauth2/authorization/google` 1회.
+  - 계정 연동 시작: `POST <연동 시작 화면 경로>` 1회 (2.6).
+  - 콜백: `GET /login/oauth2/code/google` 1회. 로그인 콜백과 계정 연동 콜백은 같은 엔드포인트이므로 같은 방식으로 1회 집계합니다.
+  - 세 종류 모두 같은 IP 카운터(최근 15분 10회)를 공유합니다. 각 요청은 개별 이벤트로 저장하며 IP 식별자는 HMAC-SHA256 값입니다.
+  - 요청 경계: 연동 시작 POST가 응답으로 보내는 Google 인증 페이지 `302`와 브라우저의 그 리다이렉트는 별도 요청으로 세지 않습니다. 서버 내부 전달이나 리다이렉트로 OAuth2 authorization endpoint가 다시 호출되더라도 같은 사용자 시작 요청의 일부로 보고 추가로 세지 않습니다.
+  - 제한을 초과하면 시작 요청(POST와 GET)은 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태를 만들지 않습니다. 콜백은 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태만 정리합니다. 기존 화면 세션과 API JWT는 어느 경우에도 유지합니다. 초과 요청은 이벤트를 만들지 않습니다.
+  - `state` 검증 등 기존 절차는 그대로 둡니다.
+- 제한된 요청은 새 제한 이벤트를 만들지 않습니다.
+- 429 응답의 화면과 클라이언트 처리 (T20 확정):
+  - 429 응답에서는 `access_token`, `refresh_token` 쿠키를 만료시키거나 새로 설정하지 않습니다. 화면 세션과 JWT는 유지합니다.
+  - `Retry-After` 값을 초 단위로 전달하며, 클라이언트는 그 값에 따라서만 재시도합니다. 무한 재시도하지 않습니다.
+  - Refresh API가 429를 반환해도 자동 로그아웃이나 재로그인을 수행하지 않습니다.
+  - 응답별 처리: 401 `TOKEN_INVALID`는 기존 인증 실패와 재로그인 정책을 따릅니다. 403 CSRF 실패는 CSRF 오류 처리를 따릅니다. 429 `RATE_LIMITED`는 인증 상태와 JWT 쿠키를 유지하고 재시도 안내를 합니다. 200은 기존 처리를 유지합니다. Refresh 재사용 탐지로 전체 토큰이 폐기된 경우에는 T7에 따라 401을 반환하고 JWT 쿠키를 만료시킵니다.
+  - 화면 경로도 같은 상태 코드(`429`)와 `Retry-After`를 사용합니다. 화면 표시 문구는 구현 단계에서 작성합니다.
+- 이 표에 없는 엔드포인트(예: 로그아웃)는 이번 정책의 제한 대상이 아닙니다.
+
+개인정보와 저장 (R2, T16 확정):
+- 이벤트 테이블에는 IP 기반 식별자를 HMAC-SHA256 값으로만 저장합니다. 적용 범위는 로그인 이메일+IP 조합, 로그인 IP 보조 제한, 회원가입 IP 제한, Google OAuth2 IP 제한입니다. 원문 이메일과 원문 IP는 이벤트 테이블에 저장하지 않습니다.
+- HMAC 비밀키는 EC2 환경 변수로 주입하며 Git에 커밋하지 않습니다. 키 교체 절차는 DEVELOPMENT_RULES 5.8을 따릅니다.
+- 클라이언트 IP 판별:
+  1. 설정된 신뢰 프록시에서 전달한 `X-Forwarded-For` 값만 신뢰합니다. 신뢰 프록시 목록은 구현 단계에서 설정 값으로 지정합니다.
+  2. 신뢰 프록시가 아닌 요청의 `X-Forwarded-For`는 신뢰하지 않으며 Remote Address를 사용합니다.
+  3. 판별한 IP는 HMAC-SHA256으로 변환하여 저장과 조회 키로만 사용합니다. 일반 애플리케이션 로그에 원본 IP를 불필요하게 남기지 않습니다.
+
+보존과 동시성 (R3, T18 확정, 설계안):
+- 로그인, 회원가입, Refresh, Google OAuth2 이벤트는 모두 생성 시점으로부터 24시간 후 삭제합니다.
+- 조회 범위를 벗어났다는 이유만으로 즉시 삭제하지 않습니다.
+- 만료 이벤트 정리는 요청 시 정리와 Spring Scheduling 기반 주기적 정리를 병행합니다.
+- 판단은 MySQL 행 잠금으로 같은 키의 요청을 직렬화하여 수행합니다. 단순 `COUNT` 후 `INSERT` 방식은 쓰지 않습니다. 자세한 구조는 DATABASE_ERD 2.10을 따릅니다.
+
 
 ## 2. 인증 API (F1-01)
 
@@ -135,7 +189,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "timestamp": "..."
 }
 ```
-- 주요 오류: 400 EMAIL_REQUIRED, 400 EMAIL_INVALID, 400 NICKNAME_REQUIRED, 400 NICKNAME_INVALID, 400 PASSWORD_REQUIRED, 400 PASSWORD_INVALID, 409 EMAIL_DUPLICATED, 409 NICKNAME_DUPLICATED. 세부 검증 규칙은 FUNCTION_SPEC F1-01 "회원가입·로그인 검증 규칙"을 따른다.
+- 주요 오류: 400 EMAIL_REQUIRED, 400 EMAIL_INVALID, 400 NICKNAME_REQUIRED, 400 NICKNAME_INVALID, 400 PASSWORD_REQUIRED, 400 PASSWORD_INVALID, 409 EMAIL_DUPLICATED, 409 NICKNAME_DUPLICATED, 429 RATE_LIMITED (1.4, 입력값 검증 실패도 계산). 세부 검증 규칙은 FUNCTION_SPEC F1-01 "회원가입·로그인 검증 규칙"을 따른다.
 
 ### 2.2 로그인 (API)
 
@@ -155,7 +209,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 }
 ```
 - 처리: Refresh Token 원문은 쿠키로만 내려주고, DB `refresh_token`에는 SHA-256 해시를 저장합니다 (FR-01-05). Spring Security 세션은 만들지 않습니다. 화면 로그인은 2.10을 사용합니다.
-- 주요 오류: 400 EMAIL_REQUIRED, 400 EMAIL_INVALID, 400 PASSWORD_REQUIRED (입력 누락·형식 오류에만 사용), 401 INVALID_CREDENTIALS. 미가입 이메일, 비밀번호 불일치, Google 전용 계정은 모두 같은 401 INVALID_CREDENTIALS로 응답한다.
+- 주요 오류: 400 EMAIL_REQUIRED, 400 EMAIL_INVALID, 400 PASSWORD_REQUIRED (입력 누락·형식 오류에만 사용), 401 INVALID_CREDENTIALS, 429 RATE_LIMITED (1.4: 정규화 이메일+IP 실패 5회 뒤 6번째부터, IP 보조는 실패 20회 뒤 21번째부터). 미가입 이메일, 비밀번호 불일치, Google 전용 계정은 모두 같은 401 INVALID_CREDENTIALS로 응답한다.
 
 ### 2.3 Access Token 재발급 (Refresh Token 로테이션)
 
@@ -163,17 +217,26 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
 - 권한: 유효한 Refresh Token을 가진 회원
 - 요청: 본문 없음. `refresh_token` 쿠키를 전송합니다.
-- 처리 (FR-01-06, FR-01-24, T7 A안, T14 A안):
-  1. 쿠키 원문의 SHA-256 해시로 `refresh_token` 행을 잠금 없이 조회하여 회원 ID를 확인합니다. 행이 없으면 `401 TOKEN_INVALID`를 반환합니다. 어떤 행도 변경하지 않습니다.
+- 계열: 모든 Refresh Token 행은 서버가 만든 UUID `family_id`를 가집니다. 회전할 때 같은 값을 유지하고, 새 기기 로그인에서는 새 값을 만듭니다 (FR-01-36, DATABASE_ERD 2.8). `family_id`는 가명 식별자이므로 응답 본문에 포함하지 않으며, 외부 노출을 막습니다 (DEVELOPMENT_RULES 5.3).
+- 처리 (FR-01-06, FR-01-24, FR-01-30, T7 A안, T14 A안):
+  1. 쿠키 원문의 SHA-256 해시로 `refresh_token` 행을 잠금 없이 조회하여 회원 ID와 `family_id`를 확인합니다. 행이 없으면 `401 TOKEN_INVALID`를 반환합니다. 어떤 행도 변경하지 않으며 제한 이벤트도 만들지 않습니다.
   2. 트랜잭션을 시작하고 회원 행을 잠금 조회합니다.
-  3. 같은 트랜잭션에서 `refresh_token` 행을 다시 조회하여 아래로 판정합니다.
-     - 폐기되지 않았고 만료되지 않았으면 정상 갱신입니다. 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT한 뒤 커밋합니다.
-     - 폐기되지 않았지만 만료되었으면 `401 TOKEN_INVALID`를 반환합니다. 다른 행은 변경하지 않습니다.
-     - `revoked_at`이 있으면 재사용입니다. 같은 회원의 `revoked_at`이 없는 모든 행에 `revoked_at`을 기록하고 커밋합니다. 커밋 후 `401 TOKEN_INVALID`를 반환합니다.
+  3. 같은 트랜잭션에서 `refresh_token` 행을 다시 조회하여 아래 순서로 판정합니다.
+     - 폐기된 행(`revoked_at`이 있음)이면 재사용입니다. 요청 제한 판정보다 먼저 처리합니다. 같은 회원의 `revoked_at`이 없는 모든 행에 `revoked_at`을 기록하고 커밋한 뒤 `401 TOKEN_INVALID`를 반환합니다. 429 때문에 이 처리가 생략되지 않습니다.
+     - 폐기되지 않은 행이면 계열별 요청 제한(1.4)을 확인합니다. 같은 `family_id`의 최근 1분 요청이 10회 이미 있으면 `429 RATE_LIMITED`를 반환합니다. 이때 토큰과 이벤트를 변경하지 않습니다.
+     - 제한을 통과한 요청은 `refresh_request_event`에 한 건을 기록합니다. 그다음 만료 여부를 확인합니다. 만료되었으면 `401 TOKEN_INVALID`를 반환하고 다른 행은 변경하지 않습니다.
+     - 활성이고 만료되지 않았으면 정상 갱신입니다. 기존 행의 `revoked_at`을 기록하고, 같은 `family_id`로 새 행을 INSERT한 뒤 커밋합니다.
   4. 정상 갱신일 때만 새 `access_token`, `refresh_token` 쿠키를 설정합니다.
-- 재사용 탐지 응답: `401 TOKEN_INVALID`입니다. 서버는 해당 회원의 모든 활성 Refresh Token을 커밋한 뒤 응답합니다. 응답 본문에는 재사용 여부나 토큰 정보를 넣지 않습니다.
-- 응답 유실 시: 응답이 네트워크에서 유실되면 클라이언트는 새 쿠키를 받지 못합니다. 이후 이전 토큰을 제출하면 재사용으로 판정되어 재로그인이 필요할 수 있습니다. 이는 T14 A안의 수용된 한계입니다.
-- 응답 보안: Refresh Token 원문과 해시는 응답 본문에 노출하지 않습니다. 쿠키의 HttpOnly, Secure, SameSite, Path 설정은 1.1절을 따르며 이 절에서 바꾸지 않습니다.
+- 응답별 처리:
+
+| 상황 | 응답 | 쿠키 처리 |
+|------|------|-----------|
+| 정상 갱신 | 200 | 새 `access_token`, `refresh_token` 발급 |
+| 요청 제한 초과 | 429 `RATE_LIMITED` (`Retry-After`) | 기존 쿠키 유지 |
+| 유효하지 않은 토큰 (행 없음, 위조) | 401 `TOKEN_INVALID` | 두 JWT 쿠키 만료 |
+| 만료된 토큰 | 401 `TOKEN_INVALID` | 두 JWT 쿠키 만료 |
+| 폐기된 토큰 재사용 | 401 `TOKEN_INVALID` (회원의 활성 토큰은 T7에 따라 커밋 후 모두 폐기) | 두 JWT 쿠키 만료 |
+
 - 응답 `200`:
 ```json
 {
@@ -182,12 +245,15 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   "timestamp": "..."
 }
 ```
-- 실패 시 두 쿠키를 만료시킵니다.
+- 재사용 탐지 응답 본문에는 재사용 여부나 토큰 정보를 넣지 않습니다.
+- 응답 유실 시: 응답이 네트워크에서 유실되면 클라이언트는 새 쿠키를 받지 못합니다. 이후 이전 토큰을 제출하면 재사용으로 판정되어 재로그인이 필요할 수 있습니다. 이는 T14 A안이 수용한 한계입니다.
+- 응답 보안: Refresh Token 원문과 해시는 응답 본문에 노출하지 않습니다. 쿠키 속성은 1.1절을 따르며 이 절에서 바꾸지 않습니다.
 - 화면 세션(`JSESSIONID`)은 이 API로 재발급되지 않습니다.
-- 화면의 자동 재발급과 재시도 규칙은 DEVELOPMENT_RULES 5.7.2 (T13 A안)를 따릅니다.
+- 화면의 자동 재발급과 재시도 규칙은 DEVELOPMENT_RULES 5.7.2 (T13 A안)를 따릅니다. 재발급이 429를 받으면 인증 상태와 쿠키를 유지하고 자동 로그아웃이나 재로그인을 하지 않습니다 (1.4, T20 확정).
 - 동시 갱신 (T14 A안): 같은 브라우저의 여러 탭은 Web Locks API로 갱신을 직렬화하고, 잠금 안에서 `GET /api/auth/me`로 인증 상태를 확인한 뒤 필요할 때만 이 API를 호출합니다 (DEVELOPMENT_RULES 5.7.2). 서버는 회원 행 잠금으로 정상 갱신과 재사용 탐지를 같은 순서로 처리합니다 (DEVELOPMENT_RULES 5.7.4).
-- 주요 오류: 401 TOKEN_INVALID (쿠키 없음, 만료, 폐기, 위조)
 - 재사용 탐지는 DEVELOPMENT_RULES 5.7.4 (T7 A안)를 따릅니다. 폐기된 토큰이 재사용되면 해당 회원의 모든 활성 Refresh Token을 폐기합니다.
+- 계열을 확인할 수 없는 요청에는 별도 IP 기반 제한을 추가하지 않으며, 기존 인증 실패 처리(401)를 따릅니다 (T17 확정, 1.4).
+- 주요 오류: 401 TOKEN_INVALID (쿠키 없음, 만료, 폐기, 위조), 429 RATE_LIMITED
 
 ### 2.4 로그아웃 (API)
 
@@ -201,6 +267,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 { "success": true, "data": null, "timestamp": "..." }
 ```
 - 쿠키가 없거나 이미 폐기된 토큰이어도 `200`을 반환합니다.
+- 요청 제한 대상이 아닙니다 (1.4 표에 없음).
 - 화면 세션을 종료하지 않습니다. 화면 로그아웃은 2.11을 사용합니다.
 
 ### 2.5 Google 로그인 (시작 및 콜백)
@@ -220,6 +287,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 콜백 처리는 사용자 정의 `AuthenticationSuccessHandler`(성공)와 `AuthenticationFailureHandler`(실패)가 담당합니다. 세션의 연동 진행 상태가 없으면 위 일반 로그인 처리를 유지합니다 (DEVELOPMENT_RULES 5.7.1 Callback 핸들러 원칙).
 - 발급: 성공하면 화면 세션과 JWT를 함께 발급합니다 (FR-01-17).
 - 주요 오류(리다이렉트 쿼리): `email_account_exists`, `google_unverified`, `google_failed`
+- 요청 제한 (1.4, R5, T18): 로그인 시작(GET), 연동 시작(POST, 2.6), 콜백(GET)은 Google OAuth2 IP 카운터(15분 10회)를 공유합니다. 초과하면 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태만 정리합니다. 기존 세션과 JWT는 유지합니다. 요청 경계는 1.4를 따릅니다.
 
 ### 2.5.1 Google 신규 가입 닉네임 설정 (화면, T3 A안)
 
@@ -237,6 +305,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   6. `302` → `/`로 리다이렉트합니다.
 - 닉네임 설정이 끝나기 전에는 회원을 만들지 않습니다. 흐름이 중단되면 가입 진행 상태만 제거하고, 회원은 만들지 않습니다.
 - 주요 오류(리다이렉트 쿼리): `validation_failed`, `nickname_duplicated`.
+- 요청 제한 (1.4): 닉네임 제출은 회원가입 요청으로 계산합니다 (IP별 1시간 5회). 초과하면 HTTP 429와 `Retry-After`를 반환하고 회원을 만들지 않습니다. 가입 진행 상태의 처리는 구현 단계에서 확인합니다.
 - 참고: `nickname`에는 `uk_member_nickname` UNIQUE 제약이 있습니다. 사전 검사 후 저장 시 위반이 나면 같은 `nickname_duplicated`로 처리합니다 (ERD 2.1, DEVELOPMENT_RULES 5.7.3, 6.4).
 
 ### 2.6 Google 계정 연동 시작 (화면, 세션 기반)
@@ -254,6 +323,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 응답: `302` → Google 인증 페이지.
 - 기존 로그인 세션과 API JWT는 변경하지 않습니다. 재발급하거나 교체하지 않습니다.
 - 주요 오류: 세션 없음 → `/login`으로 리다이렉트.
+- 요청 제한 (1.4, R5): 연동 시작 POST는 Google OAuth2 IP 카운터(15분 10회)에 포함합니다. 이 POST는 1회로 집계하며, 이어지는 Google 인증 페이지 `302`는 별도 요청으로 세지 않습니다. 초과하면 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태를 만들지 않으며, 기존 세션과 JWT는 유지합니다.
 
 ### 2.6.1 Google 계정 연동 콜백 (콜백 URL `/login/oauth2/code/google`)
 
@@ -278,6 +348,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - API JWT를 재발급하거나 교체하지 않습니다. 일반 로그인 성공 처리(세션 발급, JWT 발급)를 실행하지 않습니다.
 - 실패하면 기존 세션과 JWT를 변경하지 않고, 임시 상태만 정리합니다.
 - 주요 오류(리다이렉트 쿼리): `google_failed`, `google_unverified`, `google_already_linked`.
+- 요청 제한 (1.4): 계정 연동 콜백은 Google OAuth2 카운터를 공유합니다. 초과하면 HTTP 429를 반환하고, 연동 임시 상태만 정리하며 기존 로그인 세션과 JWT는 유지합니다.
 
 ### 2.7 Google 계정 연동 해제 (화면, 세션 기반, T8 A안)
 
@@ -334,6 +405,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 처리: 2.1과 같은 검증과 저장을 수행한 뒤 자동 로그인합니다. Spring Security 화면 세션을 생성하고 JWT 쿠키(`access_token`, `refresh_token`)를 발급합니다 (FR-01-17).
 - 응답: 성공 `302` → `/`.
 - 실패는 JSON이 아니라 리다이렉트로 응답합니다: `/signup?error=email_duplicated`, `/signup?error=nickname_duplicated`, `/signup?error=validation_failed`.
+- 요청 제한 (1.4, T15 확정): JSON 파싱과 DTO 검증 이전에 회원가입 요청으로 집계합니다 (IP별 1시간 5회). 초과하면 HTTP 429와 `Retry-After`를 반환하고 회원을 만들지 않습니다. 화면 표시 문구는 구현 단계에서 작성합니다 (T20, 1.4).
 
 ### 2.10 로그인 (화면)
 
@@ -344,6 +416,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 처리: 자격 증명을 검증하고 Spring Security 세션을 생성합니다. 기본 세션 보호 정책(세션 ID 변경 등)을 적용합니다 (세부 값은 T11). 이어서 JWT Access Token과 Refresh Token을 발급하고, Refresh Token의 SHA-256 해시를 `refresh_token`에 저장합니다. 쿠키를 설정합니다 (FR-01-17).
 - 응답: 성공 `302` → `/`.
 - 실패: `302` → `/login?error=invalid_credentials`. Google 전용 계정도 같은 결과입니다.
+- 요청 제한 (1.4): 정규화 이메일+IP 실패 5회 뒤 6번째 요청부터, IP 보조 제한은 실패 20회 뒤 21번째 요청부터 HTTP 429와 `Retry-After`를 반환합니다. 제한된 요청은 비밀번호를 검증하지 않습니다.
 
 ### 2.11 로그아웃 (화면)
 
@@ -359,6 +432,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 1이 실패하면 `POST /logout`을 호출하지 않습니다. 화면 세션을 종료하지 않고 재시도를 안내합니다.
 - 1이 성공하고 2가 실패하면 API 토큰은 이미 폐기된 상태입니다. 화면 로그아웃만 재시도합니다.
 - 중복 로그아웃 요청은 안전하게 처리합니다.
+- 요청 제한 대상이 아닙니다.
 - `refresh_token` 쿠키의 Path는 `/api/auth`를 유지하며, `/logout`에서 이 쿠키를 읽지 않습니다 (DEVELOPMENT_RULES 5.7.2).
 
 ---

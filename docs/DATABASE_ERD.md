@@ -92,6 +92,7 @@ erDiagram
         bigint id PK
         bigint member_id FK
         char token_hash UK "SHA-256 hex"
+        char family_id "계열 UUID (서버 생성, 회전 시 유지)"
         datetime expires_at
         datetime revoked_at "NULL 허용"
         datetime created_at
@@ -252,6 +253,7 @@ erDiagram
 | id | BIGINT | N | AUTO_INCREMENT | PK |
 | member_id | BIGINT | N | | FK → member.id |
 | token_hash | CHAR(64) | N | | Refresh Token의 SHA-256 해시 (원문 저장 금지) |
+| family_id | CHAR(36) (구현 전 검토) | N | | 토큰 계열 식별 UUID (가명 식별자). 서버가 생성한다. 직접 식별 정보는 없지만 회원 및 인증 세션과 연결될 수 있으므로 외부 노출을 막는다. 같은 로그인 세션의 회전에서는 같은 값을 유지하고, 새 기기 로그인에서는 새로 생성한다 (FR-01-36) |
 | expires_at | DATETIME(6) | N | | 만료 시각 |
 | revoked_at | DATETIME(6) | Y | | 로그아웃·재발급 등으로 폐기된 시각 |
 | created_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) | |
@@ -259,6 +261,8 @@ erDiagram
 - FK: `fk_refresh_member (member_id) → member(id) ON DELETE CASCADE`
 - UNIQUE: `uk_refresh_token_hash (token_hash)`
 - INDEX: `idx_refresh_member (member_id, revoked_at)`
+- INDEX (설계안): `idx_refresh_family (family_id)`. 계열 단위 요청 제한 조회용. 구현 전 검토 대상이다.
+- 계열(`family_id`): 회전할 때 기존 행의 값을 새 행에 그대로 복사한다. 새 기기 로그인은 새 UUID를 만든다. `family_id`는 서버가 생성하는 UUID다. 직접적인 개인 식별 정보는 포함하지 않지만, 회원 및 인증 세션과 연결될 수 있는 가명 식별자다. 따라서 개인정보 및 보안 정보에 준하여 접근을 통제하고 로그를 관리하며, 원본 Refresh Token과 마찬가지로 외부 노출을 막는다. 요청 제한의 키로도 쓴다 (API_SPEC 1.4). 기존 계열 구조와 T7·T14 정책은 바뀌지 않는다.
 - 원문 저장 위치: 브라우저의 HttpOnly Cookie만 (FR-01-05). DB에는 해시만 저장합니다.
 - 로테이션 (FR-01-06): 재발급 시 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT합니다. 행을 물리 삭제하지 않습니다. 만료되거나 폐기된 행을 정리하는 방식은 구현 단계에서 정합니다.
 - 재사용 탐지 (T7 A안 확정): 폐기된 Refresh Token의 재사용이 실제로 탐지되면 해당 회원의 모든 활성 Refresh Token(`revoked_at IS NULL`)을 폐기합니다. 원문은 저장하지 않고 SHA-256 해시만 저장합니다. 폐기된 행은 재사용 탐지를 위해 보존합니다.
@@ -285,6 +289,33 @@ erDiagram
 #### 추가 이유
 
 S3 삭제 실패 키를 추적하고 재시도하려면 영속 기록이 필요합니다. 기존 테이블 중에는 삭제가 끝난 `restaurant_image` 행을 이 용도로 쓸 수 없고(행이 이미 사라짐), 맛집이 삭제되면 같이 사라지는 테이블도 적합하지 않습니다. 따라서 Q2 구현에 필요한 최소 테이블 1개만 추가합니다.
+
+### 2.10 요청 제한 이벤트와 카운터 (설계안)
+
+요청 제한(API_SPEC 1.4, FR-01-28~FR-01-35)을 위해 다음 테이블을 설계안으로 둡니다. 개인정보는 최소로 보관합니다. 정확한 컬럼 타입, 길이, 제약 이름, 인덱스 이름은 구현 전에 별도로 검토합니다. 아래 표의 타입 표기는 방향만 나타냅니다.
+
+| 테이블 | 역할 | 저장 정보 (최소) | 관계 | 인덱스 요구 |
+|--------|------|------------------|------|-------------|
+| `login_failure_event` | 로그인 실패 이벤트. 요청마다 1행 | `pair_key_hash`: 정규화 이메일+IP의 HMAC-SHA256, `ip_key`: IP 식별자의 HMAC-SHA256 (T16 확정), `failed_at` | 독립. FK 없음 | (`pair_key_hash`, `failed_at`), (`ip_key`, `failed_at`), (`failed_at`) 정리용 |
+| `signup_request_event` | 회원가입 요청 이벤트. 화면, API, Google 신규 가입 닉네임 제출 공통. JSON 파싱과 DTO 검증 이전에 집계 (T15 확정) | `ip_key`: IP 식별자의 HMAC-SHA256 (T16 확정), `requested_at` | 독립 | (`ip_key`, `requested_at`), (`requested_at`) |
+| `refresh_request_event` | Refresh 요청 이벤트. 계열을 확인할 수 있는 요청만 기록 | `family_id`, `requested_at` | `refresh_token.family_id`를 논리적으로 참조. FK 없음 | (`family_id`, `requested_at`), (`requested_at`) |
+| `google_oauth_request_event` | Google OAuth2 로그인 시작, 계정 연동 시작, 콜백 요청 이벤트 (요청 1회당 1행, 24시간 보관) | `ip_key`: IP 식별자의 HMAC-SHA256 (T16 확정), `requested_at` | 독립 | (`ip_key`, `requested_at`), (`requested_at`) |
+| `auth_rate_limit_counter` | 같은 키의 동시 요청을 직렬화하는 잠금 행 | `counter_key` (키 종류와 값의 해시), `updated_at` | 이벤트 테이블과 키 값으로 연결. FK 없음 | PK (`counter_key`) |
+
+- 제한 판단의 원천은 이벤트 테이블입니다. `auth_rate_limit_counter`는 같은 키의 요청을 한 번에 하나씩 처리하도록 잠그는 행입니다.
+- 이벤트 테이블에는 원문 이메일과 원문 IP를 저장하지 않습니다 (R2). 모든 IP 기반 식별자는 HMAC-SHA256 값으로 저장합니다 (T16 확정).
+- HMAC 키를 교체하면 기존 키로 만든 `pair_key_hash`와 IP 키는 새 키로 조회되지 않습니다. 교체 전 정리 절차는 DEVELOPMENT_RULES 5.8을 따릅니다. Refresh 계열 키(`family_id`)는 HMAC을 쓰지 않으므로 영향을 받지 않습니다.
+- 보존 기간: 로그인, 회원가입, Refresh, Google OAuth2 이벤트는 생성 시점으로부터 24시간 후 삭제합니다 (R3, T18 확정).
+- 조회 범위(15분, 1시간, 1분)를 벗어났다는 이유만으로 이벤트를 즉시 삭제하지 않습니다. 삭제는 보존 기간 기준으로만 합니다.
+- 정리 방식: 요청 시 정리와 Spring Scheduling 기반 주기적 정리를 병행합니다. 요청 시 정리는 인덱스를 사용하고 한 번에 삭제하는 행 수를 제한합니다.
+
+동시성 제어 (설계안, R3):
+1. 단순 `SELECT COUNT(*)` 후 `INSERT`로 제한을 구현하지 않습니다.
+2. 판단에 쓸 키를 계산합니다. 한 요청이 여러 키를 잠글 때(로그인: 이메일+IP 키와 IP 보조 키)는 `counter_key`의 사전순으로 정렬하여 같은 순서로 잠급니다. 교착 상태를 피하기 위해서입니다.
+3. 카운터 행이 없으면 `INSERT ... ON DUPLICATE KEY UPDATE`처럼 중복을 허용하지 않는 방식으로 만듭니다. 동시에 생성해도 행은 하나만 남습니다.
+4. 같은 트랜잭션에서 `SELECT ... FOR UPDATE`로 카운터 행을 잠급니다.
+5. 잠근 상태에서 기간 안의 이벤트 수를 셉니다.
+6. 한도 미만이면 이벤트 한 건을 기록하고 커밋합니다. 한도에 도달했으면 이벤트를 기록하지 않고 `429`를 반환합니다.
 
 ## 3. 관계 요약
 
@@ -344,6 +375,6 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 
 ## 6. 마이그레이션 규칙
 
-- 스키마 변경은 Flyway 마이그레이션 스크립트(`V{번호}__{설명}.sql`)로 관리합니다. Flyway 도입은 설계 변경 절차를 거쳐 확정합니다 (현재는 미도입).
-- 한 번 배포된 마이그레이션 파일은 수정하지 않습니다.
+- 스키마 변경은 `db/manual/` 아래 번호가 붙은 SQL 파일로 관리하며, 사람이 대상 DB에 직접 실행합니다. Flyway 등 마이그레이션 도구는 사용하지 않습니다 (REQUIREMENTS 3). 도구 도입은 설계 변경 절차로만 정합니다.
+- 한 번 적용된 SQL 파일은 수정하지 않습니다. 새 변경은 다음 번호의 파일로 추가합니다. `ddl-auto`는 `none`을 유지합니다.
 - 이번 변경(`member` 컬럼 교체, `storage_delete_task` 추가)은 아직 배포된 DB가 없으므로 초기 스키마에 직접 반영합니다.
