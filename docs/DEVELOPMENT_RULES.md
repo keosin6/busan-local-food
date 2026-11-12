@@ -80,7 +80,7 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
 | `DB_URL` | MySQL JDBC URL (개발과 운영에서 값이 다름, 5.5 참조) |
 | `DB_USERNAME` | DB 사용자 |
 | `DB_PASSWORD` | DB 비밀번호 |
-| `JWT_SECRET` | JWT 서명 키 (최소 256비트) |
+| `JWT_SECRET` | Base64로 인코딩한 JWT 서명 키. 디코딩 후 32바이트 이상. 누락, 형식 오류, 길이 부족 시 기동 실패 (5.9) |
 | `JWT_ACCESS_TOKEN_EXPIRY_SECONDS` | 액세스 토큰 만료 초 (기본 1800) |
 | `JWT_REFRESH_TOKEN_EXPIRY_SECONDS` | 리프레시 토큰 만료 초 (기본 1209600) |
 | (구현 단계에서 이름 확정) | 요청 제한 키의 HMAC-SHA256 비밀키. EC2 환경 변수로만 주입하며 Git에 커밋하지 않는다 (R2) |
@@ -449,6 +449,22 @@ Google 계정 해제 (확정):
 - DB 백업에는 교체 이전 식별자가 남을 수 있습니다. 백업 보관 기간은 T4에서 정하므로 그때 함께 확인합니다.
 - 키 값은 로그, 오류 메시지, 디버그 출력에 나타나지 않도록 합니다.
 
+
+### 5.9 JWT 발급·검증 규칙 (Stage 2-3 구현 기준)
+
+- 구현 위치는 `member.jwt` 패키지입니다. 발급은 `AccessTokenIssuer`, 검증은 `AccessTokenVerifier`, 설정은 `JwtProperties`, 검증 규칙은 `JwtValidators`, 키 로딩은 `JwtSigningKeys`가 담당합니다.
+- 서명은 HS256으로 고정합니다. 기존 `spring-security-oauth2-jose`를 사용하며 라이브러리를 추가하지 않습니다.
+- `JWT_SECRET`은 다음 규칙을 따릅니다.
+  - 생성: 암호학적 난수 32바이트 이상을 Base64로 인코딩합니다. 예: `openssl rand -base64 32`.
+  - 보관: EC2 환경 변수로만 주입합니다. Git, 문서, 테스트 결과, 커밋, 로그에 키 원문이나 디코딩 결과를 남기지 않습니다.
+  - 코드와 설정: 기본 키나 개발용 고정 키를 코드에 두지 않습니다. `application.yml`의 기본값은 빈 값입니다.
+  - 시작 검증: 누락, Base64 형식 오류, 디코딩 후 32바이트 미만이면 기동을 실패시킵니다. 오류 메시지에는 키 값이나 원인 예외를 포함하지 않습니다.
+  - 교체: 키를 바꾸면 기존 Access Token은 무효화될 수 있습니다. 교체 시점과 절차는 운영 단계에서 정하며, Refresh Token 처리와 함께 확인합니다.
+- Access Token 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`로 설정합니다. 기본값은 1800초입니다. 코드에 같은 값의 상수를 중복 정의하지 않습니다.
+- 시계 오차 60초는 Spring 기본값에 의존하지 않고 `JwtSpec.CLOCK_SKEW`로 명시합니다.
+- 토큰에는 1.5절의 클레임만 넣습니다. `family_id`와 개인 식별 정보는 넣지 않습니다.
+- 검증 실패의 내부 사유는 내부 예외 메시지에만 남기고 외부 응답에 노출하지 않습니다. 토큰 원문은 예외 메시지, 로그, 응답 본문 어디에도 남기지 않습니다.
+- 구현 상태: 발급과 검증, 설정과 시작 검증은 구현되었습니다. Refresh Token, 인증 필터 연결, 로그인과 회원가입 컨트롤러는 아직 구현하지 않았습니다.
 
 ## 6. 코드 구조 규칙 (구현 단계)
 

@@ -23,6 +23,13 @@ spring:
   thymeleaf:
     cache: true
 
+jwt:
+  # Base64로 인코딩한 32바이트 이상의 서명 키. 환경 변수로만 주입하며 저장소에 커밋하지 않는다.
+  # 값이 없거나 형식·길이가 잘못되면 애플리케이션 기동이 실패한다.
+  secret: ${JWT_SECRET:}
+  # Access Token 만료 초. 기본 1800초(30분).
+  access-token-expiry-seconds: ${JWT_ACCESS_TOKEN_EXPIRY_SECONDS:1800}
+
 server:
   port: 8080
 
