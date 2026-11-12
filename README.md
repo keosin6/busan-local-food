@@ -96,7 +96,9 @@ export JWT_SECRET="$(openssl rand -base64 32)"
 
 ```bash
 export AUTH_RATE_LIMIT_HMAC_SECRET="$(openssl rand -base64 32)"
-``` `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`(기본 1800)와 `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`(기본 1209600)는 선택입니다.
+```
+
+`JWT_ACCESS_TOKEN_EXPIRY_SECONDS`(기본 1800)와 `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`(기본 1209600)는 선택입니다.
 
 시간대는 애플리케이션이 `Asia/Seoul`로 고정합니다. `DB_URL`에 다른 시간대 옵션을 넣지 않습니다 ([개발 규칙 5.10](docs/DEVELOPMENT_RULES.md)).
 
