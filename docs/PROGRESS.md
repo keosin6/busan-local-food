@@ -138,7 +138,7 @@
   - `member.repository.RefreshTokenRepository`: 해시 조회, 회원별 폐기되지 않은 토큰 조회.
   - `global.config.PasswordEncoderConfig`: `BCryptPasswordEncoder` Bean.
 - 수동 DDL: `db/manual/001_create_member_refresh_token.sql` (MySQL 8.0.16 이상). 자동 실행되지 않으며 CREATE TABLE만 포함하고 데이터는 건드리지 않음. 제약 이름은 `uk_member_email`, `uk_member_nickname`, `uk_member_google_sub`, `ck_member_role`, `ck_member_login_method`, `uk_refresh_token_hash`, `fk_refresh_member`(ERD 2.8 이름 준수), `idx_refresh_member`.
-- 테스트 DB 연동 테스트 실행 방법: 테스트 전용 MySQL 8에 위 DDL을 먼저 적용한 뒤, 환경 변수 `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정하여 실행. 변수가 없으면 해당 테스트 10개는 건너뜀. 개발 DB에는 연결하지 않음. H2·Testcontainers 미사용.
+- 테스트 DB 연동 테스트 실행 방법: 테스트 전용 MySQL 8에 `db/manual/001_create_member_refresh_token.sql`을 적용한 뒤 `db/manual/002_add_refresh_token_family_id.sql`을 순서대로 적용하고, 환경 변수 `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정하여 실행. 002를 적용하지 않은 테스트 DB에서는 Refresh Token 관련 DB 테스트가 실패합니다. 변수가 없으면 DB 테스트 18개(`MemberPersistenceDbTest` 15개, `MemberRegistrationDbTest` 3개)는 건너뜀. 개발 DB에는 연결하지 않음. H2·Testcontainers 미사용.
 - 테스트 결과:
   - `./gradlew clean test` (테스트 DB 변수 미설정): 29개 중 19개 통과, 10개 건너뜀(DB 테스트), 실패 0개.
   - `./gradlew clean test` (테스트 DB 설정 및 DDL 적용, 격리된 MySQL 8.0.46 테스트 인스턴스): 29개 모두 통과. DB 제약(UNIQUE, CHECK, FK) 검증 포함.
@@ -317,10 +317,35 @@
     - `./gradlew bootJar`: 성공.
     - 격리 MySQL 미연결. `family_id` 관련 DB 테스트 2건은 이번 작업에서 재확인하지 않았으며, 별도 과제로 유지합니다.
 
+### 6.10 Stage 2-3 Refresh Token Family ID 적용 (2026-11-12)
+
+- 브랜치: `feat/stage2-3-refresh-token-family-id` (기준: `main` e595bf2, JWT PR #11 병합본).
+- 구현 (`member.domain.RefreshToken`):
+  - `familyId` 필드를 `family_id CHAR(36) ascii_bin NOT NULL`에 매핑합니다. 값은 소문자 문자열로 관리합니다.
+  - 기존 `issue(...)`는 family_id 없이 행을 만들 수 있으므로 제거하고, 두 팩토리로 바꿨습니다.
+    - `issueNewFamily(member, tokenHash, expiresAt)`: `UUID.randomUUID()`로 UUID v4를 만들어 새 계열을 시작합니다.
+    - `issueInFamily(member, familyId, tokenHash, expiresAt)`: 전달받은 family_id를 그대로 유지합니다. 회전 시 이전 행의 값을 넘기면 됩니다.
+  - `issueInFamily`는 소문자 canonical 형식의 UUID v1(SQL 002 백필)과 v4만 허용합니다. 대문자, 하이픈 없는 값, 앞뒤 공백, v5, nil UUID, 잘못된 variant는 거부합니다. 예외 메시지에는 입력값을 넣지 않습니다.
+  - `tokenHash` 검증 정책은 그대로 두고, 두 팩토리 모두 같은 검증을 거칩니다.
+  - `toString()`에서 `family_id`와 `token_hash`를 출력하지 않습니다.
+- 변경하지 않은 것: SQL 001·002·003, JWT 발급·검증 로직, 요청 제한, Gradle 의존성.
+- 테스트:
+  - `RefreshTokenTest` 12개: 기존 해시 검증 2개 유지, 신규 Family UUID v4 생성과 서로 다른 값 확인, 기존 Family ID(v1·v4) 유지, 회전 시 같은 계열 유지, 잘못된 값 거부, 예외 메시지와 `toString()`에 민감값 없음.
+  - `MemberPersistenceDbTest` 15개: 기존 10개 유지, 신규 5개 추가. 신규 Family 저장과 재조회, 회전 토큰이 같은 family_id로 저장됨, v1 family_id 저장, `family_id` 컬럼이 `CHAR(36) ascii_bin NOT NULL`인지 확인, `family_id`를 빼면 NOT NULL 위반, FK 위반 테스트는 유효한 UUID v4를 넣어 `fk_refresh_member` 위반을 직접 확인하도록 수정했습니다.
+  - `MemberRegistrationDbTest`: 주석의 테스트 DB 전제조건을 001+002로 갱신했습니다. 테스트 로직은 바꾸지 않았습니다.
+- 실행 결과 (최종 커밋 기준):
+  - `./gradlew clean test`, `TEST_DB_*` 설정, 격리된 MySQL 8.0.46에 SQL 001 → 002 순서로 적용: 186개 중 186개 통과, 건너뜀 0개, 실패 0개. 6.9에 기록된 DB 테스트 실패 2건(`family_id` 불일치)은 이번 변경으로 해결되었습니다.
+  - `./gradlew clean test`, `TEST_DB_URL` 미설정: 186개 중 168개 통과, 건너뜀 18개(모두 DB 테스트), 실패 0개. DB 테스트를 통과로 세지 않았습니다.
+  - `./gradlew bootJar`: 성공.
+- 운영 주의:
+  - 이 코드는 `family_id` 컬럼이 있어야 INSERT됩니다. 배포 대상 DB에 SQL 002가 적용되어 있는지 `SHOW CREATE TABLE refresh_token`으로 먼저 확인합니다.
+  - SQL 002는 한 번만 실행합니다. 이미 적용된 DB에 다시 실행하지 않습니다.
+- 미구현 (이번 범위 밖): Refresh Token 실제 발급 서비스, 회전(rotation) 서비스, 재사용 감지, Family 단위 전체 폐기, 요청 제한, JWT 인증 필터 연결, 로그아웃.
+
 ## 7. 다음 작업
 
 1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
-2. Stage 2-3 다음 작업: (a) `RefreshToken` Entity에 `family_id`를 매핑하고 발급 시 UUID v4를 채웁니다. 현재 DB 테스트 2건 실패의 원인입니다 (6.9 참조). (b) Refresh Token 발급·로테이션·재사용 탐지(T7 A안). (c) 요청 제한 서비스(R1~R10). (d) API 로그인·회원가입 컨트롤러와 JWT 인증 필터 연결. (e) 로그아웃(T12 A안) 순으로 진행합니다.
+2. Stage 2-3 다음 작업: (a) 완료 — `RefreshToken`의 `family_id` 매핑과 생성 경로(신규 UUID v4, 기존 값 유지)를 구현했습니다 (6.10 참조). (b) Refresh Token 발급·로테이션·재사용 탐지(T7 A안). 이 단계에서 `issueNewFamily`와 `issueInFamily`를 호출합니다. (c) 요청 제한 서비스(R1~R10). (d) API 로그인·회원가입 컨트롤러와 JWT 인증 필터 연결. (e) 로그아웃(T12 A안) 순으로 진행합니다.
 3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
