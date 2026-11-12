@@ -20,7 +20,7 @@ public sealed interface RefreshTokenRotation
     }
 
     /** 계열별 요청 제한 초과 (429 RATE_LIMITED). 토큰과 쿠키를 바꾸지 않는다. 재사용 탐지보다 뒤에 판정된다. */
-    record RateLimited() implements RefreshTokenRotation {
+    record RateLimited(long retryAfterSeconds) implements RefreshTokenRotation {
     }
 
     /** 재사용 탐지: 폐기된 토큰이 다시 제출되었다. 회원의 활성 토큰 revokedCount건을 커밋과 함께 폐기했다. */

@@ -1,16 +1,15 @@
 package com.busanlocalfood.member.refresh;
 
+import com.busanlocalfood.member.ratelimit.RateLimitDecision;
+
 /**
  * 회전 직전의 계열별 요청 제한 판정 지점 (API_SPEC 2.3, 1.4).
  * RefreshTokenService.rotate()가 회원 행과 토큰 행을 잠근 상태에서, 재사용 탐지 뒤 만료 확인 전에 호출한다.
  * 구현은 같은 트랜잭션 안에서 판정하고, 통과한 요청만 이벤트로 기록한다. 외부 네트워크 호출을 하지 않는다.
  * familyId는 가명 식별자이므로 구현에서도 로그에 남기지 않는다.
- * 실제 구현은 @Service 또는 @Component로 등록한다. 그러면 RefreshTokenConfig의 전부 통과 기본 구현이 빠진다.
- * 다른 설정 클래스의 @Bean으로 등록하면 기본 구현과 겹쳐 기동이 실패할 수 있으므로, 그 경우 기본 구현을 삭제한다.
+ * 구현체는 RefreshTokenRateLimitGate 하나다. 다른 구현을 추가하면 빈이 둘이 되므로 기동이 실패한다.
  */
-@FunctionalInterface
 public interface RefreshRotationGate {
 
-    /** 요청을 통과시키면 true. 제한에 걸리면 false이며 이때 토큰과 이벤트를 바꾸지 않는다. */
-    boolean tryPass(String familyId);
+    RateLimitDecision check(String familyId);
 }

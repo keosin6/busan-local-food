@@ -2,6 +2,7 @@ package com.busanlocalfood.member.refresh;
 
 import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.domain.RefreshToken;
+import com.busanlocalfood.member.ratelimit.RateLimitDecision;
 import com.busanlocalfood.member.repository.MemberRepository;
 import com.busanlocalfood.member.repository.RefreshTokenRepository;
 import java.time.Clock;
@@ -108,8 +109,9 @@ public class RefreshTokenService {
 
         // 5) 계열별 요청 제한. 재사용 탐지 뒤, 만료 확인 전에 판정한다 (API_SPEC 2.3).
         //    제한에 걸리면 토큰을 바꾸지 않는다. 통과한 요청의 이벤트 기록은 gate 구현이 같은 트랜잭션에서 한다.
-        if (!rotationGate.tryPass(current.getFamilyId())) {
-            return new RefreshTokenRotation.RateLimited();
+        RateLimitDecision limit = rotationGate.check(current.getFamilyId());
+        if (limit instanceof RateLimitDecision.Limited limited) {
+            return new RefreshTokenRotation.RateLimited(limited.retryAfterSeconds());
         }
 
         // 6) 만료된 토큰은 갱신하지 않는다. 다른 활성 토큰은 건드리지 않는다.

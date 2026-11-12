@@ -27,6 +27,21 @@ spring:
   thymeleaf:
     cache: true
 
+# 요청 제한 (API_SPEC 1.4). HMAC 키는 환경 변수로만 주입한다. 기본값을 두지 않는다. JWT_SECRET과 달라야 한다.
+auth:
+  rate-limit:
+    # Base64 인코딩 값, 디코딩 후 32바이트 이상. 누락이거나 형식·길이가 잘못되면 기동이 실패한다.
+    hmac-secret: ${AUTH_RATE_LIMIT_HMAC_SECRET:}
+    # 만료 이벤트 주기 정리: 한 번에 지우는 행 수, 주기(ms), 기동 후 첫 실행까지의 지연(ms).
+    cleanup-batch-size: 1000
+    cleanup-interval-ms: 600000
+    cleanup-initial-delay-ms: 60000
+
+# 신뢰 프록시 IP 목록. 비어 있으면 X-Forwarded-For를 신뢰하지 않는다. 운영 기본값을 임의로 넣지 않는다.
+app:
+  security:
+    trusted-proxies: []
+
 jwt:
   # Base64로 인코딩한 32바이트 이상의 서명 키. 환경 변수로만 주입하며 저장소에 커밋하지 않는다.
   # 값이 없거나 형식·길이가 잘못되면 애플리케이션 기동이 실패한다.
