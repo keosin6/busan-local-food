@@ -342,10 +342,63 @@
   - SQL 002는 한 번만 실행합니다. 이미 적용된 DB에 다시 실행하지 않습니다.
 - 미구현 (이번 범위 밖): Refresh Token 실제 발급 서비스, 회전(rotation) 서비스, 재사용 감지, Family 단위 전체 폐기, 요청 제한, JWT 인증 필터 연결, 로그아웃.
 
+### 6.11 Stage 2-3 Refresh Token 생명주기 구현 (2026-11-12)
+
+- 브랜치: `feat/stage2-3-refresh-token-lifecycle` (기준: `main` b8be4e4, PR #12 병합본).
+- 구현 (`member.refresh` 패키지, 엔티티와 저장소 보강):
+  - `RefreshTokenGenerator`: `SecureRandom`으로 256비트를 뽑아 URL-safe Base64(패딩 없음, 43자)로 인코딩합니다.
+  - `RefreshTokenHasher`: 원문의 SHA-256을 소문자 16진수 64자로 계산합니다. 입력값은 예외 메시지에 넣지 않습니다.
+  - `RefreshTokenProperties`: `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`(기본 1209600초). Access Token 만료 설정(`JwtProperties`)과 분리했습니다.
+  - `RefreshTokenConfig`: 만료 계산과 폐기 시각에 쓰는 `Clock`을 제공합니다.
+  - `IssuedRefreshToken`: 원문과 만료 시각. `toString()`에서 원문을 `[REDACTED]`로 마스킹합니다.
+  - `RefreshTokenRotation`: 결과 타입(sealed). `Rotated`(정상 회전, 회원 ID·권한·새 토큰), `Rejected`(알 수 없음·만료), `ReuseDetected`(재사용 탐지, 폐기 건수). 예외로 던지지 않습니다.
+  - `RefreshTokenService`: `issueForNewLogin(memberId)`, `rotate(rawToken)`, `logout(rawToken)`.
+  - `RefreshToken` 엔티티: `revoke(at)`(처음 폐기 시각 유지, 중복 호출 안전), `isRevoked()`, `isExpiredAt(now)`. 원문 필드는 없습니다.
+  - `MemberRepository.findByIdForUpdate`: 회원 행 `PESSIMISTIC_WRITE` 잠금.
+  - `RefreshTokenRepository`: 잠금 없는 사전 조회(`findMemberIdByTokenHash`, 회원 ID만 읽음), 잠금 재조회(`findByTokenHashForUpdate`), 회원 활성 토큰 잠금(`findActiveByMemberIdForUpdate`, ID 오름차순).
+- 처리 흐름:
+  - 신규 로그인: 회원 확인 → 원문 생성 → 해시 → `issueNewFamily`(UUID v4) → INSERT → 원문과 만료 시각 반환.
+  - 정상 회전: 사전 조회 → 회원 행 잠금 → 토큰 행 잠금 재조회 → 폐기 여부 판정 → 기존 행 `revoked_at` 기록 → `issueInFamily`로 같은 family_id의 새 행 INSERT → 커밋 후 반환.
+  - 판정 순서: 폐기됨(재사용) → 만료(거부, 다른 행 유지) → 정상 회전. 알 수 없는 토큰은 행을 바꾸지 않고 거부합니다.
+  - 재사용 탐지: 같은 트랜잭션에서 회원의 활성 행을 ID 순서로 잠가 모두 폐기하고 `ReuseDetected`를 반환합니다. 예외를 던지지 않으므로 전체 폐기가 롤백되지 않습니다. 폐기된 행은 삭제하지 않습니다.
+  - 로그아웃: 회원 행 → 토큰 행 순서로 잠가 해당 행만 폐기합니다. 알 수 없는 토큰과 이미 폐기된 토큰은 아무 작업 없이 끝납니다. 로그아웃된 토큰을 나중에 쓰면 재사용으로 탐지됩니다 (5.7.4).
+- 동시성 (T14 A안, 잠금 순서 회원 → 토큰): 사전 조회는 판정에 쓰지 않습니다. 잠금 뒤에 다시 읽습니다. InnoDB의 REPEATABLE READ 스냅샷에 가려지지 않도록 재조회도 `FOR UPDATE` 잠금 읽기로 합니다. 외부 호출은 트랜잭션 안에서 하지 않습니다.
+- 보안 점검 (JWT 패키지와 동일 기준):
+  - 난수는 `SecureRandom`만 사용합니다. `Random`과 `Math.random()`은 쓰지 않습니다.
+  - 원문은 `IssuedRefreshToken`으로만 전달합니다. Entity, 로그, 예외 메시지, `toString()`에 넣지 않습니다.
+  - DB에는 SHA-256 해시만 저장합니다. 통합 테스트에서 원문이 어떤 컬럼에도 없음을 확인했습니다.
+  - 로그는 재사용 탐지 시 회원 ID와 폐기 건수만 남깁니다. `family_id`와 토큰은 남기지 않습니다.
+  - 고정 토큰이나 테스트용 키를 운영 코드에 넣지 않았습니다. 신규 라이브러리를 추가하지 않았습니다.
+- 테스트:
+  - 단위: `RefreshTokenGeneratorAndHasherTest` 7개(원문 길이와 인코딩, 중복 없음, SHA-256 표준 벡터, 원문 미노출, 빈 값 거부, 만료 설정 검증), `RefreshTokenServiceTest` 8개(신규 계열 발급, 정상 회전과 family 유지, 만료 거부, 알 수 없는 토큰 거부, 재사용 탐지 결과 반환과 예외 없음, 회원 행 → 토큰 행 잠금 순서, 로그아웃 안전성, 로그아웃의 빈 잠금), `RefreshTokenStateTest` 3개, `RefreshTokenTest` 12개.
+  - MySQL 통합: `RefreshTokenLifecycleDbTest` 7개. 테스트 트랜잭션을 열지 않아 커밋된 값을 직접 확인합니다. 각 테스트 후 생성한 행을 삭제합니다.
+    1. 신규 계열 발급 후 해시만 저장되고 family_id는 UUID v4
+    2. 정상 회전 후 이전 행 폐기, 새 행은 같은 family_id, 이전 해시 보존
+    3. 만료 토큰 거부, 다른 활성 토큰 유지
+    4. 폐기 토큰 재사용 시 회원의 모든 활성 토큰 폐기가 커밋되고 예외 없이 결과 반환, 폐기 행 보존
+    5. 서로 다른 회원 간 영향 없음
+    6. 로그아웃 후 중복 로그아웃 안전, 로그아웃된 토큰 재사용은 재사용 탐지
+    7. 같은 토큰 동시 갱신 5회 반복: 한 요청은 `Rotated`, 다른 요청은 `ReuseDetected`, 끝난 뒤 활성 토큰 0개
+- 실행 결과 (최종 커밋 기준):
+  - `./gradlew clean test`, DB 미설정: 211개 중 186개 통과, 25개 건너뜀(DB 테스트 25개: `MemberPersistenceDbTest` 15, `MemberRegistrationDbTest` 3, `RefreshTokenLifecycleDbTest` 7), 실패 0개.
+  - `./gradlew clean test`, 격리 MySQL 8.0.46에 SQL 001 → 002 적용, `TEST_DB_*` 설정: 211개 전부 통과, 건너뜀 0개, 실패 0개.
+  - `./gradlew bootJar`: 성공.
+- 설정: `application.yml`에 `jwt.refresh-token-expiry-seconds: ${JWT_REFRESH_TOKEN_EXPIRY_SECONDS:1209600}`를 추가했습니다. README와 DEVELOPMENT_RULES의 환경 변수 표에는 이미 같은 항목이 있어 바꾸지 않았습니다.
+- 미구현 (이번 범위 밖):
+  - 로그인·회원가입 컨트롤러와 쿠키 설정 (화면, API, Google 공통 서비스만 준비됨)
+  - `POST /api/auth/refresh`, `POST /api/auth/logout` HTTP 컨트롤러. 결과 타입을 401 `TOKEN_INVALID`로 바꾸는 매핑도 여기서 합니다. `ErrorCode`에 `TOKEN_INVALID`는 아직 없습니다.
+  - Access Token 재발급과 JWT 인증 필터 연결, SecurityFilterChain 분리
+  - Google OAuth2 로그인과 연동
+  - 요청 제한 서비스 (R1~R10). 재발급의 제한 판정 순서는 컨트롤러 단계에서 맞춥니다.
+  - T13 프런트엔드 자동 갱신, T14 Web Locks API
+- 운영 주의:
+  - 재사용 탐지는 회원의 모든 기기에서 로그아웃시킵니다 (T7 A안). 응답 유실로 정상 사용자가 재로그인해야 할 수 있습니다 (T14 A안이 수용한 한계).
+  - Refresh Token 폐기만으로 이미 발급된 Access Token이 즉시 무효화되지 않습니다. 이는 확정된 정책입니다 (5.7.4 한계).
+
 ## 7. 다음 작업
 
 1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
-2. Stage 2-3 다음 작업: (a) 완료 — `RefreshToken`의 `family_id` 매핑과 생성 경로(신규 UUID v4, 기존 값 유지)를 구현했습니다 (6.10 참조). (b) Refresh Token 발급·로테이션·재사용 탐지(T7 A안). 이 단계에서 `issueNewFamily`와 `issueInFamily`를 호출합니다. (c) 요청 제한 서비스(R1~R10). (d) API 로그인·회원가입 컨트롤러와 JWT 인증 필터 연결. (e) 로그아웃(T12 A안) 순으로 진행합니다.
+2. Stage 2-3 다음 작업: (a) 완료 — `RefreshToken`의 `family_id` 매핑과 생성 경로(신규 UUID v4, 기존 값 유지)를 구현했습니다 (6.10 참조). (b) 완료 — Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스 (6.11). 다음 단계는 이 서비스를 HTTP 컨트롤러와 쿠키에 연결하는 것입니다. (c) 요청 제한 서비스(R1~R10). (d) API 로그인·회원가입 컨트롤러와 JWT 인증 필터 연결. (e) 로그아웃(T12 A안) 순으로 진행합니다.
 3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
