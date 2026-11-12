@@ -301,11 +301,21 @@
   - 두 record의 생성자, 접근자, 환경 변수 바인딩과 검증 로직은 변경하지 않았습니다.
   - 신규 테스트 `SensitiveToStringTest` 6개 추가: 발급 토큰 원문 미노출, Base64 secret 원문 미노출, `null` 필드에서도 예외 없음, 접근자와 만료 값 유지.
   - 보안 스캔: `member.jwt` 패키지에 로깅 호출과 `printStackTrace`, `System.out` 사용이 없음을 확인. 예외 메시지는 고정 문자열이며 키나 토큰 값을 넣지 않음.
-    - 잔여 확인 사항: `AccessTokenVerifier`는 디코더의 원인 예외(cause)를 보존합니다. 라이브러리 예외 메시지에 토큰 원문이 들어가지 않는다는 점은 코드로 보장하지 않으므로, 로그 적재 시 cause 출력 여부를 주의해야 합니다.
+    - 잔여 확인 사항(원인 예외 보존)은 아래 "검증 실패 예외 원인 노출 방지" 보완에서 해결했습니다.
   - 검증 결과 (이번 보완 커밋 기준, DB 미설정):
     - `./gradlew clean test`: 166개 중 153개 통과, 13개 건너뜀(DB 테스트), 실패 0개. JWT 테스트는 65개 전부 통과 (기존 59 + 신규 6).
     - `./gradlew bootJar`: 성공.
     - 이번 실행에서는 격리 MySQL을 연결하지 않았습니다. DB 테스트 2건의 실패는 위 "검증"에 기록한 기존 `family_id` 불일치이며 별도 과제로 남깁니다.
+- 검증 실패 예외 원인 노출 방지 (기존 브랜치 후속 커밋):
+  - `AccessTokenVerifier`: 디코더의 `JwtException`과 `IllegalArgumentException`을 원인 예외 없이 `InvalidAccessTokenException("token rejected")`로 변환합니다. subject 숫자 변환 실패도 원인 예외 없이 `subject format`으로 변환합니다.
+  - `InvalidAccessTokenException`: 원인 예외를 받는 생성자를 제거했습니다. 사용처는 `AccessTokenVerifier`뿐이었습니다. 고정 사유 생성자만 남깁니다.
+  - 고정 내부 사유 메시지(`token missing`, `token rejected`, `subject format`, `role value`)와 발생 조건은 그대로입니다. 외부 응답 규격과 검증 정책은 바꾸지 않았습니다.
+  - 신규 테스트 `AccessTokenVerifierExceptionTest` 5개: `JwtException` 변환 시 cause 없음, 라이브러리 메시지에 토큰 조각이 섞여도 고정 메시지만 유지되고 토큰 원문 미포함, `IllegalArgumentException` 동일 처리, 비숫자 subject 변환 시 cause 없고 subject 값 미포함, 토큰 누락 고정 메시지 유지. Mockito로 디코더를 대체했습니다. 기존 JWT 테스트는 삭제하거나 축소하지 않았습니다.
+  - 잔여 보안 확인 사항 해결 여부: 해결. 검증 실패 예외에는 원인 예외와 토큰 원문이 더 이상 포함되지 않으므로, 전체 예외 로깅에서도 라이브러리 메시지 경로가 열려 있지 않습니다.
+  - 검증 결과 (이번 보완 커밋 기준, DB 미설정):
+    - `./gradlew clean test`: 171개 중 158개 통과, 13개 건너뜀(DB 테스트), 실패 0개. JWT 테스트는 70개 전부 통과 (기존 59 + 민감정보 6 + 원인 예외 5).
+    - `./gradlew bootJar`: 성공.
+    - 격리 MySQL 미연결. `family_id` 관련 DB 테스트 2건은 이번 작업에서 재확인하지 않았으며, 별도 과제로 유지합니다.
 
 ## 7. 다음 작업
 

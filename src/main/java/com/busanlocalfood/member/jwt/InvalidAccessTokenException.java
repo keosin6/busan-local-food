@@ -9,8 +9,4 @@ public class InvalidAccessTokenException extends RuntimeException {
     public InvalidAccessTokenException(String internalReason) {
         super(internalReason);
     }
-
-    public InvalidAccessTokenException(String internalReason, Throwable cause) {
-        super(internalReason, cause);
-    }
 }
