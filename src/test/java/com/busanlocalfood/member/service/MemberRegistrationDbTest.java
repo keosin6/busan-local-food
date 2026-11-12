@@ -22,7 +22,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 /**
  * 실제 MySQL 8 테스트 DB에서 회원가입 서비스의 UNIQUE 위반 변환을 확인한다.
  * 사전 중복 검사를 spy로 "없음"을 돌려주게 하여 동시 가입 경합을 재현한다.
- * TEST_DB_URL 등 환경 변수가 없으면 건너뛴다. 테스트 DB에는 수동 DDL이 적용되어 있어야 한다.
+ * TEST_DB_URL 등 환경 변수가 없으면 건너뛴다.
+ * 테스트 DB에는 db/manual/001_create_member_refresh_token.sql과 002_add_refresh_token_family_id.sql을 순서대로 적용해야 한다.
  */
 @DataJpaTest(properties = {
         "spring.datasource.url=${TEST_DB_URL}",
