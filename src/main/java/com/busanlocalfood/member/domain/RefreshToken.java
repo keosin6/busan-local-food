@@ -12,19 +12,30 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.regex.Pattern;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
  * Refresh Token 행. 테이블 정의는 DATABASE_ERD 2.8을 따른다.
  * 원문은 이 Entity에 들어오지 않는다. SHA-256 해시(64자리 16진수)만 저장한다 (FR-01-05).
- * 발급·갱신·폐기 로직은 다음 단계에서 구현한다.
+ * family_id는 토큰 계열 식별자(가명 식별자)다. 외부 응답, 로그, toString()에 노출하지 않는다.
+ * 발급·갱신·폐기 서비스는 다음 단계에서 구현한다.
  */
 @Entity
 @Table(name = "refresh_token")
 public class RefreshToken {
 
     private static final int SHA256_HEX_LENGTH = 64;
+    private static final int UUID_LENGTH = 36;
+
+    /**
+     * 허용하는 family_id 형식: 소문자 canonical 문자열이며 버전 1(기존 백필) 또는 4(신규 생성)이고 RFC 4122 variant다.
+     * DB 컬럼은 ascii_bin이라 대소문자를 구분하므로, 대문자 입력은 거부해 같은 계열이 둘로 갈라지지 않게 한다.
+     */
+    private static final Pattern FAMILY_ID_PATTERN = Pattern.compile(
+            "^[0-9a-f]{8}-[0-9a-f]{4}-[14][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -38,6 +49,14 @@ public class RefreshToken {
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "token_hash", nullable = false, length = SHA256_HEX_LENGTH)
     private String tokenHash;
+
+    /**
+     * 토큰 계열 ID. DB 컬럼은 CHAR(36) ascii_bin이며 기본값이 없으므로 INSERT 때 반드시 값을 넣는다.
+     * 회전 시 같은 값을 유지하고, 새 로그인 세션에서만 새로 만든다.
+     */
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "family_id", nullable = false, length = UUID_LENGTH)
+    private String familyId;
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
@@ -53,23 +72,41 @@ public class RefreshToken {
         // JPA 기본 생성자
     }
 
-    private RefreshToken(Member member, String tokenHash, LocalDateTime expiresAt) {
+    private RefreshToken(Member member, String familyId, String tokenHash, LocalDateTime expiresAt) {
         this.member = member;
+        this.familyId = familyId;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
     }
 
     /**
-     * 해시로 Refresh Token 행을 만든다. 원문 토큰을 받는 생성자는 없다.
-     * tokenHash는 SHA-256 결과를 소문자 16진수 64자로 전달해야 한다.
+     * 새 로그인으로 새 Family를 시작하는 행을 만든다. family_id는 UUID v4로 새로 생성한다.
+     * 원문 토큰을 받는 생성자는 없다. tokenHash는 SHA-256 결과를 소문자 16진수 64자로 전달해야 한다.
      */
-    public static RefreshToken issue(Member member, String tokenHash, LocalDateTime expiresAt) {
+    public static RefreshToken issueNewFamily(Member member, String tokenHash, LocalDateTime expiresAt) {
+        return create(member, UUID.randomUUID().toString(), tokenHash, expiresAt);
+    }
+
+    /**
+     * 기존 Family에 속하는 행을 만든다. 회전할 때 이전 행의 family_id를 그대로 전달한다.
+     * familyId는 소문자 UUID v1(기존 백필) 또는 v4(신규 생성) 형식이어야 하며, 그 외 값은 거부한다.
+     */
+    public static RefreshToken issueInFamily(Member member, String familyId, String tokenHash,
+                                             LocalDateTime expiresAt) {
+        // 잘못된 값을 예외 메시지에 그대로 넣지 않는다. 계열 ID는 가명 식별자다.
+        if (familyId == null || !FAMILY_ID_PATTERN.matcher(familyId).matches()) {
+            throw new IllegalArgumentException("familyId는 소문자 UUID v1 또는 v4 형식이어야 합니다.");
+        }
+        return create(member, familyId, tokenHash, expiresAt);
+    }
+
+    private static RefreshToken create(Member member, String familyId, String tokenHash, LocalDateTime expiresAt) {
         Objects.requireNonNull(member, "member는 필수입니다.");
         Objects.requireNonNull(expiresAt, "expiresAt은 필수입니다.");
         if (tokenHash == null || tokenHash.length() != SHA256_HEX_LENGTH || !tokenHash.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("tokenHash는 SHA-256 16진수 64자여야 합니다.");
         }
-        return new RefreshToken(member, tokenHash, expiresAt);
+        return new RefreshToken(member, familyId, tokenHash, expiresAt);
     }
 
     @PrePersist
@@ -80,7 +117,16 @@ public class RefreshToken {
     public Long getId() { return id; }
     public Member getMember() { return member; }
     public String getTokenHash() { return tokenHash; }
+    public String getFamilyId() { return familyId; }
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public LocalDateTime getRevokedAt() { return revokedAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    /** family_id와 token_hash는 출력하지 않는다. member는 지연 로딩이므로 참조하지 않는다. */
+    @Override
+    public String toString() {
+        return "RefreshToken[id=" + id
+                + ", expiresAt=" + expiresAt
+                + ", revoked=" + (revokedAt != null) + "]";
+    }
 }
