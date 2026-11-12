@@ -29,6 +29,11 @@ public class AuthRateLimitConfig {
     }
 
     @Bean
+    LockRetryTemplate lockRetryTemplate(org.springframework.transaction.PlatformTransactionManager transactionManager) {
+        return new LockRetryTemplate(transactionManager);
+    }
+
+    @Bean
     ClientIpResolver clientIpResolver(TrustedProxyProperties properties) {
         return new ClientIpResolver(properties.trustedProxies());
     }
