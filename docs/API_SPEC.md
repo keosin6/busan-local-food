@@ -115,7 +115,11 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 1.4 요청 제한 (Rate Limit)
 
-모든 제한은 Rolling Window로 계산합니다. 즉 고정된 시간대가 아니라 "최근 N분(또는 N시간)"을 기준으로 셉니다. 초과한 요청은 HTTP `429`, 오류 코드 `RATE_LIMITED`로 응답하고 `Retry-After` 헤더에 재시도까지 남은 초를 담습니다. 제한 기준이나 내부 키 정보는 응답에 노출하지 않습니다.
+> **구현 상태 (2026-11-12):** 판정 서비스(`member.ratelimit.AuthRateLimitService`)와 이벤트 정리(요청 시 + 주기)는 구현되었습니다. Refresh 회전의 제한 판정은 `RefreshTokenRateLimitGate`로 연결되었습니다. 아래 HTTP 계층 항목은 아직 구현되지 않았습니다. 필터·컨트롤러가 `AuthRateLimitService`의 결과(`LoginAttemptResult`, `RateLimitDecision`)를 429 `RATE_LIMITED`와 `Retry-After`로 바꾸는 작업, 쿠키 처리, 회원가입 JSON 파싱 전 집계 연결, Google OAuth2 시작·콜백 연결이 남아 있습니다.
+>
+> **CSRF와 집계 순서 (2026-11-12 조사):** Spring Security의 CSRF 필터는 기본 필터 체인에서 DispatcherServlet과 사용자 정의 요청 제한 필터보다 앞에서 동작합니다. 따라서 CSRF 토큰이 없거나 틀린 요청은 집계되지 않고 403으로 거부됩니다. 영향 범위: 토큰 없는 대량 요청은 집계 없이 거부되어 DB 부하가 없습니다. 다만 `XSRF-TOKEN` 쿠키는 GET으로 누구나 받을 수 있으므로, 토큰을 받은 요청은 정상적으로 집계됩니다. 이 정책은 CSRF를 약화하지 않고 유지합니다. 회원가입 집계는 JSON 파싱보다 앞에서 해야 하므로, 해당 요청 필터는 CSRF 필터 뒤, 본문 읽기 이전에 둡니다.
+>
+> 모든 제한은 Rolling Window로 계산합니다. 즉 고정된 시간대가 아니라 "최근 N분(또는 N시간)"을 기준으로 셉니다. 초과한 요청은 HTTP `429`, 오류 코드 `RATE_LIMITED`로 응답하고 `Retry-After` 헤더에 재시도까지 남은 초를 담습니다. 제한 기준이나 내부 키 정보는 응답에 노출하지 않습니다.
 
 | 구분 | 제한 기준 | 제한 초과 시점 | 적용 대상 |
 |------|-----------|----------------|-----------|

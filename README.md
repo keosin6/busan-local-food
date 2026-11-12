@@ -52,12 +52,12 @@
 
 ## 환경 변수
 
-보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 애플리케이션이 실제로 읽는 변수는 첫 두 줄(DB 3개, JWT 3개)입니다. `DB_PASSWORD`와 `JWT_SECRET`이 없으면 기동하지 않습니다.
+보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 애플리케이션이 실제로 읽는 변수는 DB 3개, JWT 3개, `AUTH_RATE_LIMIT_HMAC_SECRET`입니다. `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`이 없으면 기동하지 않습니다.
 
 ```
 DB_URL, DB_USERNAME, DB_PASSWORD
 JWT_SECRET, JWT_ACCESS_TOKEN_EXPIRY_SECONDS, JWT_REFRESH_TOKEN_EXPIRY_SECONDS
-(이름 미정, 구현 단계 확정) 요청 제한 HMAC 비밀키
+AUTH_RATE_LIMIT_HMAC_SECRET
 GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 AWS_REGION, AWS_S3_BUCKET
 OPENROUTER_API_KEY, OPENROUTER_MODEL
@@ -90,7 +90,13 @@ JWT 서명 키도 필요합니다. Base64로 인코딩한 32바이트 이상의 
 export JWT_SECRET="$(openssl rand -base64 32)"
 ```
 
-키를 바꾸면 이미 발급된 Access Token은 무효가 됩니다. `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`(기본 1800)와 `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`(기본 1209600)는 선택입니다.
+키를 바꾸면 이미 발급된 Access Token은 무효가 됩니다.
+
+요청 제한의 HMAC 키도 같은 방식으로 필요합니다. `JWT_SECRET`과 달라야 하며, 같으면 기동이 실패합니다. 키를 바꾸는 절차는 [개발 규칙 5.8](docs/DEVELOPMENT_RULES.md)을 따릅니다.
+
+```bash
+export AUTH_RATE_LIMIT_HMAC_SECRET="$(openssl rand -base64 32)"
+``` `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`(기본 1800)와 `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`(기본 1209600)는 선택입니다.
 
 시간대는 애플리케이션이 `Asia/Seoul`로 고정합니다. `DB_URL`에 다른 시간대 옵션을 넣지 않습니다 ([개발 규칙 5.10](docs/DEVELOPMENT_RULES.md)).
 
@@ -125,7 +131,7 @@ mysql -u busan -p busan_local_food < db/manual/003_create_auth_rate_limit_tables
 ./gradlew bootJar
 ```
 
-DB 연동 테스트는 기본으로 건너뜁니다. 실행하려면 개발 DB와 분리된 테스트 전용 데이터베이스에 SQL 001, 002를 순서대로 적용하고 아래 변수를 지정합니다.
+DB 연동 테스트는 기본으로 건너뜁니다. 실행하려면 개발 DB와 분리된 테스트 전용 데이터베이스에 SQL 001, 002, 003을 순서대로 적용하고 아래 변수를 지정합니다.
 
 ```bash
 export TEST_DB_URL='jdbc:mysql://localhost:3306/<테스트 DB 이름>'
@@ -158,5 +164,6 @@ SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAM
 | 증상 | 확인할 것 |
 |------|-----------|
 | `필수 환경변수가 설정되지 않았습니다: DB_PASSWORD` | 누락된 환경변수를 지정합니다. 목록에 표시된 변수만 확인하면 됩니다. |
+| `AUTH_RATE_LIMIT_HMAC_SECRET 환경 변수가 설정되지 않았습니다` 또는 `AUTH_RATE_LIMIT_HMAC_SECRET은 JWT_SECRET과 다른 값이어야 합니다` | 요청 제한용 키를 Base64 32바이트 이상으로 지정하고, `JWT_SECRET`과 다른 값인지 확인합니다. |
 | `JWT_SECRET 환경 변수가 설정되지 않았습니다` 또는 `JWT_SECRET은 Base64 형식이어야 합니다` | `JWT_SECRET`에 Base64로 인코딩한 32바이트 이상의 값을 지정합니다 (위 2번 참조). |
 | `데이터베이스 연결 또는 초기화에 실패했습니다` | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`가 맞는지, MySQL 8이 실행 중인지, 사용자에게 권한이 있는지 확인합니다. 실패 원인 메시지가 함께 출력됩니다. |
