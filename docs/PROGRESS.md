@@ -295,6 +295,17 @@
   - 로컬과 운영에서 `JWT_SECRET`을 반드시 설정해야 기동됩니다.
   - 키를 교체하면 기존 Access Token이 무효화될 수 있습니다.
   - `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`는 Refresh Token 구현 단계에서 사용합니다.
+- 보완 (민감정보 로그 노출 방지, 기존 브랜치 후속 커밋):
+  - `IssuedAccessToken.toString()`: `token`을 `[REDACTED]`로 마스킹. `issuedAt`, `expiresAt`는 그대로 표시.
+  - `JwtProperties.toString()`: `secret`을 `[REDACTED]`로 마스킹. `accessTokenExpirySeconds`는 그대로 표시.
+  - 두 record의 생성자, 접근자, 환경 변수 바인딩과 검증 로직은 변경하지 않았습니다.
+  - 신규 테스트 `SensitiveToStringTest` 6개 추가: 발급 토큰 원문 미노출, Base64 secret 원문 미노출, `null` 필드에서도 예외 없음, 접근자와 만료 값 유지.
+  - 보안 스캔: `member.jwt` 패키지에 로깅 호출과 `printStackTrace`, `System.out` 사용이 없음을 확인. 예외 메시지는 고정 문자열이며 키나 토큰 값을 넣지 않음.
+    - 잔여 확인 사항: `AccessTokenVerifier`는 디코더의 원인 예외(cause)를 보존합니다. 라이브러리 예외 메시지에 토큰 원문이 들어가지 않는다는 점은 코드로 보장하지 않으므로, 로그 적재 시 cause 출력 여부를 주의해야 합니다.
+  - 검증 결과 (이번 보완 커밋 기준, DB 미설정):
+    - `./gradlew clean test`: 166개 중 153개 통과, 13개 건너뜀(DB 테스트), 실패 0개. JWT 테스트는 65개 전부 통과 (기존 59 + 신규 6).
+    - `./gradlew bootJar`: 성공.
+    - 이번 실행에서는 격리 MySQL을 연결하지 않았습니다. DB 테스트 2건의 실패는 위 "검증"에 기록한 기존 `family_id` 불일치이며 별도 과제로 남깁니다.
 
 ## 7. 다음 작업
 
