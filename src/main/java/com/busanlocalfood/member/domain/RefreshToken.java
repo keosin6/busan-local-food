@@ -109,6 +109,27 @@ public class RefreshToken {
         return new RefreshToken(member, familyId, tokenHash, expiresAt);
     }
 
+    /**
+     * 폐기한다. 행은 삭제하지 않는다 (재사용 탐지를 위해 보존, T7 A안).
+     * 이미 폐기된 행은 처음 폐기된 시각을 유지한다. 중복 호출은 안전하다.
+     */
+    public void revoke(LocalDateTime at) {
+        Objects.requireNonNull(at, "at은 필수입니다.");
+        if (this.revokedAt == null) {
+            this.revokedAt = at;
+        }
+    }
+
+    public boolean isRevoked() {
+        return revokedAt != null;
+    }
+
+    /** 만료 시각이 기준 시각 이전이거나 같으면 만료된 것으로 본다. */
+    public boolean isExpiredAt(LocalDateTime now) {
+        Objects.requireNonNull(now, "now는 필수입니다.");
+        return !expiresAt.isAfter(now);
+    }
+
     @PrePersist
     void onCreate() {
         this.createdAt = LocalDateTime.now();
