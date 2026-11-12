@@ -83,7 +83,8 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
 | `JWT_SECRET` | Base64로 인코딩한 JWT 서명 키. 디코딩 후 32바이트 이상. 누락, 형식 오류, 길이 부족 시 기동 실패 (5.9) |
 | `JWT_ACCESS_TOKEN_EXPIRY_SECONDS` | 액세스 토큰 만료 초 (기본 1800) |
 | `JWT_REFRESH_TOKEN_EXPIRY_SECONDS` | 리프레시 토큰 만료 초 (기본 1209600) |
-| (구현 단계에서 이름 확정) | 요청 제한 키의 HMAC-SHA256 비밀키. EC2 환경 변수로만 주입하며 Git에 커밋하지 않는다 (R2) |
+| `AUTH_RATE_LIMIT_HMAC_SECRET` | 요청 제한 키의 HMAC-SHA256 비밀키. Base64 인코딩, 디코딩 후 32바이트 이상. 누락·형식 오류·길이 부족이면 기동 실패. `JWT_SECRET`과 달라야 하며 같으면 기동 실패. 기본값과 개발용 고정 키를 두지 않는다. EC2 환경 변수로만 주입하며 Git에 커밋하지 않는다 (R2) |
+| `app.security.trusted-proxies` (설정 프로퍼티, 환경 변수 아님) | 신뢰 프록시 IP 목록. 비어 있으면 `X-Forwarded-For`를 신뢰하지 않는다. 운영 기본값을 코드에 두지 않는다 |
 | `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 클라이언트 시크릿 |
 | `AWS_REGION` | S3 리전 |
@@ -424,6 +425,22 @@ Google 계정 해제 (확정):
 
 ### 5.8 요청 제한 HMAC 키 관리
 
+구현 설정 (2026-11-12):
+- 환경 변수 `AUTH_RATE_LIMIT_HMAC_SECRET`을 `auth.rate-limit.hmac-secret`에 바인딩합니다. 키는 `AuthRateLimitHasher.keyFromBase64`가 검증합니다. 이중 키 조회는 구현하지 않습니다.
+- 키 값과 디코딩 결과는 로그, 예외 메시지, `toString()`, 테스트 실패 메시지에 나타나지 않도록 합니다. `AuthRateLimitProperties.toString()`은 값을 가립니다.
+- 이벤트 정리: 모든 이벤트는 생성 후 24시간 뒤 삭제합니다. 요청 시 정리(한 번에 `REQUEST_PURGE_BATCH`=100건)와 주기 정리를 병행합니다. 주기 정리는 `auth.rate-limit.cleanup-interval-ms`(기본 600000), 첫 실행 지연은 `cleanup-initial-delay-ms`(기본 60000), 배치 크기는 `cleanup-batch-size`(기본 1000)입니다. 정리 실패는 로그에 예외 종류만 남기고 요청 결과를 바꾸지 않습니다.
+- `auth_rate_limit_counter` 행은 자동으로 지우지 않습니다.
+- 신뢰 프록시: `app.security.trusted-proxies`. Remote Address가 목록에 없으면 `X-Forwarded-For`를 무시합니다. 체인은 오른쪽부터 보고 신뢰 프록시가 아닌 첫 항목을 클라이언트로 씁니다.
+
+HMAC 키 교체 절차 (구현 기준):
+1. 교체 시점을 정하고, 애플리케이션을 중지합니다. 중지 중에는 요청 제한 판정이 없으므로 교체 전후 카운터 초기화 위험을 운영자가 감수합니다.
+2. HMAC 기반 이벤트와 카운터를 삭제합니다. Refresh 계열(`refresh_request_event`)은 HMAC을 쓰지 않으므로 대상이 아닙니다.
+   `DELETE FROM login_failure_event; DELETE FROM signup_request_event; DELETE FROM google_oauth_request_event; DELETE FROM auth_rate_limit_counter;`
+3. 새 키를 `AUTH_RATE_LIMIT_HMAC_SECRET`에만 설정하고 애플리케이션을 시작합니다. 새 키는 기존 키와 달라야 하며, `openssl rand -base64 32`로 만듭니다.
+4. 로그인 실패 요청 한 건으로 이벤트가 새 키 기반으로 기록되는지 확인합니다. 이전 키 값은 운영 환경과 운영 기록에서 제거합니다.
+5. 교체 날짜, 정리 방식, 담당자를 운영 기록에 남깁니다.
+
+
 적용 대상: 요청 제한 식별자를 만들 때 쓰는 HMAC-SHA256 비밀키 (R2). 로그인 이메일+IP 키, 로그인 IP 보조 키, 회원가입 IP 키, Google OAuth2 IP 키가 모두 여기에 해당합니다 (T16 확정). Refresh 계열 키(`family_id`)는 HMAC을 쓰지 않으므로 이 절의 영향을 받지 않습니다.
 
 정책:
@@ -522,7 +539,7 @@ com.busanlocalfood
 - Testcontainers, H2, Docker 기반 테스트 환경은 도입하지 않습니다. Docker Desktop 설치를 요구하지 않습니다.
 - DB 연동 테스트는 개발 PC에 직접 설치한 MySQL 8의 테스트 전용 데이터베이스를 사용합니다. 개발 데이터베이스와 분리합니다. 테스트가 개발 데이터베이스의 데이터를 삭제하거나 변경하지 않도록 합니다.
 - DB 연동 테스트 준비 절차:
-  1. 테스트 전용 데이터베이스에 `db/manual/001_create_member_refresh_token.sql`, `db/manual/002_add_refresh_token_family_id.sql`을 이 순서로 한 번씩 적용합니다. 003은 요청 제한 구현 단계의 테스트부터 필요합니다.
+  1. 테스트 전용 데이터베이스에 `db/manual/001_create_member_refresh_token.sql`, `db/manual/002_add_refresh_token_family_id.sql`, `db/manual/003_create_auth_rate_limit_tables.sql`을 이 순서로 한 번씩 적용합니다. 003이 없으면 `AuthRateLimitDbTest`가 실패합니다.
   2. 환경 변수 `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정하고 `./gradlew clean test`를 실행합니다. 값은 저장소에 커밋하지 않습니다.
   3. 변수가 없으면 DB 테스트는 건너뜁니다. 건너뛴 테스트는 통과로 보고하지 않습니다.
 - 외부 서비스(Google, AWS S3, OpenRouter)는 모킹하거나 가짜 구현체를 사용합니다 (아래 마지막 항목 참조).

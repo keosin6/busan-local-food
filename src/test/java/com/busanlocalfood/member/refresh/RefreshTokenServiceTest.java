@@ -13,6 +13,9 @@ import static org.mockito.Mockito.when;
 
 import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.domain.RefreshToken;
+import com.busanlocalfood.member.ratelimit.LockRetryTemplate;
+import com.busanlocalfood.member.ratelimit.RateLimitDecision;
+import org.springframework.transaction.PlatformTransactionManager;
 import com.busanlocalfood.member.repository.MemberRepository;
 import com.busanlocalfood.member.repository.RefreshTokenRepository;
 import java.time.Clock;
@@ -51,8 +54,8 @@ class RefreshTokenServiceTest {
                 new RefreshTokenGenerator(), new RefreshTokenProperties(1209600),
                 familyId -> {
                     gateCalls++;
-                    return gateOpen;
-                }, clock);
+                    return gateOpen ? new RateLimitDecision.Allowed() : new RateLimitDecision.Limited(60);
+                }, new LockRetryTemplate(mock(PlatformTransactionManager.class)), clock);
         gateOpen = true;
         gateCalls = 0;
         member = Member.create("a@example.com", "$2a$10$hash", "부산먹보", null);

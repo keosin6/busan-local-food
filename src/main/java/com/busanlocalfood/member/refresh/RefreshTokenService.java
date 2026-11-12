@@ -2,6 +2,8 @@ package com.busanlocalfood.member.refresh;
 
 import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.domain.RefreshToken;
+import com.busanlocalfood.member.ratelimit.LockRetryTemplate;
+import com.busanlocalfood.member.ratelimit.RateLimitDecision;
 import com.busanlocalfood.member.repository.MemberRepository;
 import com.busanlocalfood.member.repository.RefreshTokenRepository;
 import java.time.Clock;
@@ -33,6 +35,7 @@ public class RefreshTokenService {
     private final RefreshTokenGenerator generator;
     private final RefreshTokenProperties properties;
     private final RefreshRotationGate rotationGate;
+    private final LockRetryTemplate lockRetry;
     private final Clock clock;
 
     public RefreshTokenService(MemberRepository memberRepository,
@@ -40,12 +43,14 @@ public class RefreshTokenService {
                                RefreshTokenGenerator generator,
                                RefreshTokenProperties properties,
                                RefreshRotationGate rotationGate,
+                               LockRetryTemplate lockRetry,
                                Clock clock) {
         this.memberRepository = memberRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.generator = generator;
         this.properties = properties;
         this.rotationGate = rotationGate;
+        this.lockRetry = lockRetry;
         this.clock = clock;
     }
 
@@ -73,11 +78,20 @@ public class RefreshTokenService {
      * 판정 순서: 재사용 탐지 → 요청 제한 → 만료 → 정상 회전 (API_SPEC 2.3).
      * 정상 회전이면 기존 행을 폐기하고 같은 family_id의 새 행을 INSERT한다.
      */
-    @Transactional
     public RefreshTokenRotation rotate(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             return new RefreshTokenRotation.Rejected();
         }
+        // 트랜잭션은 이 래퍼가 연다. 잠금 대기와 교착 상태는 LockRetryTemplate이 새 트랜잭션에서 다시 실행한다.
+        // 실패한 시도는 롤백되므로 이벤트와 폐기가 중복되거나 일부만 남지 않는다.
+        return lockRetry.execute(() -> rotateInTransaction(rawToken));
+    }
+
+    /**
+     * 회전 본문. 잠금 순서: 회원 행 → Refresh Token 행 → 재사용 확인 → 요청 제한 카운터 → 제한 판정 → 만료 → 회전.
+     * 이 메서드는 LockRetryTemplate이 연 트랜잭션 안에서만 호출된다.
+     */
+    private RefreshTokenRotation rotateInTransaction(String rawToken) {
         String hash = RefreshTokenHasher.sha256Hex(rawToken);
 
         // 1) 잠금 없는 사전 조회: 회원 ID만 확인한다. 이 결과로는 판정하지 않는다.
@@ -108,8 +122,9 @@ public class RefreshTokenService {
 
         // 5) 계열별 요청 제한. 재사용 탐지 뒤, 만료 확인 전에 판정한다 (API_SPEC 2.3).
         //    제한에 걸리면 토큰을 바꾸지 않는다. 통과한 요청의 이벤트 기록은 gate 구현이 같은 트랜잭션에서 한다.
-        if (!rotationGate.tryPass(current.getFamilyId())) {
-            return new RefreshTokenRotation.RateLimited();
+        RateLimitDecision limit = rotationGate.check(current.getFamilyId());
+        if (limit instanceof RateLimitDecision.Limited limited) {
+            return new RefreshTokenRotation.RateLimited(limited.retryAfterSeconds());
         }
 
         // 6) 만료된 토큰은 갱신하지 않는다. 다른 활성 토큰은 건드리지 않는다.

@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -31,6 +33,8 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +56,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @Import({RefreshTokenService.class, RefreshTokenGenerator.class, RefreshTokenConfig.class,
-        com.busanlocalfood.global.config.TimeConfig.class})
+        com.busanlocalfood.global.config.TimeConfig.class,
+        com.busanlocalfood.member.ratelimit.AuthRateLimitConfig.class,
+        com.busanlocalfood.member.ratelimit.AuthRateLimitRepository.class,
+        com.busanlocalfood.member.ratelimit.AuthRateLimitCleanup.class,
+        com.busanlocalfood.member.ratelimit.AuthRateLimitService.class,
+        RefreshTokenRateLimitGate.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RefreshTokenLifecycleDbTest {
 
@@ -73,11 +82,29 @@ class RefreshTokenLifecycleDbTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private com.busanlocalfood.member.ratelimit.AuthRateLimitHasher rateLimitHasher;
+
+    @DynamicPropertySource
+    static void rateLimitSecret(DynamicPropertyRegistry registry) {
+        byte[] key = new byte[32];
+        new SecureRandom().nextBytes(key);
+        String secret = Base64.getEncoder().encodeToString(key);
+        registry.add("auth.rate-limit.hmac-secret", () -> secret);
+    }
+
     private final List<Long> createdMemberIds = new ArrayList<>();
 
     @AfterEach
     void cleanUp() {
         for (Long memberId : createdMemberIds) {
+            // 이 테스트가 만든 요청 이벤트와 카운터를 먼저 지운다. 회원의 계열 목록을 읽어야 하므로 행 삭제 전에 한다.
+            for (String familyId : jdbcTemplate.queryForList(
+                    "SELECT DISTINCT family_id FROM refresh_token WHERE member_id = ?", String.class, memberId)) {
+                jdbcTemplate.update("DELETE FROM refresh_request_event WHERE family_id = ?", familyId);
+                jdbcTemplate.update("DELETE FROM auth_rate_limit_counter WHERE counter_key = ?",
+                        rateLimitHasher.counterKey("REFRESH_FAMILY:", familyId));
+            }
             jdbcTemplate.update("DELETE FROM refresh_token WHERE member_id = ?", memberId);
             jdbcTemplate.update("DELETE FROM member WHERE id = ?", memberId);
         }
