@@ -51,7 +51,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 })
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
-@Import({RefreshTokenService.class, RefreshTokenGenerator.class, RefreshTokenConfig.class})
+@Import({RefreshTokenService.class, RefreshTokenGenerator.class, RefreshTokenConfig.class,
+        com.busanlocalfood.global.config.TimeConfig.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RefreshTokenLifecycleDbTest {
 

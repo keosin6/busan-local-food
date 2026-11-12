@@ -397,6 +397,30 @@
   - 재사용 탐지는 회원의 모든 기기에서 로그아웃시킵니다 (T7 A안). 응답 유실로 정상 사용자가 재로그인해야 할 수 있습니다 (T14 A안이 수용한 한계).
   - Refresh Token 폐기만으로 이미 발급된 Access Token이 즉시 무효화되지 않습니다. 이는 확정된 정책입니다 (5.7.4 한계).
 
+### 6.12 전체 코드 검수 후 정리 (2026-11-12)
+
+- 브랜치: `fix/timezone-and-auth-cleanup` (기준: `main` 0fe4356, PR #13 병합본).
+- 시간대 고정 (서비스 시간대 Asia/Seoul):
+  - 문제: 시각은 JVM 기본 시간대의 `LocalDateTime`으로 저장하는데, JVM·JDBC·DB 세션 시간대가 고정되어 있지 않았습니다. JVM이 UTC이고 DB URL이 `serverTimezone=Asia/Seoul`인 조합에서 앱이 저장한 값과 DB의 `NOW()`가 9시간 어긋나는 것을 실제 실행으로 확인했습니다.
+  - `global.config.TimeConfig`: `SERVICE_ZONE` 상수, 공용 `Clock` 빈, `applyDefaultTimeZone()`. `main()`이 기동 직후 JVM 기본 시간대를 고정합니다.
+  - `application.yml`: `spring.datasource.hikari.connection-init-sql: SET time_zone = '+09:00'`로 DB 세션 시간대를 고정합니다.
+  - `build.gradle`: 테스트 JVM에 `user.timezone=Asia/Seoul`을 지정합니다 (의존성 변경 없음).
+  - 주의: `DB_URL`에 다른 시간대 옵션을 넣지 않습니다. 이 변경 이전에 KST가 아닌 JVM으로 저장한 행이 있다면 그 시각은 보정되지 않습니다.
+- `Clock` 통일: JWT 발급·검증과 Refresh Token 서비스가 같은 `Clock` 빈을 주입받습니다. `RefreshTokenConfig`의 별도 Clock 빈과 `JwtConfig`의 `Clock.systemUTC()` 직접 사용을 없앴습니다.
+- Refresh 요청 제한 판정 지점: `RefreshRotationGate`와 결과 `RefreshTokenRotation.RateLimited`를 추가했습니다. `rotate()`의 판정 순서는 재사용 탐지 → 요청 제한 → 만료 → 정상 회전입니다 (API_SPEC 2.3). 요청 제한 서비스(R4)는 아직 없으므로 기본 구현은 모든 요청을 통과시킵니다. 서비스 구현 시 `RefreshRotationGate` 빈을 등록해 대체합니다.
+- 미사용 코드 제거: 잠금 없는 `RefreshTokenRepository.findAllByMemberIdAndRevokedAtIsNull`을 삭제했습니다. 상태 변경 경로가 실수로 잠금을 우회하지 않게 하기 위해서입니다.
+- 테스트 추가:
+  - `ApplicationContextDbTest` 3개 (DB 테스트): 전체 컨텍스트 기동과 인증 빈 연결, `Clock` 빈 1개, JVM·DB 세션 시간대 일치, 앱 저장 시각과 DB `NOW()`의 기준 일치.
+  - `RefreshTokenServiceTest` 4개 추가: 제한 시 토큰 미변경, 재사용 탐지가 제한보다 먼저, 제한 판정이 만료 확인보다 먼저, 알 수 없는 토큰은 제한 판정 없음.
+- 실행 결과:
+  - `./gradlew clean test`, 격리 MySQL 8.0.46 (SQL 001 → 002), `TEST_DB_*` 설정: 220개 전부 통과, 건너뜀 0개. DB URL에 `serverTimezone=Asia/Seoul`을 붙인 경우와 붙이지 않은 경우 모두 같은 결과입니다.
+  - `./gradlew clean test`, DB 미설정: 220개 중 190개 통과, 30개 건너뜀(DB 테스트), 실패 0개.
+  - `./gradlew bootJar`: 성공. jar 기동 확인: 정상 기동, `/` 200, 로그 시각이 +09:00으로 표시됩니다.
+- 이번에 정리하지 않은 항목 (결정이 필요함):
+  - 폐기·만료된 `refresh_token` 행의 보존 기간과 정리 방식.
+  - 이메일 형식의 Unicode 공백 처리 (아래 7번 4항).
+  - `GlobalExceptionHandler`의 공통 예외 처리와 `SecurityConfig` 임시 전체 허용: API 컨트롤러 단계에서 교체합니다.
+
 ## 7. 다음 작업
 
 1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.

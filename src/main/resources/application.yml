@@ -10,6 +10,10 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      # DB 세션 시간대를 서비스 시간대(Asia/Seoul)로 고정한다. NOW(), CURRENT_TIMESTAMP가 앱이 저장하는 시각과 같은 기준이 된다.
+      # JVM 기본 시간대는 TimeConfig가 같은 값으로 고정한다. DB_URL에 다른 시간대 옵션을 넣지 않는다.
+      connection-init-sql: SET time_zone = '+09:00'
   jpa:
     # 스키마는 애플리케이션이 생성·변경하지 않는다. 스키마 관리 방식은 설계 변경 절차로 정한다 (Flyway 미도입).
     open-in-view: false

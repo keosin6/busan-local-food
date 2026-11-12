@@ -32,17 +32,20 @@ public class RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final RefreshTokenGenerator generator;
     private final RefreshTokenProperties properties;
+    private final RefreshRotationGate rotationGate;
     private final Clock clock;
 
     public RefreshTokenService(MemberRepository memberRepository,
                                RefreshTokenRepository refreshTokenRepository,
                                RefreshTokenGenerator generator,
                                RefreshTokenProperties properties,
+                               RefreshRotationGate rotationGate,
                                Clock clock) {
         this.memberRepository = memberRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.generator = generator;
         this.properties = properties;
+        this.rotationGate = rotationGate;
         this.clock = clock;
     }
 
@@ -66,7 +69,8 @@ public class RefreshTokenService {
     }
 
     /**
-     * 원문 Refresh Token을 제출받아 정상 회전, 거부, 재사용 탐지 중 하나로 판정한다.
+     * 원문 Refresh Token을 제출받아 정상 회전, 거부, 재사용 탐지, 요청 제한 중 하나로 판정한다.
+     * 판정 순서: 재사용 탐지 → 요청 제한 → 만료 → 정상 회전 (API_SPEC 2.3).
      * 정상 회전이면 기존 행을 폐기하고 같은 family_id의 새 행을 INSERT한다.
      */
     @Transactional
@@ -102,12 +106,18 @@ public class RefreshTokenService {
             return revokeAllActive(member, now);
         }
 
-        // 5) 만료된 토큰은 갱신하지 않는다. 다른 활성 토큰은 건드리지 않는다.
+        // 5) 계열별 요청 제한. 재사용 탐지 뒤, 만료 확인 전에 판정한다 (API_SPEC 2.3).
+        //    제한에 걸리면 토큰을 바꾸지 않는다. 통과한 요청의 이벤트 기록은 gate 구현이 같은 트랜잭션에서 한다.
+        if (!rotationGate.tryPass(current.getFamilyId())) {
+            return new RefreshTokenRotation.RateLimited();
+        }
+
+        // 6) 만료된 토큰은 갱신하지 않는다. 다른 활성 토큰은 건드리지 않는다.
         if (current.isExpiredAt(now)) {
             return new RefreshTokenRotation.Rejected();
         }
 
-        // 6) 정상 회전: 기존 행 폐기, 같은 family_id로 새 행 발급. 기존 행은 삭제하지 않는다.
+        // 7) 정상 회전: 기존 행 폐기, 같은 family_id로 새 행 발급. 기존 행은 삭제하지 않는다.
         current.revoke(now);
         IssuedRefreshToken next = insertInFamily(member, current.getFamilyId(), now);
         return new RefreshTokenRotation.Rotated(member.getId(), member.getRole(), next);

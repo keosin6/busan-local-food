@@ -31,19 +31,19 @@ public class JwtConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey jwtSigningKey) {
+    JwtDecoder jwtDecoder(SecretKey jwtSigningKey, Clock clock) {
         // macAlgorithm(HS256)으로 알고리즘을 고정하므로 다른 알고리즘 토큰은 거부된다.
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSigningKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
-        decoder.setJwtValidator(JwtValidators.accessTokenValidator(Clock.systemUTC()));
+        decoder.setJwtValidator(JwtValidators.accessTokenValidator(clock));
         return decoder;
     }
 
     @Bean
-    AccessTokenIssuer accessTokenIssuer(JwtEncoder jwtEncoder, JwtProperties properties) {
+    AccessTokenIssuer accessTokenIssuer(JwtEncoder jwtEncoder, JwtProperties properties, Clock clock) {
         return new AccessTokenIssuer(jwtEncoder,
-                java.time.Duration.ofSeconds(properties.accessTokenExpirySeconds()), Clock.systemUTC());
+                java.time.Duration.ofSeconds(properties.accessTokenExpirySeconds()), clock);
     }
 
     @Bean

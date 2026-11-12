@@ -14,9 +14,6 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     /** 요청 쿠키 원문의 SHA-256 해시로 조회한다. */
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
-    /** 회원의 폐기되지 않은 Refresh Token 목록 (재사용 탐지 시 일괄 폐기 대상). */
-    List<RefreshToken> findAllByMemberIdAndRevokedAtIsNull(Long memberId);
-
     /**
      * 잠금 전 사전 조회: 해시로 회원 ID만 읽는다. 행을 잠그지 않으며, Entity도 영속성 컨텍스트에 올리지 않는다.
      * 이 결과로 정상 회전 여부를 판단하지 않는다. 회원 행을 잠근 뒤 반드시 findByTokenHashForUpdate로 다시 읽는다.
