@@ -29,6 +29,8 @@ jwt:
   secret: ${JWT_SECRET:}
   # Access Token 만료 초. 기본 1800초(30분).
   access-token-expiry-seconds: ${JWT_ACCESS_TOKEN_EXPIRY_SECONDS:1800}
+  # Refresh Token 만료 초. 기본 1209600초(14일). Access Token 만료와 분리한다.
+  refresh-token-expiry-seconds: ${JWT_REFRESH_TOKEN_EXPIRY_SECONDS:1209600}
 
 server:
   port: 8080
