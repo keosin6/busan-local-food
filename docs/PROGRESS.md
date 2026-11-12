@@ -434,43 +434,50 @@
 
 ### 6.14 요청 제한 서비스 R1~R10 구현 (2026-11-12)
 
-- 브랜치: `feat/stage2-3-auth-rate-limiting` (기준: `main` 2b643b1, PR #15 병합본).
+- 브랜치: `feat/stage2-3-auth-rate-limiting` (기준: `main` 2b643b1, PR #15 병합본). PR #16에 구현 커밋과 보완 커밋을 추가했습니다.
+- 상태 구분:
+  - 서비스 계층: 구현 완료. R1~R10 판정과 기록, Refresh 게이트 연결, 이벤트 정리.
+  - HTTP 계층: 미구현. 필터·컨트롤러 연결, 429 `RATE_LIMITED`와 `Retry-After` 변환, 회원가입 JSON 파싱 이전 집계, Google OAuth2 시작·연동·콜백 연결, 프런트엔드 T20 처리.
 - 구현 (`member.ratelimit` 패키지):
-  - `AuthRateLimitService`: `attemptLogin`(로그인 두 제한 + 자격 증명 확인), `recordSignupRequest`, `recordGoogleOAuthRequest`, `recordRefreshRequest`. 각 호출은 한 트랜잭션에서 잠금, 판정, 기록을 끝냅니다.
-  - 동시성: 카운터 행을 `INSERT ... ON DUPLICATE KEY UPDATE`로 확보하고 `SELECT ... FOR UPDATE`로 사전순 잠금 후 이벤트를 셉니다. 한도 미만이면 이벤트를 기록하고, 도달하면 기록 없이 `Limited`를 반환합니다. 잠금 대기와 교착은 최대 3회 재시도하고, 계속 실패하면 `RateLimitUnavailableException`으로 요청을 허용하지 않습니다(fail-closed).
-  - 로그인은 자격 증명 확인을 잠금 안에서 합니다. 잠금 밖에서 세고 나중에 기록하면 동시 요청이 한도를 넘습니다. 대신 BCrypt 시간만큼 같은 이메일+IP와 같은 IP의 로그인이 직렬화됩니다.
-  - 성공 로그인은 해당 이메일+IP 조합의 실패 이벤트만 지웁니다. 같은 IP의 다른 이메일 기록은 남깁니다. 주의: 이메일과 IP 이벤트는 같은 행이므로 지운 실패는 IP 보조 집계에서도 빠집니다. 한 이메일의 실패가 최대 4회(5회째부터 제한)라서 영향은 제한적입니다.
-  - `RateLimitDecision`, `LoginAttemptResult`: 429 변환에 쓸 결과 타입. `Limited`에는 `Retry-After` 초가 들어 있습니다.
-  - Refresh: `RefreshTokenRateLimitGate`가 `RefreshRotationGate`를 구현합니다(빈 하나). 재사용 탐지 → 요청 제한 → 만료 → 회전 순서를 지키고, 제한된 요청은 토큰을 바꾸지 않습니다. 기본 허용 구현은 제거했습니다.
-  - IP 식별: `ClientIpResolver`. 신뢰 프록시 목록(`app.security.trusted-proxies`)이 비어 있으면 헤더를 신뢰하지 않습니다. 체인은 오른쪽부터 봅니다. 잘못된 항목이 있으면 Remote Address를 씁니다.
-  - HMAC: `AuthRateLimitHasher`. 이벤트 식별자는 HMAC-SHA256, 카운터 키는 접두어+식별값의 SHA-256입니다. 키는 `AUTH_RATE_LIMIT_HMAC_SECRET`(Base64, 32바이트 이상)이며 누락, 형식 오류, 길이 부족, JWT 키와 같은 값이면 기동이 실패합니다.
+  - `AuthRateLimitService`: `attemptLogin`(로그인 두 제한과 자격 증명 확인), `recordSignupRequest`, `recordGoogleOAuthRequest`, `recordRefreshRequest`. 각 호출은 카운터 잠금, 판정, 기록을 한 트랜잭션에서 끝냅니다. 한도에 도달하면 기록 없이 `Limited`를 반환합니다.
+  - 동시성: 카운터 행을 `INSERT ... ON DUPLICATE KEY UPDATE`로 확보하고 `SELECT ... FOR UPDATE`로 사전순 잠금을 건 뒤 이벤트를 셉니다.
+  - 로그인은 자격 증명 확인을 잠금 안에서 합니다. 잠금 밖에서 세면 동시 요청이 한도를 넘습니다. 대신 BCrypt 시간만큼 같은 이메일+IP와 같은 IP의 로그인이 직렬화됩니다.
+  - 성공 로그인은 해당 이메일+IP 조합의 실패 이벤트만 지웁니다. 같은 행에 IP가 있으므로 지운 실패는 IP 보조 집계에서도 빠집니다. 한 조합의 실패는 최대 4회까지 쌓이므로 영향은 제한적입니다.
+  - `LockRetryTemplate`(보완 1): 잠금 대기와 교착 상태를 최대 3번 재시도합니다. 활성 트랜잭션이 없으면 새 트랜잭션을 열고, 실패하면 롤백한 뒤 처음부터 다시 실행합니다. 이미 외부 트랜잭션이 열려 있으면 재시도하지 않습니다. 계속 실패하면 `RateLimitUnavailableException`으로 요청을 허용하지 않습니다(fail-closed).
+  - `RefreshTokenRateLimitGate`: `RefreshRotationGate`의 실제 구현(빈 하나). 재사용 탐지 → 요청 제한 → 만료 → 회전 순서를 지킵니다. 제한된 요청은 토큰을 바꾸지 않습니다. 기본 허용 구현은 제거했습니다.
+  - `ClientIpResolver`: 신뢰 프록시(`app.security.trusted-proxies`)의 체인을 오른쪽부터 판별합니다. 목록이 비어 있으면 헤더를 신뢰하지 않습니다. 잘못된 항목이 있으면 Remote Address를 씁니다.
+  - `AuthRateLimitHasher`: 이벤트 식별자는 HMAC-SHA256, 카운터 키는 접두어+식별값의 SHA-256입니다. 키는 `AUTH_RATE_LIMIT_HMAC_SECRET`(Base64, 32바이트 이상)이며, 누락, 형식 오류, 길이 부족, JWT 키와 같은 값이면 기동이 실패합니다.
   - 정리: 요청 시(배치 100건, 외부 트랜잭션 밖에서만) + 주기(`AuthRateLimitCleanupScheduler`). 생성 후 24시간이 지난 이벤트만 지웁니다. 카운터 행은 지우지 않습니다. 정리 실패는 로그에 예외 종류만 남기고 요청 결과를 바꾸지 않습니다.
-  - 설정: `auth.rate-limit.*`(HMAC 키, 정리 배치와 주기), `app.security.trusted-proxies`. 테스트 DB는 SQL 003이 필요합니다.
-- 설계 확인 사항:
-  - 회원가입 집계는 JSON 파싱과 DTO 검증보다 앞에서 해야 하고, CSRF 실패 요청은 집계되지 않습니다(API_SPEC 1.4 조사 결과). 이 연결은 HTTP 계층 작업입니다.
-  - Refresh 요청 시 정리는 하지 않습니다. 회전 트랜잭션 안에서 다른 행을 지우면 잠금 충돌 위험이 있어 주기 정리에만 맡깁니다.
-- 검증:
-  - 단위 테스트 33개: 규칙 경계와 올림 계산, HMAC과 키 검증, IP 판별(IPv4·IPv6, 위조 체인, 잘못된 값), 기동 설정(키 누락, 형식, 길이, JWT 키 중복).
-  - MySQL 테스트 17개 (`AuthRateLimitDbTest`): 로그인 5회·6번째 제한(자격 증명 미확인), 제한 요청 미기록, IP 보조 20회, IP별 독립, 성공 시 조합만 초기화, 15분 창 경계와 남은 시간, 회원가입 1시간 5회와 경계, Google 10회와 독립, Refresh 1분 10회와 계열 독립, 동시 로그인 5회·20회·회원가입·Refresh 한도, 교차 키 동시 요청 교착 없음, 보존 24시간과 배치 제한, 반복 정리, 정리 실패 시 결과 불변.
-  - 잠금 검증: 로그인 카운터 잠금을 일시적으로 제거하면 동시성 테스트 2건이 실패합니다(기대 20, 실제 26 / 기대 5, 실제 11). 잠금을 되돌린 뒤 통과했습니다.
-  - 전체 테스트 DB 연결(SQL 001 → 003): 270개 전부 통과, 건너뜀 0개, 실패 0개.
-  - 전체 테스트 DB 미설정: 270개 중 223개 통과, 건너뜀 47개(DB 테스트), 실패 0개.
-  - `bootJar` 성공. jar 기동 확인: HMAC 키 누락은 기동 실패, JWT 키와 같은 값은 기동 실패, 정상 값은 `/` 200. 로그에 JWT 키, HMAC 키, DB 비밀번호 값이 나타나지 않았습니다.
+- 보완 1: Refresh 경로의 재시도
+  - 문제: `rotate()`의 `@Transactional`이 바깥 트랜잭션을 먼저 열어서, 게이트의 `inTransaction()`이 재시도 없이 그 트랜잭션에 참여했습니다.
+  - 해결: `rotate()`에서 `@Transactional`을 제거했습니다. `rotate()`는 `LockRetryTemplate`으로 트랜잭션을 열고 `rotateInTransaction()`을 실행합니다. 재시도는 트랜잭션 경계 바깥에서 새 트랜잭션으로 합니다.
+  - 잠금 순서는 바뀌지 않았습니다: 회원 행 → Refresh Token 행 → 재사용 확인 → 요청 제한 카운터 → 제한 판정 → 만료 → 회전.
+  - 재사용 탐지의 전체 폐기는 마지막 시도가 성공할 때만 커밋됩니다. 중간 실패는 롤백되므로 일부만 폐기되는 상태가 생기지 않습니다.
+  - 재시도 중 이벤트가 중복되지 않습니다. 실패한 시도의 이벤트도 같은 트랜잭션이므로 롤백됩니다.
+  - 검증: `rotate()`에 `@Transactional`을 다시 붙이면 재시도 테스트 3건이 실패합니다(잠금 실패 예외가 그대로 전파됨). 되돌린 뒤 통과했습니다.
+- 보완 1에서 추가한 테스트 (`RefreshRateLimitRetryDbTest`, 5개, MySQL): 카운터 잠금 실패 후 새 트랜잭션 재시도와 실패 시도 이벤트 미잔존, 재시도 한도 초과의 fail-closed(토큰과 이벤트 불변), 제한된 Refresh 요청의 토큰 불변, 정상 회전의 이벤트 1건, 재사용 탐지의 활성 토큰 잠금 실패 후 재시도 뒤 전체 폐기 커밋.
+- 검증 결과 (커밋 기준, 보완 후):
+  - 테스트 DB 연결(SQL 001 → 002 → 003): 275개 전부 통과, 건너뜀 0개, 실패 0개. 기존 270개와 신규 5개.
+  - 테스트 DB 미설정: 275개 중 223개 통과, 건너뜀 52개(DB 테스트), 실패 0개. 기존 47개와 신규 5개.
+  - `bootJar`: 성공.
+  - 요청 제한 단위 테스트 33개, 요청 제한 MySQL 테스트 17개는 그대로 유지되고 통과합니다.
+  - 잠금 검증(보완 전 실험): 로그인 카운터 잠금을 제거하면 동시성 테스트 2건이 실패합니다(기대 20회, 실제 26회 / 기대 5회, 실제 11회). 되돌린 뒤 통과했습니다.
 - 미구현 (이번 범위 밖):
-  - 요청 제한 HTTP 연결: 필터 또는 컨트롤러가 결과를 429 `RATE_LIMITED`와 `Retry-After`로 바꾸기
-  - 로그인·회원가입·재발급·로그아웃 API 컨트롤러와 쿠키 발급·삭제
-  - 회원가입 집계를 JSON 파싱 이전에 연결하기 (CSRF 뒤, 본문 읽기 이전 위치)
+  - 요청 제한 HTTP 연결(필터·컨트롤러, 429·Retry-After 변환)
+  - 회원가입 집계를 JSON 파싱 이전에 연결 (CSRF 뒤, 본문 읽기 이전)
   - Google OAuth2 시작·연동·콜백에서 `recordGoogleOAuthRequest` 호출, 콜백 제한 시 OAuth2 임시 상태 정리
+  - 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키 발급·삭제
   - JWT 인증 필터, SecurityFilterChain 분리
-  - 요청 제한 서비스의 `Limited`에 대한 프런트엔드 처리(T20)
+  - 프런트엔드 T20 처리
 - 운영 주의:
   - HMAC 키 교체는 DEVELOPMENT_RULES 5.8의 절차를 따릅니다. 이벤트와 카운터를 먼저 지우고 새 키를 설정합니다.
-  - 로그인 집계는 같은 IP의 로그인을 BCrypt 시간만큼 직렬화합니다. 같은 NAT 뒤의 많은 사용자가 같은 시각에 로그인하면 대기 시간이 늘어날 수 있습니다. 운영에서 확인합니다.
+  - 로그인 집계는 같은 IP의 로그인을 BCrypt 시간만큼 직렬화합니다. 같은 NAT 뒤 사용자가 몰리면 대기가 늘 수 있으므로 운영에서 확인합니다.
+  - `issueForNewLogin`과 `logout`은 이번 보완의 재시도 대상이 아닙니다. 두 메서드의 잠금 대기 실패는 기존처럼 바로 예외로 전파됩니다.
 
 ## 7. 다음 작업
 
 1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
-2. Stage 2-3 다음 작업: (a) 완료 — `family_id` 매핑과 생성 경로 (6.10). (b) 완료 — Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스 (6.11). (c) 완료 — 요청 제한 서비스 R1~R10 (6.14). (d) 다음: 요청 제한의 HTTP 연결(필터와 429·Retry-After), 로그인·회원가입·재발급·로그아웃 API 컨트롤러와 쿠키, JWT 인증 필터와 SecurityFilterChain 분리.
+2. Stage 2-3 다음 작업: (a) 완료 — `family_id` 매핑과 생성 경로 (6.10). (b) 완료 — Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스 (6.11). (c) 완료 — 요청 제한 서비스 R1~R10 (6.14). Refresh 회전의 잠금 재시도 보완 완료 (6.14 보완 1). (d) 다음 작업: 요청 제한의 HTTP 연결(필터와 429·Retry-After, 회원가입 JSON 파싱 이전 집계, Google OAuth2 연결), 그다음 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키. (e) 미구현으로 유지: JWT 인증 필터와 SecurityFilterChain 분리.
 3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.

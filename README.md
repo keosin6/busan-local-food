@@ -3,7 +3,7 @@
 
 사용자가 부산의 맛집을 등록·검색하고, 리뷰와 평점을 남기며, AI가 요약한 리뷰와 AI 맛집 추천을 받을 수 있는 웹 서비스입니다.
 
-> **현재 상태:** 프로젝트 기본 골격과 F1-01 회원·인증의 서비스 계층(회원가입·로그인 검증, JWT Access Token, Refresh Token 발급·회전·재사용 탐지)이 구현되었습니다. 로그인·회원가입 화면과 API는 아직 없으며, F1-02 ~ F1-09는 구현 전입니다. 진행 상황은 [docs/PROGRESS.md](docs/PROGRESS.md)를 확인하세요.
+> **현재 상태:** 프로젝트 기본 골격과 F1-01 회원·인증의 서비스 계층(회원가입·로그인 검증, JWT Access Token, Refresh Token 발급·회전·재사용 탐지)이 구현되었습니다. 요청 제한 서비스 R1~R10도 구현되었습니다(서비스 계층). 아직 미구현: 로그인·회원가입·재발급·로그아웃 HTTP 컨트롤러와 쿠키, 요청 제한의 HTTP 연결(429·Retry-After), JWT 인증 필터. F1-02 ~ F1-09도 구현 전입니다. 진행 상황은 [docs/PROGRESS.md](docs/PROGRESS.md)를 확인하세요.
 
 ## 필수 기능
 
@@ -153,10 +153,10 @@ java -jar build/libs/busan-local-food-0.0.1-SNAPSHOT.jar
 
 ### 5. 운영 실행 (EC2)
 
-운영은 `prod` 프로필을 사용하고, 세 DB 변수와 `JWT_SECRET`을 모두 서버 환경변수로 지정합니다. 기본값은 없습니다.
+운영은 `prod` 프로필을 사용하고, 다음 다섯 환경 변수를 모두 서버 환경변수로 지정합니다. 기본값은 없습니다. `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`. `JWT_SECRET`과 `AUTH_RATE_LIMIT_HMAC_SECRET`은 서로 다른 값이어야 하며, 같으면 기동이 실패합니다.
 
 ```bash
-SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAME='<사용자>' DB_PASSWORD='<비밀번호>' JWT_SECRET='<Base64 서명 키>' java -jar busan-local-food.jar
+SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAME='<사용자>' DB_PASSWORD='<비밀번호>' JWT_SECRET='<Base64 서명 키>' AUTH_RATE_LIMIT_HMAC_SECRET='<Base64 요청 제한 키>' java -jar busan-local-food.jar
 ```
 
 ### 문제 해결
