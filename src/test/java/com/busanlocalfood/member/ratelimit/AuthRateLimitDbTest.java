@@ -115,7 +115,7 @@ class AuthRateLimitDbTest {
     void setUp() {
         clearTables();
         clock = new MutableClock(START);
-        service = new AuthRateLimitService(repository, hasher, transactionManager, clock, cleanup);
+        service = new AuthRateLimitService(repository, hasher, new LockRetryTemplate(transactionManager), clock, cleanup);
     }
 
     @AfterEach
@@ -372,7 +372,7 @@ class AuthRateLimitDbTest {
             }
         };
         AuthRateLimitService serviceWithFailingCleanup =
-                new AuthRateLimitService(repository, hasher, transactionManager, clock, failing);
+                new AuthRateLimitService(repository, hasher, new LockRetryTemplate(transactionManager), clock, failing);
 
         LoginAttemptResult result = serviceWithFailingCleanup.attemptLogin(EMAIL, IP, () -> false);
 

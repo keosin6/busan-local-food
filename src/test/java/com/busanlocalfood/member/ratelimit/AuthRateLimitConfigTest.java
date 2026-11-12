@@ -12,8 +12,11 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 /** 기동 시 설정 검증. HMAC 키 누락, 형식 오류, 길이 부족, JWT 키와 동일한 값은 기동을 막는다. */
 class AuthRateLimitConfigTest {
 
+    /** LockRetryTemplate 빈이 트랜잭션 관리자를 요구한다. 이 테스트는 설정 검증만 보므로 목으로 채운다. */
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withUserConfiguration(AuthRateLimitConfig.class);
+            .withUserConfiguration(AuthRateLimitConfig.class)
+            .withBean(org.springframework.transaction.PlatformTransactionManager.class,
+                    () -> org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
 
     private static String randomBase64(int bytes) {
         byte[] key = new byte[bytes];
