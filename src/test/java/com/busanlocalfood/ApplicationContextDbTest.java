@@ -8,6 +8,8 @@ import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.jwt.AccessTokenIssuer;
 import com.busanlocalfood.member.jwt.AccessTokenVerifier;
 import com.busanlocalfood.member.refresh.RefreshRotationGate;
+import com.busanlocalfood.member.ratelimit.AuthRateLimitHasher;
+import com.busanlocalfood.member.ratelimit.AuthRateLimitService;
 import com.busanlocalfood.member.refresh.RefreshTokenService;
 import com.busanlocalfood.member.repository.MemberRepository;
 import java.security.SecureRandom;
@@ -41,11 +43,15 @@ import org.springframework.test.context.DynamicPropertySource;
 class ApplicationContextDbTest {
 
     @DynamicPropertySource
-    static void jwtSecret(DynamicPropertyRegistry registry) {
+    static void secrets(DynamicPropertyRegistry registry) {
+        registry.add("jwt.secret", () -> randomBase64Key());
+        registry.add("auth.rate-limit.hmac-secret", () -> randomBase64Key());
+    }
+
+    private static String randomBase64Key() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
-        String secret = Base64.getEncoder().encodeToString(key);
-        registry.add("jwt.secret", () -> secret);
+        return Base64.getEncoder().encodeToString(key);
     }
 
     @Autowired
@@ -63,6 +69,8 @@ class ApplicationContextDbTest {
         assertThat(context.getBean(AccessTokenVerifier.class)).isNotNull();
         assertThat(context.getBean(RefreshTokenService.class)).isNotNull();
         assertThat(context.getBeansOfType(RefreshRotationGate.class)).hasSize(1);
+        assertThat(context.getBean(AuthRateLimitService.class)).isNotNull();
+        assertThat(context.getBean(AuthRateLimitHasher.class)).isNotNull();
         assertThat(context.getBeansOfType(Clock.class)).hasSize(1);
         assertThat(context.getBean(Clock.class).getZone()).isEqualTo(TimeConfig.SERVICE_ZONE);
     }
