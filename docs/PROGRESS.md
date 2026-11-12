@@ -20,7 +20,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중 (Stage 2-1 회원·DB 기반, Stage 2-2 회원가입·로그인 검증 서비스 구현 완료. DB 스키마 002·003 확정과 수동 SQL 작성 완료, 인증 기능 연결은 미구현) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중 (Stage 2-1 회원·DB 기반, Stage 2-2 회원가입·로그인 검증 서비스 구현 완료. DB 스키마 002·003 확정과 수동 SQL 작성 완료. JWT Access Token 발급·검증 구현 완료. Refresh Token과 인증 필터 연결은 미구현) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 구현 준비 단계 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -269,10 +269,37 @@
   - 002 적용 이후 생성되는 모든 행의 `family_id`는 애플리케이션이 UUID v4로 만든 값을 INSERT에 명시해야 합니다. `family_id`는 NOT NULL이며 DB 기본값이 없습니다.
 - 근거: FR-01-36, DEVELOPMENT_RULES 5.3·5.7.4, DATABASE_ERD 2.8. 기존 6.7절의 "확인 필요" 항목은 이 절에서 확정되었습니다.
 
+### 6.9 Stage 2-3 JWT Access Token 발급·검증 구현 (2026-11-12)
+
+- 브랜치: `feat/stage2-3-jwt-issuance-validation` (기준: `main` 2db3534).
+- 구현 (`member.jwt` 패키지):
+  - `AccessTokenIssuer`: HS256 서명, 클레임 `sub`, `iss`, `aud`, `iat`, `exp`, `role`. 만료는 설정값(기본 1800초).
+  - `AccessTokenVerifier`: 서명, 알고리즘(HS256 고정), 발급자, 대상, 만료와 미래 발급 시각(60초 시계 오차), 클레임 존재와 형식을 검증. 성공 시 회원 ID와 권한을 돌려줌.
+  - `JwtValidators`: 검증 규칙 조립. `JwtSigningKeys`: Base64 키 로딩과 시작 시 검증. `JwtProperties`, `JwtConfig`, `JwtSpec`, 값 타입 3종.
+  - `application.yml`: `jwt.secret`(환경 변수 `JWT_SECRET`), `jwt.access-token-expiry-seconds`(환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, 기본 1800) 추가.
+- 의존성: 추가 없음. 기존 `spring-security-oauth2-jose`를 사용.
+- 미구현 (이번 범위 밖): Refresh Token 발급·저장·회전, 재사용 탐지(T7), T14 동시 갱신, 요청 제한 서비스(R1~R10), 로그인·회원가입 API 컨트롤러, 로그아웃, 최종 SecurityFilterChain 분리와 JWT 인증 필터 연결, Google OAuth2.
+- 검증:
+  - `./gradlew clean test` (DB와 `JWT_SECRET` 미설정): 160개 중 147개 통과, 13개 건너뜀 (DB 테스트), 실패 0개. JWT 테스트 59개 전부 통과.
+  - `./gradlew clean test` (격리된 MySQL 8.0.46, `TEST_DB_*` 설정): 160개 중 158개 통과, 실패 2개.
+    - 실패: `MemberPersistenceDbTest`의 Refresh Token 2건.
+    - 원인: `main`에 병합된 002 SQL로 `refresh_token.family_id`가 NOT NULL이 되었지만, `RefreshToken` Entity는 이 컬럼을 채우지 않습니다. INSERT가 `Field 'family_id' doesn't have a default value`로 실패합니다.
+    - 이 문제는 JWT 변경 이전부터 `main`에 있던 불일치입니다. Refresh Token 발급 범위이므로 이번 PR에서는 Entity를 수정하지 않았습니다.
+  - `./gradlew bootJar`: 성공.
+  - 기동 확인 (생성된 jar, 격리 DB 연결):
+    - `JWT_SECRET` 없음: 기동 실패. 메시지에 `JWT_SECRET`이 표시됩니다.
+    - 32바이트 이상 Base64 키: 기동 성공, `/`는 200.
+    - 16바이트 키: 기동 실패.
+    - 실패 로그에 키 값은 나타나지 않았습니다.
+- 운영 주의:
+  - 로컬과 운영에서 `JWT_SECRET`을 반드시 설정해야 기동됩니다.
+  - 키를 교체하면 기존 Access Token이 무효화될 수 있습니다.
+  - `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`는 Refresh Token 구현 단계에서 사용합니다.
+
 ## 7. 다음 작업
 
 1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
-2. Stage 2-3: 다음 작업은 JWT 발급·검증 설계와 구현입니다. DB 스키마(SQL 002·003)는 확정되었고 수동 SQL은 작성 완료했습니다. 실제 DB 적용은 사용자가 수행합니다. 이후 Refresh Token 발급·로테이션·재사용 탐지(T7 A안, `family_id` 포함), 요청 제한 서비스(R1~R10), API 로그인·회원가입 컨트롤러, 로그아웃(T12 A안) 순으로 진행합니다.
+2. Stage 2-3 다음 작업: (a) `RefreshToken` Entity에 `family_id`를 매핑하고 발급 시 UUID v4를 채웁니다. 현재 DB 테스트 2건 실패의 원인입니다 (6.9 참조). (b) Refresh Token 발급·로테이션·재사용 탐지(T7 A안). (c) 요청 제한 서비스(R1~R10). (d) API 로그인·회원가입 컨트롤러와 JWT 인증 필터 연결. (e) 로그아웃(T12 A안) 순으로 진행합니다.
 3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
