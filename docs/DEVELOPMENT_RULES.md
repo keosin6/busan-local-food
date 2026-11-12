@@ -466,6 +466,15 @@ Google 계정 해제 (확정):
 - 검증 실패의 내부 사유는 내부 예외 메시지에만 남기고 외부 응답에 노출하지 않습니다. 토큰 원문은 예외 메시지, 로그, 응답 본문 어디에도 남기지 않습니다.
 - 구현 상태: 발급과 검증, 설정과 시작 검증은 구현되었습니다. Refresh Token, 인증 필터 연결, 로그인과 회원가입 컨트롤러는 아직 구현하지 않았습니다.
 
+### 5.10 시간 처리 규칙
+
+- 서비스 시간대는 `Asia/Seoul`입니다. 애플리케이션(JVM), JDBC 변환, DB 세션이 모두 이 시간대를 씁니다. API의 날짜·시간 표기(API_SPEC 1.1)와 같은 기준입니다.
+- JVM 기본 시간대는 기동 시 `TimeConfig.applyDefaultTimeZone()`이 고정합니다. 서버의 OS 시간대 설정에 의존하지 않습니다.
+- DB 세션 시간대는 `application.yml`의 `spring.datasource.hikari.connection-init-sql`(`SET time_zone = '+09:00'`)로 고정합니다. `NOW()`, `CURRENT_TIMESTAMP` 기본값이 앱이 저장하는 시각과 같은 기준이 됩니다.
+- `DB_URL`에 서비스 시간대와 다른 시간대 옵션(`serverTimezone`, `connectionTimeZone` 등)을 넣지 않습니다. 셋이 다르면 앱이 저장한 시각과 DB가 만든 시각이 어긋납니다.
+- 현재 시각이 필요한 빈은 `TimeConfig`의 공용 `Clock` 빈을 주입받습니다. `Clock` 빈을 추가로 등록하지 않으며, 서비스 코드에서 `Clock.systemUTC()`나 `Clock.systemDefaultZone()`을 직접 만들지 않습니다.
+- 테스트 JVM은 `build.gradle`의 `user.timezone` 설정으로 같은 시간대에서 실행됩니다. 시간대 일치는 `ApplicationContextDbTest`가 확인합니다.
+
 ## 6. 코드 구조 규칙 (구현 단계)
 
 ### 6.1 패키지 구조 (기능 단위)
@@ -512,6 +521,10 @@ com.busanlocalfood
 - 테스트 의존성은 `spring-boot-starter-test`입니다. JUnit 5, Mockito, AssertJ, Spring MockMvc를 사용합니다.
 - Testcontainers, H2, Docker 기반 테스트 환경은 도입하지 않습니다. Docker Desktop 설치를 요구하지 않습니다.
 - DB 연동 테스트는 개발 PC에 직접 설치한 MySQL 8의 테스트 전용 데이터베이스를 사용합니다. 개발 데이터베이스와 분리합니다. 테스트가 개발 데이터베이스의 데이터를 삭제하거나 변경하지 않도록 합니다.
+- DB 연동 테스트 준비 절차:
+  1. 테스트 전용 데이터베이스에 `db/manual/001_create_member_refresh_token.sql`, `db/manual/002_add_refresh_token_family_id.sql`을 이 순서로 한 번씩 적용합니다. 003은 요청 제한 구현 단계의 테스트부터 필요합니다.
+  2. 환경 변수 `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정하고 `./gradlew clean test`를 실행합니다. 값은 저장소에 커밋하지 않습니다.
+  3. 변수가 없으면 DB 테스트는 건너뜁니다. 건너뛴 테스트는 통과로 보고하지 않습니다.
 - 외부 서비스(Google, AWS S3, OpenRouter)는 모킹하거나 가짜 구현체를 사용합니다 (아래 마지막 항목 참조).
 - 위 목록 밖의 테스트 라이브러리가 필요하면 이유와 대안을 제안하고 사용자 승인을 받은 뒤 추가합니다.
 - CI 테스트는 기존 GitHub Actions 계획을 따릅니다. 이번 결정으로 새 테스트 인프라를 추가하지 않습니다.

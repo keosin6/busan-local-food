@@ -171,7 +171,7 @@ class MemberPersistenceDbTest {
         refreshTokenRepository.saveAndFlush(
                 RefreshToken.issueNewFamily(member, hash, LocalDateTime.now().plusDays(14)));
 
-        assertThat(refreshTokenRepository.findByTokenHash(hash)).isPresent();
+        assertThat(refreshTokenRepository.findByTokenHashForUpdate(hash)).isPresent();
         assertThat(refreshTokenRepository.findActiveByMemberIdForUpdate(member.getId())).hasSize(1);
     }
 

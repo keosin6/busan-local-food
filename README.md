@@ -3,7 +3,7 @@
 
 사용자가 부산의 맛집을 등록·검색하고, 리뷰와 평점을 남기며, AI가 요약한 리뷰와 AI 맛집 추천을 받을 수 있는 웹 서비스입니다.
 
-> **현재 상태:** 프로젝트 기본 골격(Spring Boot, 설정, 공통 오류 응답, 기본 홈 화면)이 구현되었습니다. 기능 F1-01 ~ F1-09는 아직 구현 전입니다. 진행 상황은 [docs/PROGRESS.md](docs/PROGRESS.md)를 확인하세요.
+> **현재 상태:** 프로젝트 기본 골격과 F1-01 회원·인증의 서비스 계층(회원가입·로그인 검증, JWT Access Token, Refresh Token 발급·회전·재사용 탐지)이 구현되었습니다. 로그인·회원가입 화면과 API는 아직 없으며, F1-02 ~ F1-09는 구현 전입니다. 진행 상황은 [docs/PROGRESS.md](docs/PROGRESS.md)를 확인하세요.
 
 ## 필수 기능
 
@@ -52,7 +52,7 @@
 
 ## 환경 변수
 
-보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 기본 골격이 실제로 읽는 변수는 DB 관련 3개입니다.
+보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 애플리케이션이 실제로 읽는 변수는 첫 두 줄(DB 3개, JWT 3개)입니다. `DB_PASSWORD`와 `JWT_SECRET`이 없으면 기동하지 않습니다.
 
 ```
 DB_URL, DB_USERNAME, DB_PASSWORD
@@ -84,6 +84,32 @@ mysql -u root -p -e "CREATE DATABASE busan_local_food CHARACTER SET utf8mb4 COLL
 export DB_PASSWORD='<비밀번호>'
 ```
 
+JWT 서명 키도 필요합니다. Base64로 인코딩한 32바이트 이상의 값이며, 없거나 형식이 잘못되면 기동이 실패합니다. 아래 명령으로 만든 값을 환경변수로만 지정하고 저장소에 넣지 않습니다.
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 32)"
+```
+
+키를 바꾸면 이미 발급된 Access Token은 무효가 됩니다. `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`(기본 1800)와 `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`(기본 1209600)는 선택입니다.
+
+시간대는 애플리케이션이 `Asia/Seoul`로 고정합니다. `DB_URL`에 다른 시간대 옵션을 넣지 않습니다 ([개발 규칙 5.10](docs/DEVELOPMENT_RULES.md)).
+
+### 2-1. 테이블 생성 (수동 SQL)
+
+애플리케이션은 테이블을 만들지 않습니다. `db/manual/`의 SQL을 번호 순서대로 한 번씩 직접 실행합니다. 각 파일 머리말의 적용 전 확인 사항을 먼저 읽으세요.
+
+```bash
+mysql -u busan -p busan_local_food < db/manual/001_create_member_refresh_token.sql
+```
+
+```bash
+mysql -u busan -p busan_local_food < db/manual/002_add_refresh_token_family_id.sql
+```
+
+```bash
+mysql -u busan -p busan_local_food < db/manual/003_create_auth_rate_limit_tables.sql
+```
+
 ### 3. 실행
 
 ```bash
@@ -99,7 +125,21 @@ export DB_PASSWORD='<비밀번호>'
 ./gradlew bootJar
 ```
 
-JAR 실행에도 같은 환경변수가 필요합니다.
+DB 연동 테스트는 기본으로 건너뜁니다. 실행하려면 개발 DB와 분리된 테스트 전용 데이터베이스에 SQL 001, 002를 순서대로 적용하고 아래 변수를 지정합니다.
+
+```bash
+export TEST_DB_URL='jdbc:mysql://localhost:3306/<테스트 DB 이름>'
+```
+
+```bash
+export TEST_DB_USERNAME='<사용자>'
+```
+
+```bash
+export TEST_DB_PASSWORD='<비밀번호>'
+```
+
+JAR 실행에도 `DB_PASSWORD`, `JWT_SECRET` 등 같은 환경변수가 필요합니다.
 
 ```bash
 java -jar build/libs/busan-local-food-0.0.1-SNAPSHOT.jar
@@ -107,10 +147,10 @@ java -jar build/libs/busan-local-food-0.0.1-SNAPSHOT.jar
 
 ### 5. 운영 실행 (EC2)
 
-운영은 `prod` 프로필을 사용하고, 세 DB 변수를 모두 서버 환경변수로 지정합니다. 기본값은 없습니다.
+운영은 `prod` 프로필을 사용하고, 세 DB 변수와 `JWT_SECRET`을 모두 서버 환경변수로 지정합니다. 기본값은 없습니다.
 
 ```bash
-SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAME='<사용자>' DB_PASSWORD='<비밀번호>' java -jar busan-local-food.jar
+SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAME='<사용자>' DB_PASSWORD='<비밀번호>' JWT_SECRET='<Base64 서명 키>' java -jar busan-local-food.jar
 ```
 
 ### 문제 해결
@@ -118,4 +158,5 @@ SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAM
 | 증상 | 확인할 것 |
 |------|-----------|
 | `필수 환경변수가 설정되지 않았습니다: DB_PASSWORD` | 누락된 환경변수를 지정합니다. 목록에 표시된 변수만 확인하면 됩니다. |
+| `JWT_SECRET 환경 변수가 설정되지 않았습니다` 또는 `JWT_SECRET은 Base64 형식이어야 합니다` | `JWT_SECRET`에 Base64로 인코딩한 32바이트 이상의 값을 지정합니다 (위 2번 참조). |
 | `데이터베이스 연결 또는 초기화에 실패했습니다` | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`가 맞는지, MySQL 8이 실행 중인지, 사용자에게 권한이 있는지 확인합니다. 실패 원인 메시지가 함께 출력됩니다. |

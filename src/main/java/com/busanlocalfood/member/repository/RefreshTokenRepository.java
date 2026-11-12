@@ -11,9 +11,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
-    /** 요청 쿠키 원문의 SHA-256 해시로 조회한다. */
-    Optional<RefreshToken> findByTokenHash(String tokenHash);
-
     /**
      * 잠금 전 사전 조회: 해시로 회원 ID만 읽는다. 행을 잠그지 않으며, Entity도 영속성 컨텍스트에 올리지 않는다.
      * 이 결과로 정상 회전 여부를 판단하지 않는다. 회원 행을 잠근 뒤 반드시 findByTokenHashForUpdate로 다시 읽는다.
