@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 class JwtConfigTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withUserConfiguration(JwtConfig.class);
+            .withUserConfiguration(JwtConfig.class, com.busanlocalfood.global.config.TimeConfig.class);
 
     private static String validSecret() {
         return Base64.getEncoder().encodeToString(JwtTestSupport.randomKey(32).getEncoded());

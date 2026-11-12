@@ -1,5 +1,6 @@
 package com.busanlocalfood;
 
+import com.busanlocalfood.global.config.TimeConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
@@ -10,6 +11,8 @@ import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServic
 public class BusanLocalFoodApplication {
 
     public static void main(String[] args) {
+        // 시간대를 먼저 고정한다. DB 연결과 시각 계산이 모두 이 값을 기준으로 한다.
+        TimeConfig.applyDefaultTimeZone();
         SpringApplication.run(BusanLocalFoodApplication.class, args);
     }
 }

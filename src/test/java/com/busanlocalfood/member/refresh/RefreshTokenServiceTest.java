@@ -31,13 +31,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 class RefreshTokenServiceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 12, 12, 0);
-    private static final ZoneId ZONE = ZoneId.systemDefault();
+    private static final ZoneId ZONE = com.busanlocalfood.global.config.TimeConfig.SERVICE_ZONE;
     private static final String FAMILY = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
     private static final long MEMBER_ID = 7L;
 
     private MemberRepository memberRepository;
     private RefreshTokenRepository refreshTokenRepository;
     private RefreshTokenService service;
+    private boolean gateOpen;
+    private int gateCalls;
     private Member member;
 
     @BeforeEach
@@ -46,7 +48,13 @@ class RefreshTokenServiceTest {
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         Clock clock = Clock.fixed(NOW.atZone(ZONE).toInstant(), ZONE);
         service = new RefreshTokenService(memberRepository, refreshTokenRepository,
-                new RefreshTokenGenerator(), new RefreshTokenProperties(1209600), clock);
+                new RefreshTokenGenerator(), new RefreshTokenProperties(1209600),
+                familyId -> {
+                    gateCalls++;
+                    return gateOpen;
+                }, clock);
+        gateOpen = true;
+        gateCalls = 0;
         member = Member.create("a@example.com", "$2a$10$hash", "부산먹보", null);
         ReflectionTestUtils.setField(member, "id", MEMBER_ID);
     }
@@ -192,5 +200,61 @@ class RefreshTokenServiceTest {
         service.logout(" ");
 
         verify(memberRepository, never()).findByIdForUpdate(anyLong());
+    }
+
+    private RefreshToken stubLockedRow(String raw, LocalDateTime expiresAt) {
+        RefreshToken token = row(raw, FAMILY, expiresAt);
+        String hash = RefreshTokenHasher.sha256Hex(raw);
+        when(refreshTokenRepository.findMemberIdByTokenHash(hash)).thenReturn(Optional.of(MEMBER_ID));
+        when(memberRepository.findByIdForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
+        when(refreshTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(token));
+        return token;
+    }
+
+    @Test
+    void 요청_제한에_걸리면_토큰을_바꾸지_않고_RateLimited를_반환한다() {
+        String raw = "rate-limited-token-value-for-test-0001";
+        RefreshToken token = stubLockedRow(raw, NOW.plusDays(1));
+        gateOpen = false;
+
+        RefreshTokenRotation result = service.rotate(raw);
+
+        assertThat(result).isInstanceOf(RefreshTokenRotation.RateLimited.class);
+        assertThat(token.isRevoked()).isFalse();
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void 재사용_탐지는_요청_제한보다_먼저_처리되어_제한_판정을_거치지_않는다() {
+        String raw = "reuse-before-gate-token-for-test-00001";
+        RefreshToken token = stubLockedRow(raw, NOW.plusDays(1));
+        token.revoke(NOW.minusMinutes(1));
+        when(refreshTokenRepository.findActiveByMemberIdForUpdate(MEMBER_ID)).thenReturn(List.of());
+        gateOpen = false;
+
+        RefreshTokenRotation result = service.rotate(raw);
+
+        assertThat(result).isInstanceOf(RefreshTokenRotation.ReuseDetected.class);
+        assertThat(gateCalls).isZero();
+    }
+
+    @Test
+    void 요청_제한_판정은_만료_확인보다_먼저_한다() {
+        String raw = "expired-after-gate-token-for-test-0001";
+        stubLockedRow(raw, NOW.minusSeconds(1));
+
+        RefreshTokenRotation result = service.rotate(raw);
+
+        assertThat(result).isInstanceOf(RefreshTokenRotation.Rejected.class);
+        assertThat(gateCalls).isEqualTo(1);
+    }
+
+    @Test
+    void 알_수_없는_토큰은_요청_제한_판정을_거치지_않는다() {
+        when(refreshTokenRepository.findMemberIdByTokenHash(anyString())).thenReturn(Optional.empty());
+
+        service.rotate("unknown-token-no-gate-for-test-00000001");
+
+        assertThat(gateCalls).isZero();
     }
 }

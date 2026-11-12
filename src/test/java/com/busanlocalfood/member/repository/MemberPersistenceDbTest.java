@@ -172,7 +172,7 @@ class MemberPersistenceDbTest {
                 RefreshToken.issueNewFamily(member, hash, LocalDateTime.now().plusDays(14)));
 
         assertThat(refreshTokenRepository.findByTokenHash(hash)).isPresent();
-        assertThat(refreshTokenRepository.findAllByMemberIdAndRevokedAtIsNull(member.getId())).hasSize(1);
+        assertThat(refreshTokenRepository.findActiveByMemberIdForUpdate(member.getId())).hasSize(1);
     }
 
     @Test
