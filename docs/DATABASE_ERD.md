@@ -283,7 +283,7 @@ erDiagram
 | id | BIGINT | N | AUTO_INCREMENT | PK |
 | member_id | BIGINT | N | | FK → member.id |
 | token_hash | CHAR(64) | N | | Refresh Token의 SHA-256 해시 (원문 저장 금지) |
-| family_id | CHAR(36) ascii_bin | N | | 토큰 계열 식별 UUID (가명 식별자, SQL 002로 추가). 서버가 생성한다. 기존 행은 마이그레이션 시 행마다 개별 UUID를 받았다. 직접 식별 정보는 없지만 회원 및 인증 세션과 연결될 수 있으므로 외부 노출을 막는다. 같은 로그인 세션의 회전에서는 같은 값을 유지하고, 새 기기 로그인에서는 새로 생성한다 (FR-01-36) |
+| family_id | CHAR(36) ascii_bin | N | | 토큰 계열 식별 UUID (가명 식별자, SQL 002로 추가). 서버가 생성한다. 기존 행은 마이그레이션(SQL 002) 시 MySQL UUID v1을 행마다 개별로 받았다(일회성 백필). 신규 계열 ID는 애플리케이션이 UUID v4로 생성하며, 기본값이 없으므로 INSERT 때 반드시 값을 넣는다. 직접 식별 정보는 없지만 회원 및 인증 세션과 연결될 수 있으므로 외부 노출을 막는다. 같은 로그인 세션의 회전에서는 같은 값을 유지하고, 새 기기 로그인에서는 새로 생성한다 (FR-01-36) |
 | expires_at | DATETIME(6) | N | | 만료 시각 |
 | revoked_at | DATETIME(6) | Y | | 로그아웃·재발급 등으로 폐기된 시각 |
 | created_at | DATETIME(6) | N | CURRENT_TIMESTAMP(6) | |
@@ -292,7 +292,7 @@ erDiagram
 - UNIQUE: `uk_refresh_token_hash (token_hash)`
 - INDEX: `idx_refresh_member (member_id, revoked_at)`
 - INDEX: `idx_refresh_family (family_id)`. 계열 단위 요청 제한 조회용 (SQL 002 확정).
-- 계열(`family_id`): 회전할 때 기존 행의 값을 새 행에 그대로 복사한다. 새 기기 로그인은 새 UUID를 만든다. `family_id`는 서버가 생성하는 UUID다. 직접적인 개인 식별 정보는 포함하지 않지만, 회원 및 인증 세션과 연결될 수 있는 가명 식별자다. 따라서 개인정보 및 보안 정보에 준하여 접근을 통제하고 로그를 관리하며, 원본 Refresh Token과 마찬가지로 외부 노출을 막는다. 요청 제한의 키로도 쓴다 (API_SPEC 1.4). 기존 계열 구조와 T7·T14 정책은 바뀌지 않는다.
+- 계열(`family_id`): 회전할 때 기존 행의 값을 새 행에 그대로 복사한다. 새 기기 로그인은 새 UUID를 만든다. 신규 `family_id`는 애플리케이션이 생성하는 UUID v4다. 기존 행의 백필 값은 MySQL UUID v1이며 일회성 마이그레이션에만 쓴다. 직접적인 개인 식별 정보는 포함하지 않지만, 회원 및 인증 세션과 연결될 수 있는 가명 식별자다. 따라서 개인정보 및 보안 정보에 준하여 접근을 통제하고 로그를 관리하며, 원본 Refresh Token과 마찬가지로 외부 API 응답, 클라이언트 데이터, 일반 애플리케이션 로그에 노출하지 않는다. 요청 제한의 키로도 쓴다 (API_SPEC 1.4). 기존 계열 구조와 T7·T14 정책은 바뀌지 않는다.
 - 원문 저장 위치: 브라우저의 HttpOnly Cookie만 (FR-01-05). DB에는 해시만 저장합니다.
 - 로테이션 (FR-01-06): 재발급 시 기존 행의 `revoked_at`을 기록하고 새 행을 INSERT합니다. 행을 물리 삭제하지 않습니다. 만료되거나 폐기된 행을 정리하는 방식은 구현 단계에서 정합니다.
 - 재사용 탐지 (T7 A안 확정): 폐기된 Refresh Token의 재사용이 실제로 탐지되면 해당 회원의 모든 활성 Refresh Token(`revoked_at IS NULL`)을 폐기합니다. 원문은 저장하지 않고 SHA-256 해시만 저장합니다. 폐기된 행은 재사용 탐지를 위해 보존합니다.
@@ -423,5 +423,5 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 | 3 | `db/manual/003_create_auth_rate_limit_tables.sql` | 요청 제한 이벤트 4개와 카운터 1개 테이블 생성 | 금지 (이미 테이블이 있으면 실패) |
 
 - 적용 전에는 대상 DB를 백업하고 현재 스키마를 확인합니다. 운영 DB는 점검 시간에 적용합니다.
-- 002의 `UUID()`는 버전 1 형식입니다. 시각 정보와 서버 노드 식별 값을 담으므로, 마이그레이션 시점의 한 번 채우는 값으로만 씁니다. 애플리케이션의 신규 `family_id`는 버전 4(난수 기반)를 사용하도록 구현 단계에서 정합니다.
+- 002의 `UUID()`는 버전 1 형식입니다. 시각 정보와 서버 노드 식별 값을 담으므로, 마이그레이션 시점의 한 번 채우는 값으로만 씁니다. 애플리케이션의 신규 `family_id`는 버전 4(난수 기반) UUID를 사용합니다 (2026-11-12 확정, PROGRESS 6.8). 백필 값은 일회성이며 외부 노출 금지 대상입니다.
 - `ddl-auto`는 `none`을 유지합니다. 스키마 검증은 적용 후 SHOW CREATE TABLE과 information_schema 조회로 확인합니다.
