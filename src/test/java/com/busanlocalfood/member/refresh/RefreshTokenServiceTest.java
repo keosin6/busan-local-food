@@ -57,9 +57,13 @@ class RefreshTokenServiceTest {
 
     @Test
     void 신규_로그인은_새_계열로_발급하고_해시만_저장한다() {
-        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(member));
+        when(memberRepository.findByIdForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
 
         IssuedRefreshToken issued = service.issueForNewLogin(MEMBER_ID);
+
+        // 신규 발급도 회원 행 잠금으로 시작해야 한다. 잠금 없는 조회는 쓰지 않는다.
+        verify(memberRepository).findByIdForUpdate(MEMBER_ID);
+        verify(memberRepository, never()).findById(anyLong());
 
         ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
         verify(refreshTokenRepository).save(saved.capture());

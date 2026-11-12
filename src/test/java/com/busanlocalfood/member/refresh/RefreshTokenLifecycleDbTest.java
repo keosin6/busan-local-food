@@ -2,6 +2,7 @@ package com.busanlocalfood.member.refresh;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.domain.RefreshToken;
@@ -18,6 +19,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +32,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * MySQL 8 테스트 DB에서 Refresh Token 생명주기를 검증한다.
@@ -63,6 +68,9 @@ class RefreshTokenLifecycleDbTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private final List<Long> createdMemberIds = new ArrayList<>();
 
@@ -261,6 +269,108 @@ class RefreshTokenLifecycleDbTest {
             }
             // 두 요청 모두 끝난 뒤 회원의 활성 토큰은 하나도 없어야 한다. 교차 실행에서도 남는 토큰이 없어야 한다.
             assertThat(activeCount(member.getId())).isZero();
+        }
+    }
+
+    @Test
+    void 신규_발급은_다른_트랜잭션이_잡은_회원_행_잠금을_기다린다() throws Exception {
+        Member member = newMember();
+        service.issueForNewLogin(member.getId());
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // 테스트 트랜잭션이 회원 행을 잠근 채 대기한다.
+            Future<?> holder = pool.submit(() -> tx.executeWithoutResult(status -> {
+                memberRepository.findByIdForUpdate(member.getId());
+                locked.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<IssuedRefreshToken> issuing = pool.submit(() -> service.issueForNewLogin(member.getId()));
+
+            // 회원 행이 잠긴 동안에는 신규 발급이 끝나면 안 된다.
+            // 참고: 잠금 없는 조회라도 INSERT가 FK 때문에 같은 부모 행을 기다리므로 이 검사만으로는 명시적 잠금 호출을 구분하지 못한다.
+            // 명시적 잠금 호출은 RefreshTokenServiceTest가 findByIdForUpdate 호출과 findById 미호출로 검증한다.
+            assertThatThrownBy(() -> issuing.get(500, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            assertThat(activeCount(member.getId())).isEqualTo(1);
+
+            release.countDown();
+            holder.get(5, TimeUnit.SECONDS);
+            IssuedRefreshToken issued = issuing.get(5, TimeUnit.SECONDS);
+
+            assertThat(issued.token()).isNotBlank();
+            assertThat(activeCount(member.getId())).isEqualTo(2);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void 신규_발급과_재사용_탐지가_동시에_실행되어도_직렬화되어_결과가_한_순서와_일치한다() throws Exception {
+        for (int round = 0; round < 5; round++) {
+            Member member = newMember();
+            IssuedRefreshToken old = service.issueForNewLogin(member.getId());
+            RefreshTokenRotation rotated = service.rotate(rawOf(old));
+            String oldFamily = rowsOf(member.getId()).get(0).familyId();
+            // 재사용 대상: 이미 회전되어 폐기된 old 토큰. 회원의 활성 토큰은 회전으로 생긴 B 하나다.
+            assertThat(rotated).isInstanceOf(RefreshTokenRotation.Rotated.class);
+            assertThat(activeCount(member.getId())).isEqualTo(1);
+
+            ExecutorService pool = Executors.newFixedThreadPool(2);
+            try {
+                CountDownLatch start = new CountDownLatch(1);
+                Future<IssuedRefreshToken> issuing = pool.submit(() -> {
+                    start.await();
+                    return service.issueForNewLogin(member.getId());
+                });
+                Future<RefreshTokenRotation> reuse = pool.submit(() -> {
+                    start.await();
+                    return service.rotate(rawOf(old));
+                });
+                start.countDown();
+
+                IssuedRefreshToken fresh = issuing.get(10, TimeUnit.SECONDS);
+                RefreshTokenRotation reuseResult = reuse.get(10, TimeUnit.SECONDS);
+
+                // 재사용 탐지는 예외 없이 결과로 돌아와야 한다.
+                assertThat(reuseResult).isInstanceOf(RefreshTokenRotation.ReuseDetected.class);
+                int revoked = ((RefreshTokenRotation.ReuseDetected) reuseResult).revokedCount();
+
+                List<Row> rows = rowsOf(member.getId());
+                Row freshRow = rows.stream()
+                        .filter(r -> r.tokenHash().equals(RefreshTokenHasher.sha256Hex(rawOf(fresh))))
+                        .findFirst().orElseThrow();
+
+                // 신규 발급은 기존 Family ID를 재사용하지 않고 새 UUID v4를 만든다.
+                assertThat(freshRow.familyId()).isNotEqualTo(oldFamily);
+                assertThat(UUID.fromString(freshRow.familyId()).version()).isEqualTo(4);
+
+                // 두 직렬 순서 중 하나와 일치해야 한다.
+                //  (a) 재사용 먼저: B만 폐기(1건), 이후 신규 발급이 활성으로 남는다.
+                //  (b) 발급 먼저: 신규 행까지 폐기(2건), 활성 토큰 없음.
+                boolean freshActive = freshRow.revokedAt().isEmpty();
+                if (freshActive) {
+                    assertThat(revoked).isEqualTo(1);
+                } else {
+                    assertThat(revoked).isEqualTo(2);
+                }
+                assertThat(activeCount(member.getId())).isEqualTo(freshActive ? 1 : 0);
+
+                // 기존 계열의 행은 모두 폐기되어 있어야 한다. 신규 발급이 옛 계열을 되살리면 안 된다.
+                assertThat(rows.stream().filter(r -> r.familyId().equals(oldFamily)))
+                        .allMatch(r -> r.revokedAt().isPresent());
+            } finally {
+                pool.shutdownNow();
+            }
         }
     }
 }

@@ -49,10 +49,13 @@ public class RefreshTokenService {
     /**
      * 새 로그인으로 새 계열을 시작한다. family_id는 UUID v4로 새로 만든다.
      * 화면 로그인, API 전용 로그인, Google 로그인이 공통으로 호출한다.
+     *
+     * 회원 행을 PESSIMISTIC_WRITE로 잠근 뒤 발급한다. 같은 회원의 재사용 탐지, 회전, 로그아웃과
+     * 같은 잠금으로 직렬화되어야 한다 (T14 A안, DEVELOPMENT_RULES 5.7.4). 잠금 순서는 회원 행이 첫 번째다.
      */
     @Transactional
     public IssuedRefreshToken issueForNewLogin(long memberId) {
-        Member member = memberRepository.findById(memberId)
+        Member member = memberRepository.findByIdForUpdate(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("회원을 찾을 수 없습니다."));
         LocalDateTime now = LocalDateTime.now(clock);
         String raw = generator.generate();

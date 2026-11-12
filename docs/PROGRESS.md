@@ -362,7 +362,7 @@
   - 판정 순서: 폐기됨(재사용) → 만료(거부, 다른 행 유지) → 정상 회전. 알 수 없는 토큰은 행을 바꾸지 않고 거부합니다.
   - 재사용 탐지: 같은 트랜잭션에서 회원의 활성 행을 ID 순서로 잠가 모두 폐기하고 `ReuseDetected`를 반환합니다. 예외를 던지지 않으므로 전체 폐기가 롤백되지 않습니다. 폐기된 행은 삭제하지 않습니다.
   - 로그아웃: 회원 행 → 토큰 행 순서로 잠가 해당 행만 폐기합니다. 알 수 없는 토큰과 이미 폐기된 토큰은 아무 작업 없이 끝납니다. 로그아웃된 토큰을 나중에 쓰면 재사용으로 탐지됩니다 (5.7.4).
-- 동시성 (T14 A안, 잠금 순서 회원 → 토큰): 사전 조회는 판정에 쓰지 않습니다. 잠금 뒤에 다시 읽습니다. InnoDB의 REPEATABLE READ 스냅샷에 가려지지 않도록 재조회도 `FOR UPDATE` 잠금 읽기로 합니다. 외부 호출은 트랜잭션 안에서 하지 않습니다.
+- 동시성 (T14 A안, 잠금 순서 회원 → 토큰): 신규 발급(`issueForNewLogin`)도 회원 행을 `findByIdForUpdate`로 잠근 뒤 발급합니다. 재사용 탐지·회전·로그아웃과 같은 잠금으로 직렬화됩니다 (PR #13 보완). 참고: 잠금 없는 조회라도 INSERT가 FK 때문에 부모 회원 행을 기다리므로, 블로킹 테스트만으로는 명시적 잠금 호출을 구분할 수 없습니다. 명시적 호출은 단위 테스트가 `findByIdForUpdate` 호출과 `findById` 미호출로 확인합니다. 사전 조회는 판정에 쓰지 않습니다. 잠금 뒤에 다시 읽습니다. InnoDB의 REPEATABLE READ 스냅샷에 가려지지 않도록 재조회도 `FOR UPDATE` 잠금 읽기로 합니다. 외부 호출은 트랜잭션 안에서 하지 않습니다.
 - 보안 점검 (JWT 패키지와 동일 기준):
   - 난수는 `SecureRandom`만 사용합니다. `Random`과 `Math.random()`은 쓰지 않습니다.
   - 원문은 `IssuedRefreshToken`으로만 전달합니다. Entity, 로그, 예외 메시지, `toString()`에 넣지 않습니다.
@@ -371,7 +371,7 @@
   - 고정 토큰이나 테스트용 키를 운영 코드에 넣지 않았습니다. 신규 라이브러리를 추가하지 않았습니다.
 - 테스트:
   - 단위: `RefreshTokenGeneratorAndHasherTest` 7개(원문 길이와 인코딩, 중복 없음, SHA-256 표준 벡터, 원문 미노출, 빈 값 거부, 만료 설정 검증), `RefreshTokenServiceTest` 8개(신규 계열 발급, 정상 회전과 family 유지, 만료 거부, 알 수 없는 토큰 거부, 재사용 탐지 결과 반환과 예외 없음, 회원 행 → 토큰 행 잠금 순서, 로그아웃 안전성, 로그아웃의 빈 잠금), `RefreshTokenStateTest` 3개, `RefreshTokenTest` 12개.
-  - MySQL 통합: `RefreshTokenLifecycleDbTest` 7개. 테스트 트랜잭션을 열지 않아 커밋된 값을 직접 확인합니다. 각 테스트 후 생성한 행을 삭제합니다.
+  - MySQL 통합: `RefreshTokenLifecycleDbTest` 9개. 테스트 트랜잭션을 열지 않아 커밋된 값을 직접 확인합니다. 각 테스트 후 생성한 행을 삭제합니다.
     1. 신규 계열 발급 후 해시만 저장되고 family_id는 UUID v4
     2. 정상 회전 후 이전 행 폐기, 새 행은 같은 family_id, 이전 해시 보존
     3. 만료 토큰 거부, 다른 활성 토큰 유지
@@ -379,9 +379,11 @@
     5. 서로 다른 회원 간 영향 없음
     6. 로그아웃 후 중복 로그아웃 안전, 로그아웃된 토큰 재사용은 재사용 탐지
     7. 같은 토큰 동시 갱신 5회 반복: 한 요청은 `Rotated`, 다른 요청은 `ReuseDetected`, 끝난 뒤 활성 토큰 0개
+    8. 다른 트랜잭션이 회원 행을 잠근 동안 신규 발급이 끝나지 않고 대기, 해제 후 완료
+    9. 신규 발급과 재사용 탐지를 동시에 5회 실행: 결과는 두 직렬 순서 중 하나와 일치, 신규 발급은 옛 family_id를 쓰지 않고 UUID v4 생성, 옛 계열 행은 모두 폐기
 - 실행 결과 (최종 커밋 기준):
-  - `./gradlew clean test`, DB 미설정: 211개 중 186개 통과, 25개 건너뜀(DB 테스트 25개: `MemberPersistenceDbTest` 15, `MemberRegistrationDbTest` 3, `RefreshTokenLifecycleDbTest` 7), 실패 0개.
-  - `./gradlew clean test`, 격리 MySQL 8.0.46에 SQL 001 → 002 적용, `TEST_DB_*` 설정: 211개 전부 통과, 건너뜀 0개, 실패 0개.
+  - `./gradlew clean test`, DB 미설정: 213개 중 186개 통과, 27개 건너뜀(DB 테스트 27개: `MemberPersistenceDbTest` 15, `MemberRegistrationDbTest` 3, `RefreshTokenLifecycleDbTest` 9), 실패 0개.
+  - `./gradlew clean test`, 격리 MySQL 8.0.46에 SQL 001 → 002 적용, `TEST_DB_*` 설정: 213개 전부 통과, 건너뜀 0개, 실패 0개.
   - `./gradlew bootJar`: 성공.
 - 설정: `application.yml`에 `jwt.refresh-token-expiry-seconds: ${JWT_REFRESH_TOKEN_EXPIRY_SECONDS:1209600}`를 추가했습니다. README와 DEVELOPMENT_RULES의 환경 변수 표에는 이미 같은 항목이 있어 바꾸지 않았습니다.
 - 미구현 (이번 범위 밖):
