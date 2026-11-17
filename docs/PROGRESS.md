@@ -12,7 +12,7 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 상태 (`50963bc`, PR #16 포함)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 서비스 시간대 고정, 요청 제한 서비스 R1~R10(서비스 계층), Refresh 요청 제한 연결, Refresh 잠금 재시도. **이번 PR(`feat/stage2-3-auth-rate-limit-http`)**: 공통 429 `RATE_LIMITED`와 `Retry-After`, 회원가입 요청 집계 필터(CSRF 뒤, 본문 이전), 집계 판정 실패 시 fail-closed. HTTP 계층의 나머지는 미구현 (아래 2절) |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 상태 (`50963bc`, PR #16 포함)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 서비스 시간대 고정, 요청 제한 서비스 R1~R10(서비스 계층), Refresh 요청 제한 연결, Refresh 잠금 재시도. **PR #17(병합 전, `feat/stage2-3-auth-rate-limit-http`)**: 공통 429 `RATE_LIMITED`와 `Retry-After`, 회원가입 요청 집계 필터(CSRF 뒤, 본문 이전), 집계 판정 실패 시 fail-closed. HTTP 계층의 나머지는 미구현 (아래 2절) |
 | **다음 개발 단계** | 요청 제한 HTTP 연결의 남은 항목부터: Google OAuth2 로그인·연동 흐름이 생기는 시점에 시작·연동·콜백 집계를 연결하고(OAuth2 임시 상태 보존 규칙 준수), Google 닉네임 제출 경로를 확정해 집계에 포함한다. 그다음 로그인·회원가입·재발급·로그아웃 HTTP 컨트롤러와 쿠키, Refresh 재발급 응답에 `RateLimitExceededException`(429) 매핑, JWT 인증 필터와 SecurityFilterChain 분리(미구현 유지). 그다음 Stage 2-4 |
 
 ## 1. 단계 요약
@@ -21,7 +21,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료: 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 시간대 고정, 요청 제한 서비스 R1~R10. 이번 PR: 공통 429 응답과 `Retry-After`, 회원가입 집계 필터(`POST /signup`, `POST /api/auth/signup`). **미구현**: Google OAuth2 시작·연동·콜백 집계(OAuth2 흐름 자체가 아직 없음), Google 닉네임 제출 집계(경로 미확정), 로그인 HTTP 연결(로그인 API 없음), Refresh HTTP 연결(재발급 API 없음), 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키, JWT 인증 필터, SecurityFilterChain 분리, 화면 세션, 프런트엔드 T20 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 회원가입 집계 HTTP 연결 구현 (6.2~6.15) |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료: 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 시간대 고정, 요청 제한 서비스 R1~R10. PR #17(병합 전): 공통 429 응답과 `Retry-After`, 회원가입 집계 필터(`POST /signup`, `POST /api/auth/signup`). **미구현**: Google OAuth2 시작·연동·콜백 집계(OAuth2 흐름 자체가 아직 없음), Google 닉네임 제출 집계(경로 미확정), 로그인 HTTP 연결(로그인 API 없음), Refresh HTTP 연결(재발급 API 없음), 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키, JWT 인증 필터, SecurityFilterChain 분리, 화면 세션, 프런트엔드 T20 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 회원가입 집계 HTTP 연결 구현 (6.2~6.15) |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -36,7 +36,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 이번 PR 브랜치 기준 전체 289개. DB 연결 시 289개 전부 실행, DB 미설정 시 52개 건너뜀(DB 테스트). 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 회원가입 필터와 공통 오류 응답에 한정 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). 서비스 계층 구현, 회원가입 집계 HTTP 연결 완료, 나머지 HTTP 계층 미구현 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | PR #17 브랜치 기준 전체 289개. DB 연결 시 289개 전부 실행, DB 미설정 시 52개 건너뜀(DB 테스트). 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 회원가입 필터와 공통 오류 응답에 한정 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). 서비스 계층 구현, 회원가입 집계 HTTP 연결 완료, 나머지 HTTP 계층 미구현 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -495,7 +495,7 @@
   - 테스트 DB 연결(SQL 001→003): 289개 전부 통과, 건너뜀 0개, 실패 0개.
   - 테스트 DB 미설정: 289개 중 237개 통과, 건너뜀 52개(DB 테스트), 실패 0개.
   - `bootJar`: 성공. jar 기동 확인: 정상 기동, `GET /` 200, CSRF 토큰 없는 `POST /signup`과 `POST /api/auth/signup`은 403이고 집계 0건.
-- 미구현 (이번 PR 범위 밖):
+- 미구현 (PR #17 범위 밖):
   - Google OAuth2 시작·연동·콜백 집계와 OAuth2 임시 상태 보존 규칙 (OAuth2 흐름 미구현)
   - Google 닉네임 제출 경로 확정과 집계
   - 로그인 HTTP 연결 (로그인 API 미구현)
@@ -505,8 +505,16 @@
 
 ## 7. 다음 작업
 
-1. 확정된 요청 제한 정책(R1~R10)을 구현에 반영합니다. 구현 시 확인할 사항: CSRF 검사와 집계 위치의 순서, 신뢰 프록시 목록 설정, HMAC 키 생성·보관 방식.
-2. Stage 2-3 다음 작업: (a) 완료 — `family_id` 매핑과 생성 경로 (6.10). (b) 완료 — Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 (6.11). (c) 완료 — 요청 제한 서비스 R1~R10, `main` 병합 `50963bc` (6.14). Refresh 잠금 재시도 보완 완료 (6.14 보완 1). (d) 완료 — 공통 429·`Retry-After`, 회원가입 집계 필터 (6.15). (e) 다음: Google OAuth2 집계와 닉네임 제출 집계(OAuth2 흐름과 경로가 생길 때), 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키, Refresh 재발급의 429 매핑. (f) 미구현으로 유지: JWT 인증 필터와 SecurityFilterChain 분리.
+1. 완료 — 확정된 요청 제한 정책(R1~R10) 구현 (6.14). 요청 제한 서비스 R1~R10은 PR #16으로 `main`에 병합되었습니다 (병합 커밋 `50963bc`). 공통 429 응답과 `Retry-After` 처리 (6.15, PR #17, 병합 전 브랜치 `feat/stage2-3-auth-rate-limit-http`). 회원가입 요청 제한 HTTP 필터 연결 (6.15, PR #17, 병합 전): `POST /signup`, `POST /api/auth/signup`을 CSRF 검증 이후, 본문 읽기와 파싱 이전에 집계합니다. 요청 처리 구조는 CSRF 필터 → 회원가입 집계 필터 → Controller 순서입니다. 요청 제한 서비스 장애 시 fail-closed 처리: 판정을 끝내지 못하면 요청을 진행시키지 않고 500 `INTERNAL_ERROR`로 응답합니다.
+2. 다음 작업 (미완료. 완료로 표시하지 않음):
+   - 로그인 HTTP 엔드포인트(API_SPEC 2.2의 `POST /login`, `POST /api/auth/login`)와 요청 제한 연결. 로그인 컨트롤러 미구현
+   - Refresh HTTP 엔드포인트(API_SPEC 2.3의 `POST /api/auth/refresh`)와 요청 제한 연결, 429 매핑. 재발급 컨트롤러 미구현
+   - Google OAuth2 시작(`GET /oauth2/authorization/google`), 계정 연동 시작 POST(경로 미확정), 콜백(`GET /login/oauth2/code/google`)의 요청 제한 연결. OAuth2 흐름 미구현
+   - Google 신규 가입 닉네임 설정 제출의 요청 제한 연결. 제출 경로 미확정
+   - 로그인·회원가입·재발급·로그아웃 HTTP 컨트롤러와 쿠키 발급·삭제 (Stage 2-3 잔여)
+   - JWT 인증 필터 및 SecurityFilterChain 분리. 미구현
+   - 프론트엔드 429 처리와 T20 동작. 미구현
+   위 경로 중 현재 코드에 없는 것은 확정하지 않았습니다. API_SPEC의 표기는 설계 기준입니다.
 3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
