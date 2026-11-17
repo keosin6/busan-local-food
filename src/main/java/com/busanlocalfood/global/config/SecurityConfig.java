@@ -6,6 +6,10 @@ import com.busanlocalfood.member.ratelimit.AuthRateLimitService;
 import com.busanlocalfood.member.ratelimit.ClientIpResolver;
 import com.busanlocalfood.member.ratelimit.SignupRateLimitFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Set;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,6 +41,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "TRACE", "OPTIONS");
+
     /** API 체인에서 인증 없이 POST할 수 있는 경로. API_SPEC 2.1 회원가입, 2.2 로그인, 2.3 재발급, 2.4 로그아웃. */
     static final String[] PUBLIC_API_AUTH_POST_PATHS = {
             "/api/auth/signup", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout"};
@@ -44,6 +50,7 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http,
+                                                      Environment environment,
                                                       AccessTokenVerifier accessTokenVerifier,
                                                       AuthRateLimitService rateLimitService,
                                                       ClientIpResolver clientIpResolver,
@@ -57,9 +64,12 @@ public class SecurityConfig {
                 // API 인증은 세션을 쓰지 않는다. 화면 세션이 있어도 API 요청의 인증 근거가 되지 않는다.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .securityContext(context -> context.securityContextRepository(new NullSecurityContextRepository()))
-                // CSRF 보호는 유지한다. 쿠키 기반 API 요청을 보호하므로 비활성화하지 않는다.
+                // CSRF: 상태 변경 요청 중 Authorization 헤더가 없는 요청만 검증한다 (API_SPEC 1.0).
+                // Bearer 헤더 인증은 쿠키로 자동 전송되지 않으므로 CSRF 대상이 아니다.
+                // 헤더 존재 여부만 본다. CSRF 필터는 JWT 필터보다 먼저 실행되므로 인증 결과에 의존하지 않는다.
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .requireCsrfProtectionMatcher(SecurityConfig::requiresCsrfForApi)
+                        .csrfTokenRepository(apiCsrfTokenRepository(environment))
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new ApiAuthenticationEntryPoint(objectMapper)))
@@ -68,6 +78,22 @@ public class SecurityConfig {
                         CsrfFilter.class)
                 .addFilterBefore(new AccessTokenAuthenticationFilter(accessTokenVerifier), AuthorizationFilter.class);
         return http.build();
+    }
+
+    /** API 체인의 CSRF 검사 대상: 상태 변경 메서드이고 Authorization 헤더가 없는 요청. */
+    static boolean requiresCsrfForApi(HttpServletRequest request) {
+        return !SAFE_METHODS.contains(request.getMethod()) && !AccessTokenAuthenticationFilter.hasAuthorizationHeader(request);
+    }
+
+    /**
+     * XSRF-TOKEN 쿠키 (API_SPEC 1.1): HttpOnly=false, SameSite=Lax, Path=/. 운영 프로필에서만 Secure=true.
+     * 쿠키는 JS가 읽어 X-XSRF-TOKEN 헤더에 실어야 하므로 HttpOnly를 끈다.
+     */
+    static CookieCsrfTokenRepository apiCsrfTokenRepository(Environment environment) {
+        boolean secure = environment.acceptsProfiles(Profiles.of("prod"));
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie.path("/").sameSite("Lax").secure(secure));
+        return repository;
     }
 
     @Bean
