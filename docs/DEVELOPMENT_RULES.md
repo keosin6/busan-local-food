@@ -199,6 +199,10 @@ SecurityFilterChain 분리 (구현 기준):
 - **화면 체인**: 나머지 화면 URL. Spring Security 세션 인증을 사용합니다. 화면 로그인(`/login`), 화면 로그아웃, Google OAuth2 로그인과 콜백(`/oauth2/**`, `/login/oauth2/**`)을 처리합니다. 인증 실패는 로그인 페이지로 리다이렉트합니다.
 - `/oauth2/**`와 `/login/oauth2/**`는 API 체인에 포함하지 않습니다.
 - 두 체인의 RequestMatcher가 겹치지 않아야 합니다. API 인증 실패가 로그인 리다이렉트로, 화면 인증 실패가 JSON으로 처리되지 않아야 합니다.
+- 구현 상태 (6.16, 이 브랜치 병합 전): API 체인과 JWT 인증 필터, 화면 체인 분리는 구현되었습니다. 화면 체인의 로그인 리다이렉트와 OAuth2 체인은 아직 구현되지 않았습니다.
+- API 체인의 CSRF 토큰 저장소는 `XSRF-TOKEN` 쿠키(`CookieCsrfTokenRepository`)입니다. 세션을 만들지 않고도 CSRF를 검증하기 위해서입니다. 화면 체인은 세션 기반 저장소를 그대로 씁니다.
+- API 체인의 인증 없이 허용하는 경로는 API_SPEC 2.1~2.4의 POST `/api/auth/signup`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` 네 개뿐입니다. 공개 조회 API는 구현 시 경로를 명시해서 추가합니다. `/api/**` 전체를 공개하지 않습니다.
+- JWT 인증 필터와 회원가입 집계 필터는 서블릿 빈으로 등록하지 않고 체인에 직접 추가합니다. 매 요청 새 SecurityContext를 만들고, 이전 인증 정보를 이어받지 않습니다.
 
 쿠키와 로그아웃:
 - 쿠키 속성과 Path는 API_SPEC 1.1절을 따릅니다. `JSESSIONID`는 화면 세션, `access_token`은 Path `/api`, `refresh_token`은 Path `/api/auth`입니다.

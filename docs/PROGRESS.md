@@ -12,8 +12,8 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17, merge commit `9f881a0cca892b28f342dec9fc399814b40001a8`, 2026-11-17)**. 병합된 구현: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 서비스 시간대 고정, 요청 제한 서비스 R1~R10(PR #16, `50963bc`), Refresh 요청 제한 연결과 잠금 재시도, 공통 429 `RATE_LIMITED`와 `Retry-After`, 회원가입 요청 집계 필터(CSRF 뒤, 본문 읽기 이전), 요청 제한 저장소 장애 시 fail-closed. **`main`에 없는 것**: 로그인·Refresh·Google OAuth2의 HTTP 엔드포인트, 로그인·재발급·로그아웃 컨트롤러와 쿠키, JWT 인증 필터, SecurityFilterChain 분리 (아래 7절) |
-| **다음 개발 단계** | 인증 HTTP 연결 (Stage 2-3 잔여): 화면 로그인과 API 로그인 `POST /api/auth/login` 연결(로그인 요청 제한 포함), Refresh `POST /api/auth/refresh` 연결(요청 제한과 429 처리 포함), Google OAuth2 시작·연결·콜백과 Google 신규 가입 닉네임 제출의 요청 제한 연결, 로그인·재발급·로그아웃 컨트롤러와 쿠키 처리. 그다음 JWT 인증 필터와 화면용·API용 SecurityFilterChain 분리. 그다음 Stage 2-4 (화면 세션, Google OAuth2 로그인·계정 연결·해제). 상세는 7절 |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17, merge commit `9f881a0cca892b28f342dec9fc399814b40001a8`, 2026-11-17)**. 병합된 구현: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 서비스 시간대 고정, 요청 제한 서비스 R1~R10(PR #16, `50963bc`), Refresh 요청 제한 연결과 잠금 재시도, 공통 429 `RATE_LIMITED`와 `Retry-After`, 회원가입 요청 집계 필터(CSRF 뒤, 본문 읽기 이전), 요청 제한 저장소 장애 시 fail-closed. **`main`에 없는 것**: 로그인·Refresh·Google OAuth2의 HTTP 엔드포인트, 로그인·재발급·로그아웃 컨트롤러와 쿠키, JWT 인증 필터와 SecurityFilterChain 분리는 이 브랜치(`feat/stage2-3-jwt-auth-filter-security-chains`, 병합 전)에서 구현(6.16). 나머지는 아래 7절 |
+| **다음 개발 단계** | 인증 HTTP 연결 (Stage 2-3 잔여): 화면 로그인과 API 로그인 `POST /api/auth/login` 연결(로그인 요청 제한 포함), Refresh `POST /api/auth/refresh` 연결(요청 제한과 429 처리 포함), Google OAuth2 시작·연결·콜백과 Google 신규 가입 닉네임 제출의 요청 제한 연결, 로그인·재발급·로그아웃 컨트롤러와 쿠키 처리. JWT 인증 필터와 화면용·API용 SecurityFilterChain 분리는 이 브랜치에서 구현(병합 전, 6.16). 그다음 Stage 2-4 (화면 세션, Google OAuth2 로그인·계정 연결·해제). 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -503,6 +503,37 @@
   - 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키, JWT 인증 필터, SecurityFilterChain 분리, 화면 세션, 프런트엔드 T20
 - 운영 주의: 회원가입 집계는 Controller가 생기기 전까지 `/signup`과 `/api/auth/signup`의 CSRF 통과 POST를 집계한 뒤 404로 응답합니다. 집계 테이블 기록이 그만큼 늘 수 있으므로 회원가입 Controller를 가까운 시점에 연결합니다.
 
+### 6.16 API/화면 SecurityFilterChain 분리와 API JWT 인증 필터 (2026-11-17)
+
+- 브랜치: `feat/stage2-3-jwt-auth-filter-security-chains` (기준: `main` 5168f07, PR #18 병합본). 병합 전.
+- 구현:
+  - API 체인 (`/api/**`, `@Order(1)`): JWT만 인증 근거로 쓴다. `STATELESS`, `NullSecurityContextRepository`. 세션을 만들지도 읽지도 않는다. 화면 세션만 있는 API 요청은 401이다.
+  - 화면 체인 (그 밖의 모든 요청, `@Order(2)`): 기존 세션 인증과 기존 임시 허용 정책 유지. JWT 필터를 넣지 않는다. JWT 쿠키만 있어도 화면은 인증 상태가 되지 않는다.
+  - `AccessTokenAuthenticationFilter`: `access_token` 쿠키를 기존 `AccessTokenVerifier`로 검증한다. 성공하면 `AccessTokenAuthentication`(주체 = 회원 ID, 권한 = `ROLE_<role>`, 자격 증명 없음)을 설정한다. 실패하면 인증 없이 진행하고, 쿠키는 건드리지 않는다. 매 요청 새 컨텍스트를 만든다. 원문과 원인은 로그에 남기지 않는다.
+  - 인증 진입점: 보호된 API의 인증 실패는 401 `TOKEN_INVALID`(공통 오류 응답 형식)다. `ErrorCode.TOKEN_INVALID`를 추가했다.
+  - CSRF (API 체인): 켜 둔다. 토큰은 API_SPEC 1.1대로 `XSRF-TOKEN` 쿠키와 `X-XSRF-TOKEN` 헤더로 주고받는다. `CsrfCookieFilter`가 API 응답마다 쿠키를 내려준다. 화면 체인의 세션 기반 CSRF는 바꾸지 않았다.
+  - 공개 인증 경로: API 체인에서 POST `/api/auth/signup`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`만 인증 없이 허용한다. 공개 조회 API(예: `GET /api/categories`)는 아직 구현되지 않았으므로 열지 않았다. 구현 시 경로를 명시해서 추가한다.
+  - 회원가입 집계 필터: 두 체인 모두에 두었다. CSRF 뒤, 본문 읽기 이전에 실행된다. 기존 429와 `Retry-After`, 쿠키 미삭제 정책 그대로다.
+- 설계 판단: 세션 저장소 설정만으로는 MockMvc에서 세션 재사용을 찾지 못했다. Spring Security 6은 명시적으로 저장할 때만 세션에 쓰고, JWT 필터는 매 요청 컨텍스트를 덮어쓴다. 그래서 두 겹으로 막았다. 설정(STATELESS, Null 저장소)과 필터의 컨텍스트 교체다. 그리고 "정상 API JWT 요청은 세션을 만들지 않는다"는 테스트를 추가했다. 설정만 제거한 돌연변이에서는 이 테스트도 통과했다. 설정 자체의 제거는 관찰 가능한 동작으로는 드러나지 않는다. 이 한계는 보고한다.
+- 테스트 (신규 24개):
+  - `AccessTokenAuthenticationFilterTest` 4개: 쿠키 없음, 검증 성공 시 회원 ID와 ROLE, 검증 실패 시 이전 컨텍스트를 이어받지 않음, 빈 쿠키.
+  - `ApiSecurityFilterChainTest` 20개(실제 SecurityConfig와 실제 JwtConfig): 정상 USER·ADMIN JWT, JWT 없음 401, 만료·위조·형식 오류 401, 화면 세션만 있는 API 401, JWT만 있는 화면 익명, 화면 세션 인증 유지, 두 수단 동시 존재 시 각 체인 분리, API POST의 CSRF 403과 통과, 공개 인증 경로 허용, 목록 밖 `/api` POST 401, 인증 경로 GET 401, 인증 응답에 access_token 쿠키 없음, API 회원가입 집계와 429, API CSRF 실패 미집계, 한 번만 집계, 정상 API JWT 요청은 세션 미생성.
+  - 기존 테스트 유지. `HomeControllerTest`, `GlobalExceptionHandlerTest`에 `AccessTokenVerifier` 목을 추가했고, `SignupRateLimitFilterTest`의 `/api/auth/signup` 요청은 API 체인의 CSRF 방식(XSRF 쿠키와 헤더)으로 바꿨다. 검증 내용은 줄이지 않았다.
+  - 돌연변이 확인: API CSRF를 끄면 CSRF 관련 테스트 7개가 실패한다. 되돌린 뒤 통과했다.
+- 검증 (커밋 기준):
+  - 테스트 DB 연결(SQL 001~003): 313개 전부 통과, 건너뜀 0개, 실패 0개.
+  - 테스트 DB 미설정: 313개 중 261개 통과, 건너뜀 52개(DB 테스트), 실패 0개.
+  - `./gradlew bootJar`: 성공.
+  - 실제 jar: `GET /` 200. 인증 없는 `GET /api/x` 401 `TOKEN_INVALID`. 위조 JWT 401. XSRF 쿠키 발급. CSRF 토큰이 있는 `POST /api/auth/logout`은 인증을 통과해 404(엔드포인트 없음). CSRF 토큰 없는 `POST /api/auth/signup`은 403이고 집계 0건.
+- 미구현 (이 브랜치 범위 밖):
+  - 화면 체인의 로그인 실패 리다이렉트(현재 임시 전체 허용)
+  - 화면 로그인과 API 로그인 엔드포인트, 로그인 요청 제한 연결
+  - Refresh HTTP 엔드포인트와 재발급 요청 제한·429 매핑
+  - Google OAuth2 체인(`/oauth2/**`, `/login/oauth2/**`)과 시작·연결·콜백 집계
+  - Google 신규 가입 닉네임 제출 집계
+  - 공개 조회 API의 명시적 공개 경로 (구현 시 추가)
+  - 프론트엔드 Access Token 자동 갱신과 T20
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합, PR #17, merge commit `9f881a0cca892b28f342dec9fc399814b40001a8`, 2026-11-17):
@@ -520,13 +551,13 @@
    - Google OAuth2 시작(`GET /oauth2/authorization/google`), 계정 연결 시작 POST(경로 미확정), 콜백(`GET /login/oauth2/code/google`)의 요청 제한 연결 (OAuth2 흐름 미구현)
    - Google 신규 가입 닉네임 설정 제출 경로와 요청 제한 연결 (경로 미확정)
    - 회원가입·로그인·Refresh·Logout 컨트롤러 및 쿠키 처리의 나머지 구현
-   - JWT 인증 필터 (미구현)
-   - 화면용 및 API용 SecurityFilterChain 분리 (미구현)
-   - 화면 세션 인증과 API JWT 인증의 실제 연결 (미구현)
+   - JWT 인증 필터: 이 브랜치(6.16)에서 구현, 병합 전. 병합 후 완료로 표시
+   - 화면용 및 API용 SecurityFilterChain 분리: 이 브랜치(6.16)에서 구현, 병합 전
+   - 화면 세션 인증과 API JWT 인증의 실제 연결: 체인 수준 분리는 6.16에서 구현. 실제 발급과 로그인 흐름 연결은 로그인 HTTP 엔드포인트가 생긴 뒤 가능 (미구현)
    - 프론트엔드 Access Token 자동 갱신과 T20 처리 (미구현)
    - Google OAuth2 로그인 및 계정 연결·해제 (미구현)
    위 경로 중 현재 코드에 없는 것은 확정하지 않았습니다. API_SPEC의 표기는 설계 기준입니다.
-3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), SecurityFilterChain 분리.
+3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), 화면 로그인 실패 리다이렉트(화면 체인). SecurityFilterChain 분리 자체는 6.16에서 구현.
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
 6. 실제 MySQL 스키마 적용은 사용자가 `db/manual/`의 SQL 파일을 직접 실행합니다. 이번 작업에서는 실행하지 않았습니다.
