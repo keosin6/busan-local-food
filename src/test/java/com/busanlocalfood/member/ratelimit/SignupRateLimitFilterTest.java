@@ -57,6 +57,9 @@ class SignupRateLimitFilterTest {
     @MockitoBean
     private AuthRateLimitService rateLimitService;
 
+    @MockitoBean
+    private com.busanlocalfood.member.jwt.AccessTokenVerifier accessTokenVerifier;
+
     private MockHttpSession session;
     private String csrf;
 
@@ -67,6 +70,13 @@ class SignupRateLimitFilterTest {
         MvcResult token = mockMvc.perform(get("/csrf-probe")).andReturn();
         session = (MockHttpSession) token.getRequest().getSession(false);
         csrf = ((CsrfToken) token.getRequest().getAttribute("_csrf")).getToken();
+    }
+
+    /** API 체인은 세션이 아니라 XSRF-TOKEN 쿠키와 X-XSRF-TOKEN 헤더로 CSRF를 검증한다 (API_SPEC 1.1). */
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder apiSignup(String body) throws Exception {
+        jakarta.servlet.http.Cookie xsrf = mockMvc.perform(get("/api/auth/signup")).andReturn().getResponse().getCookie("XSRF-TOKEN");
+        return post("/api/auth/signup").cookie(xsrf).header("X-XSRF-TOKEN", xsrf.getValue())
+                .contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder signup(String path, String body) {
@@ -145,7 +155,7 @@ class SignupRateLimitFilterTest {
     @Test
     void 화면과_API_회원가입은_같은_IP_카운터를_공유한다() throws Exception {
         mockMvc.perform(signup("/signup", "{\"email\":\"a@b.co\"}")).andExpect(status().isOk());
-        mockMvc.perform(signup("/api/auth/signup", "{\"email\":\"c@d.co\"}")).andExpect(status().isOk());
+        mockMvc.perform(apiSignup("{\"email\":\"c@d.co\"}")).andExpect(status().isOk());
 
         verify(rateLimitService, times(2)).recordSignupRequest("127.0.0.1");
     }

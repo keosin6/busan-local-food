@@ -18,6 +18,9 @@ public enum ErrorCode {
     PASSWORD_INVALID(HttpStatus.BAD_REQUEST, "비밀번호 조건을 확인해 주세요. 8~20자, 영문·숫자·특수문자 각 1자 이상, 공백 불가, 확인 값 일치."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
 
+    // 인증 (API_SPEC 1.3). 토큰이 없거나 만료, 폐기, 위조된 경우 모두 같은 메시지를 쓴다. 원인은 노출하지 않는다.
+    TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "로그인이 필요하거나 인증 정보가 올바르지 않습니다. 다시 로그인해 주세요."),
+
     // 요청 제한 (API_SPEC 1.3, 1.4). 메시지에 제한 기준이나 식별 정보를 넣지 않는다.
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
 
