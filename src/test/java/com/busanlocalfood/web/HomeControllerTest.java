@@ -12,6 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.busanlocalfood.member.ratelimit.AuthRateLimitService;
+import com.busanlocalfood.member.ratelimit.ClientIpResolver;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @WebMvcTest(value = HomeController.class, properties = {
         "spring.datasource.url=jdbc:mysql://localhost:3306/busan_local_food_test",
@@ -23,6 +26,13 @@ class HomeControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    /** SecurityConfig가 요청 제한 빈을 요구하므로 슬라이스 테스트에서는 목으로 채운다. */
+    @MockitoBean
+    private AuthRateLimitService rateLimitService;
+
+    @MockitoBean
+    private ClientIpResolver clientIpResolver;
 
     @Test
     void homePageIsPublicAndLinksBootstrapAndAppAssets() throws Exception {

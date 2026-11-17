@@ -1,10 +1,18 @@
 package com.busanlocalfood.global.exception;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.busanlocalfood.global.config.SecurityConfig;
+import com.busanlocalfood.member.ratelimit.AuthRateLimitService;
+import com.busanlocalfood.member.ratelimit.ClientIpResolver;
+import com.busanlocalfood.member.ratelimit.RateLimitUnavailableException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -24,6 +32,12 @@ class GlobalExceptionHandlerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @MockitoBean
+    private AuthRateLimitService rateLimitService;
+
+    @MockitoBean
+    private ClientIpResolver clientIpResolver;
+
     @Test
     void businessExceptionIsRenderedAsApiErrorResponse() throws Exception {
         mockMvc.perform(get("/test-errors/business"))
@@ -34,12 +48,42 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.timestamp").exists());
     }
 
+    @Test
+    void rateLimitExceededIsRenderedAs429WithRetryAfterAndNoInternals() throws Exception {
+        mockMvc.perform(get("/test-errors/rate-limited"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "42"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("RATE_LIMITED"))
+                .andExpect(jsonPath("$.error.message").value("요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."))
+                .andExpect(header().doesNotExist("Set-Cookie"))
+                .andExpect(content().string(not(containsString("42"))));
+    }
+
+    @Test
+    void rateLimitUnavailableFailsClosedAsInternalErrorWithoutRetryAfter() throws Exception {
+        mockMvc.perform(get("/test-errors/rate-limit-unavailable"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(header().doesNotExist("Retry-After"))
+                .andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"));
+    }
+
     @RestController
     static class FailingController {
 
         @GetMapping("/test-errors/business")
         void fail() {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        }
+
+        @GetMapping("/test-errors/rate-limited")
+        void rateLimited() {
+            throw new RateLimitExceededException(42);
+        }
+
+        @GetMapping("/test-errors/rate-limit-unavailable")
+        void unavailable() {
+            throw new RateLimitUnavailableException();
         }
     }
 }

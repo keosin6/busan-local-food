@@ -115,20 +115,24 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 1.4 요청 제한 (Rate Limit)
 
-> **구현 상태 (2026-11-12, PR #16 보완 후):** 서비스 계층과 HTTP 계층을 구분합니다.
+> **구현 상태 (2026-11-17, `main` 기준):** 서비스 계층과 HTTP 계층을 구분합니다.
 >
-> 서비스 계층 (구현 완료):
+> 서비스 계층 (`main` 병합 완료, PR #16):
 > - 요청 제한 서비스 R1~R10: `member.ratelimit.AuthRateLimitService`. 로그인 두 제한과 자격 증명 확인, 회원가입, Google OAuth2, Refresh 계열 판정과 이벤트 기록.
-> - Refresh 연결: `RefreshTokenRateLimitGate`가 `RefreshRotationGate`를 구현합니다. 재사용 탐지 → 요청 제한 → 만료 → 회전 순서를 지킵니다.
-> - Refresh 재시도: 잠금 대기와 교착 상태는 `LockRetryTemplate`이 최대 3번 새 트랜잭션에서 다시 실행합니다. 실패한 시도는 롤백되어 이벤트가 중복되지 않습니다. 한도를 넘으면 요청을 허용하지 않습니다(fail-closed).
+> - Refresh 판정 연결: `RefreshTokenRateLimitGate`가 `RefreshRotationGate`를 구현합니다. 재사용 탐지 → 요청 제한 → 만료 → 회전 순서를 지킵니다. 제한 결과는 재시도 초(`RateLimited`)를 담습니다.
+> - Refresh 잠금 재시도: 잠금 대기와 교착 상태는 `LockRetryTemplate`이 최대 3번 새 트랜잭션에서 다시 실행합니다. 한도를 넘으면 요청을 허용하지 않습니다(fail-closed).
 > - 이벤트 정리: 생성 후 24시간 보존. 요청 시 정리와 주기 정리.
 >
+> HTTP 계층 (이번 작업에서 구현):
+> - 공통 429: `RateLimitExceededException`을 `GlobalExceptionHandler`가 `429 RATE_LIMITED`로 바꿉니다. `Retry-After`에는 재시도까지 남은 초가 들어갑니다. 쿠키와 세션은 건드리지 않습니다. 본문에는 제한 기준, IP, 이메일, family_id가 없습니다.
+> - 회원가입 집계: `SignupRateLimitFilter`가 `POST /signup`, `POST /api/auth/signup`을 집계합니다. CSRF 검증 뒤, 본문 읽기와 파싱 이전에 실행됩니다. 집계 실패는 500 `INTERNAL_ERROR`로 fail-closed 합니다. 화면과 API 회원가입은 같은 IP 카운터를 씁니다.
+>
 > HTTP 계층 (미구현):
-> - 요청 제한 필터 또는 컨트롤러 연결
-> - 429 `RATE_LIMITED`와 `Retry-After` 헤더로의 HTTP 변환
-> - 회원가입 JSON 파싱 이전 집계 연결
-> - Google OAuth2 시작·연동·콜백에서 집계 호출 연결
-> - 프런트엔드 T20 처리
+> - Google OAuth2 시작·연동·콜백 집계 연결: OAuth2 로그인·연동 흐름과 클라이언트 설정이 아직 없습니다. 흐름이 생기면 OAuth2 임시 상태 보존 규칙(시작 제한 시 임시 상태 미생성, 콜백 제한 시 해당 임시 상태만 제거, 화면 세션과 JWT 유지)을 지켜 연결합니다.
+> - Google 신규 가입 닉네임 제출 집계: 제출 경로가 아직 확정되지 않았습니다.
+> - 로그인 HTTP 연결: 로그인 API가 없습니다.
+> - Refresh HTTP 연결과 429 매핑: 재발급 API가 없습니다. 재발급 컨트롤러는 `RateLimited` 결과를 `RateLimitExceededException`으로 바꿔 던지면 됩니다.
+> - 프런트엔드 T20 처리.
 >
 > **CSRF와 집계 순서 (2026-11-12 조사, 확정):** CSRF 필터는 DispatcherServlet과 사용자 정의 요청 제한 필터보다 먼저 실행됩니다. CSRF 검증에 실패한 요청(토큰 없음, 토큰 불일치)은 집계하지 않고 403으로 거부합니다. 회원가입 집계는 CSRF 검증 이후, JSON 본문 읽기 및 파싱 이전에 수행합니다. 영향 범위: 토큰 없는 대량 요청은 집계 없이 거부되어 DB 부하가 없습니다. 다만 `XSRF-TOKEN` 쿠키는 GET으로 누구나 받을 수 있으므로, 토큰을 받은 요청은 정상적으로 집계됩니다. CSRF 정책과 요청 제한 정책은 변경하지 않습니다.
 >

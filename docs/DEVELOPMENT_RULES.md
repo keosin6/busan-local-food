@@ -467,6 +467,13 @@ HMAC 키 교체 절차 (구현 기준):
 - 키 값은 로그, 오류 메시지, 디버그 출력에 나타나지 않도록 합니다.
 
 
+HTTP 적용 규칙 (요청 제한, 2026-11-17):
+- 요청 제한 집계 필터는 서블릿 필터 빈으로 등록하지 않습니다. `SecurityConfig`가 Spring Security 체인에 직접 추가합니다. 서블릿 컨테이너 자동 등록과 겹치면 집계가 두 번 일어납니다.
+- 회원가입 집계 필터는 `CsrfFilter` 뒤에 둡니다. CSRF 실패 요청은 집계하지 않습니다. 본문을 읽지 않으므로 Controller가 본문을 그대로 읽습니다.
+- 집계 대상은 정확히 일치하는 경로와 메서드만 씁니다. 접두사 일치나 와일드카드로 넓히지 않습니다.
+- 제한 초과는 `RateLimitExceededException`으로 바꿔 공통 오류 응답(429, `Retry-After`)으로 보냅니다. 쿠키를 바꾸거나 세션을 무효화하지 않습니다.
+- 요청 제한 판정 실패는 요청을 허용하지 않습니다(fail-closed). 일반 내부 오류(500 `INTERNAL_ERROR`)로 응답합니다.
+
 ### 5.9 JWT 발급·검증 규칙 (Stage 2-3 구현 기준)
 
 - 구현 위치는 `member.jwt` 패키지입니다. 발급은 `AccessTokenIssuer`, 검증은 `AccessTokenVerifier`, 설정은 `JwtProperties`, 검증 규칙은 `JwtValidators`, 키 로딩은 `JwtSigningKeys`가 담당합니다.

@@ -223,6 +223,8 @@ class RefreshTokenServiceTest {
         RefreshTokenRotation result = service.rotate(raw);
 
         assertThat(result).isInstanceOf(RefreshTokenRotation.RateLimited.class);
+        // 게이트가 준 재시도 초가 그대로 결과에 실려야 HTTP 계층이 Retry-After를 만들 수 있다.
+        assertThat(((RefreshTokenRotation.RateLimited) result).retryAfterSeconds()).isEqualTo(60);
         assertThat(token.isRevoked()).isFalse();
         verify(refreshTokenRepository, never()).save(any());
     }

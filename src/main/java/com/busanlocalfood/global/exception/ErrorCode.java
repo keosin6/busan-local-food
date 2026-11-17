@@ -18,6 +18,9 @@ public enum ErrorCode {
     PASSWORD_INVALID(HttpStatus.BAD_REQUEST, "비밀번호 조건을 확인해 주세요. 8~20자, 영문·숫자·특수문자 각 1자 이상, 공백 불가, 확인 값 일치."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
 
+    // 요청 제한 (API_SPEC 1.3, 1.4). 메시지에 제한 기준이나 식별 정보를 넣지 않는다.
+    RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
+
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
 
     private final HttpStatus status;
