@@ -29,9 +29,19 @@ public class MemberLoginService {
         this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
-    /** 자격 증명이 맞으면 검증된 회원을 반환한다. 실패 시 회원 정보를 노출하지 않는다. */
+    /** 자격 증명이 맞으면 검증된 회원을 반환한다. 실패 시 회원 정보를 노출하지 않는다. 실패 사유는 예외로 던지지 않는다. */
     @Transactional(readOnly = true)
     public Member authenticate(String rawEmail, String rawPassword) {
+        return verifyCredentials(rawEmail, rawPassword)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
+    }
+
+    /**
+     * 자격 증명을 확인한다. 실패는 예외가 아니라 빈 Optional로 돌려준다.
+     * 로그인 제한 판정 트랜잭션 안에서 호출되므로, 실패를 예외로 던지면 트랜잭션이 rollback-only가 되어 제한 기록이 사라진다.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Member> verifyCredentials(String rawEmail, String rawPassword) {
         String email = MemberInputRules.requireEmail(rawEmail);
         MemberInputRules.requireLoginPassword(rawPassword);
 
@@ -43,10 +53,10 @@ public class MemberLoginService {
         String hashToCompare = hasPasswordHash ? member.getPasswordHash() : dummyPasswordHash;
         boolean passwordMatches = passwordEncoder.matches(rawPassword, hashToCompare);
 
-        // 실패 사유(미가입, 불일치, Google 전용)는 구분하지 않고 같은 오류로 응답한다.
+        // 실패 사유(미가입, 불일치, Google 전용)는 구분하지 않는다.
         if (!hasPasswordHash || !passwordMatches) {
-            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+            return Optional.empty();
         }
-        return member;
+        return Optional.of(member);
     }
 }

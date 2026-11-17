@@ -4,6 +4,7 @@ import com.busanlocalfood.global.response.ApiErrorResponse;
 import com.busanlocalfood.member.ratelimit.RateLimitUnavailableException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -36,5 +37,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleRateLimitUnavailable(RateLimitUnavailableException e) {
         return ResponseEntity.status(ErrorCode.INTERNAL_ERROR.getStatus())
                 .body(ApiErrorResponse.of(ErrorCode.INTERNAL_ERROR));
+    }
+
+    /**
+     * 본문 JSON 오류: 파싱 실패, 본문 누락, 알 수 없는 필드, 타입 불일치.
+     * 세부 원인은 노출하지 않고 공통 400 VALIDATION_FAILED로 응답한다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(ErrorCode.VALIDATION_FAILED.getStatus())
+                .body(ApiErrorResponse.of(ErrorCode.VALIDATION_FAILED));
     }
 }

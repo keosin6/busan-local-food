@@ -1,5 +1,8 @@
 package com.busanlocalfood.member.security;
 
+import com.busanlocalfood.member.service.AuthApiService;
+import com.busanlocalfood.member.web.AuthCookies;
+import com.busanlocalfood.member.ratelimit.ClientIpResolver;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -29,6 +32,15 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         ApiSecurityFilterChainTest.ClientIpConfig.class, ApiSecurityFilterChainTest.Probes.class})
 class XsrfCookieAttributeTest {
+
+    @MockitoBean
+    private AuthApiService authApiService;
+
+    @MockitoBean
+    private AuthCookies authCookies;
+
+    @MockitoBean
+    private ClientIpResolver clientIpResolver;
 
     @DynamicPropertySource
     static void jwtSecret(DynamicPropertyRegistry registry) {

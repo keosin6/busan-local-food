@@ -1,5 +1,8 @@
 package com.busanlocalfood.member.ratelimit;
 
+import com.busanlocalfood.member.service.AuthApiService;
+import com.busanlocalfood.member.web.AuthCookies;
+import com.busanlocalfood.member.ratelimit.ClientIpResolver;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -50,6 +53,12 @@ import org.springframework.web.bind.annotation.RestController;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class,
         SignupRateLimitFilterTest.ClientIpConfig.class, SignupRateLimitFilterTest.SignupProbe.class})
 class SignupRateLimitFilterTest {
+
+    @MockitoBean
+    private AuthApiService authApiService;
+
+    @MockitoBean
+    private AuthCookies authCookies;
 
     @Autowired
     private MockMvc mockMvc;

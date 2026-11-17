@@ -26,6 +26,10 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
   thymeleaf:
     cache: true
+  jackson:
+    deserialization:
+      # 요청 본문의 알 수 없는 필드는 거부한다. 400 VALIDATION_FAILED로 응답한다.
+      fail-on-unknown-properties: true
 
 # 요청 제한 (API_SPEC 1.4). HMAC 키는 환경 변수로만 주입한다. 기본값을 두지 않는다. JWT_SECRET과 달라야 한다.
 auth:
