@@ -384,6 +384,66 @@ class ApiSecurityFilterChainTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void Bearer_스킴은_대소문자와_무관하게_상태_변경_CSRF_면제다() throws Exception {
+        mockMvc.perform(post("/api/me").header("Authorization", "bEARER " + validToken(Role.USER)))
+                .andExpect(status().isOk());
+    }
+
+    // ---- CSRF 면제는 Bearer 스킴에만 적용된다 (PR #19 보완) ----
+
+    @Test
+    void Basic_헤더의_상태_변경_요청은_CSRF_토큰이_없으면_403이다() throws Exception {
+        mockMvc.perform(post("/api/me").header("Authorization", "Basic dXNlcjpwYXNz"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void Basic_헤더의_상태_변경_요청도_올바른_CSRF_토큰이면_CSRF를_통과하고_인증_정책을_받는다() throws Exception {
+        // CSRF는 통과한다. Basic은 Bearer가 아니므로 JWT로 인증되지 않아 인증 정책에서 401이 된다.
+        Cookie xsrf = xsrfCookie();
+
+        mockMvc.perform(post("/api/me").header("Authorization", "Basic dXNlcjpwYXNz")
+                        .cookie(xsrf).header("X-XSRF-TOKEN", xsrf.getValue()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void Basic_헤더와_유효한_JWT_쿠키가_있어도_쿠키로_우회_인증되지_않고_CSRF가_적용된다() throws Exception {
+        mockMvc.perform(post("/api/me").header("Authorization", "Basic dXNlcjpwYXNz")
+                        .cookie(jwtCookie(validToken(Role.USER))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 헤더_없는_익명_상태_변경_요청은_토큰이_없으면_403이다() throws Exception {
+        mockMvc.perform(post("/api/me")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 공개_인증_경로도_Basic_헤더로는_CSRF를_우회하지_못한다() throws Exception {
+        for (String path : List.of("/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/signup")) {
+            mockMvc.perform(post(path).header("Authorization", "Basic dXNlcjpwYXNz")
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void Bearer_구분자가_없는_헤더는_Bearer_면제가_아니므로_CSRF가_적용된다() throws Exception {
+        // "Bearer" 뒤에 공백이 없으면 Bearer 스킴이 아니다. 토큰이 없는 익명 요청으로 보고 CSRF를 검사한다.
+        mockMvc.perform(post("/api/me").header("Authorization", "Bearer" + validToken(Role.USER)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void Bearer_면제_요청은_쿠키_인증_요청과_구분되어_쿠키를_보지_않는다() throws Exception {
+        // 면제되는 Bearer 요청에 쿠키가 있어도 쿠키 토큰은 쓰이지 않는다. 잘못된 Bearer는 401이어야 한다.
+        mockMvc.perform(post("/api/me").header("Authorization", bearer("not-a-jwt"))
+                        .cookie(jwtCookie(validToken(Role.ADMIN))))
+                .andExpect(status().isUnauthorized());
+    }
+
     private MockHttpSession screenSession(String username) {
         Authentication auth = new UsernamePasswordAuthenticationToken(username, null,
                 AuthorityUtils.createAuthorityList("ROLE_USER"));

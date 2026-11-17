@@ -80,9 +80,18 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** API 체인의 CSRF 검사 대상: 상태 변경 메서드이고 Authorization 헤더가 없는 요청. */
+    /**
+     * API 체인의 CSRF 검사 대상 (API_SPEC 1.0).
+     * - 안전 메서드(GET, HEAD, TRACE, OPTIONS): 검사하지 않는다.
+     * - Bearer 스킴의 Authorization 헤더: 검사하지 않는다. 토큰 값이 틀려도 면제하며, 인증 단계에서 401이 된다.
+     * - 그 밖(Basic 등 다른 스킴, Authorization 헤더 없음, 익명): 검사한다.
+     * 쿠키 인증은 Authorization 헤더가 없을 때만 일어나므로, 이 면제가 쿠키 인증 요청을 빠뜨리지 않는다.
+     */
     static boolean requiresCsrfForApi(HttpServletRequest request) {
-        return !SAFE_METHODS.contains(request.getMethod()) && !AccessTokenAuthenticationFilter.hasAuthorizationHeader(request);
+        if (SAFE_METHODS.contains(request.getMethod())) {
+            return false;
+        }
+        return !AccessTokenAuthenticationFilter.hasBearerScheme(request);
     }
 
     /**

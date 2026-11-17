@@ -37,9 +37,14 @@ public final class AccessTokenAuthenticationFilter extends OncePerRequestFilter 
         this.verifier = verifier;
     }
 
-    /** 요청이 Authorization 헤더로 인증을 시도하는지. CSRF 검사 대상 판단에 쓴다. 값의 유효성과 무관하다. */
-    public static boolean hasAuthorizationHeader(HttpServletRequest request) {
-        return request.getHeader(HttpHeaders.AUTHORIZATION) != null;
+    /**
+     * Authorization 헤더의 스킴이 Bearer인지 본다. 대소문자는 구분하지 않는다.
+     * CSRF 면제 판단에만 쓴다. 토큰 값은 보지 않으므로 JWT 검증과 분리된다.
+     * Basic 등 다른 스킴과 헤더 없음은 false다.
+     */
+    public static boolean hasBearerScheme(HttpServletRequest request) {
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        return header != null && header.regionMatches(true, 0, BEARER_SCHEME, 0, BEARER_SCHEME.length());
     }
 
     @Override
