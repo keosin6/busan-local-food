@@ -34,6 +34,9 @@ class HomeControllerTest {
     @MockitoBean
     private ClientIpResolver clientIpResolver;
 
+    @MockitoBean
+    private com.busanlocalfood.member.jwt.AccessTokenVerifier accessTokenVerifier;
+
     @Test
     void homePageIsPublicAndLinksBootstrapAndAppAssets() throws Exception {
         mockMvc.perform(get("/"))

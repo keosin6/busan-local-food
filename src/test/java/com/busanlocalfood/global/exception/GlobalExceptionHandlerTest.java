@@ -38,6 +38,9 @@ class GlobalExceptionHandlerTest {
     @MockitoBean
     private ClientIpResolver clientIpResolver;
 
+    @MockitoBean
+    private com.busanlocalfood.member.jwt.AccessTokenVerifier accessTokenVerifier;
+
     @Test
     void businessExceptionIsRenderedAsApiErrorResponse() throws Exception {
         mockMvc.perform(get("/test-errors/business"))
