@@ -105,7 +105,7 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
   - `refresh_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api/auth`로 제한합니다.
 - 모든 인증 쿠키는 `Domain`을 설정하지 않습니다. 쿠키 속성은 API_SPEC 1.1을 따릅니다.
 - Refresh Token 원문은 쿠키에만 두고, DB에는 SHA-256 해시만 저장합니다 (FR-01-05). 로그와 응답 본문에도 원문을 남기지 않습니다.
-- CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청 모두에 Spring Security CSRF 보호를 유지합니다. 상태 변경 요청은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 보냅니다. Bearer 헤더 요청은 쿠키 기반 인증이 아니므로 CSRF 헤더를 요구하지 않습니다.
+- CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청 모두에 Spring Security CSRF 보호를 유지합니다. 상태 변경 요청은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 보냅니다. `Authorization` 스킴이 `Bearer`인 요청은 쿠키 기반 인증이 아니므로 CSRF 헤더를 요구하지 않습니다. 그 밖의 Authorization 스킴과 쿠키 인증 요청은 CSRF를 검사합니다.
 - JWT 원문(Access Token, Refresh Token)은 응답 본문과 로그에 남기지 않습니다. 쿠키로만 전달합니다.
 - 요청 제한: 로그인, 회원가입, Refresh, Google OAuth2는 API_SPEC 1.4의 기준을 따릅니다. 429 응답은 JWT 쿠키를 바꾸지 않습니다.
 - 로그인 제한 이벤트에는 정규화 이메일과 IP를 HMAC-SHA256 값으로만 저장합니다 (R2). 원문 이메일과 원문 IP는 저장하지 않습니다. HMAC 비밀키는 EC2 환경 변수로 주입하고 Git에 커밋하지 않습니다. 회원가입과 Google 제한의 IP 키도 같은 방식입니다 (T16).
@@ -200,8 +200,8 @@ SecurityFilterChain 분리 (구현 기준):
 - `/oauth2/**`와 `/login/oauth2/**`는 API 체인에 포함하지 않습니다.
 - 두 체인의 RequestMatcher가 겹치지 않아야 합니다. API 인증 실패가 로그인 리다이렉트로, 화면 인증 실패가 JSON으로 처리되지 않아야 합니다.
 - 구현 상태 (6.16, 이 브랜치 병합 전): API 체인과 JWT 인증 필터, 화면 체인 분리는 구현되었습니다. 화면 체인의 로그인 리다이렉트와 OAuth2 체인은 아직 구현되지 않았습니다.
-- 인증 수단 선택 (API 체인, API_SPEC 1.0): `Authorization` 헤더가 있으면 그 헤더만 봅니다. 형식이 잘못되었거나 값이 비어 있으면 쿠키로 대체하지 않고 401입니다. 헤더가 없으면 `access_token` 쿠키를 봅니다. 스킴 `Bearer`는 대소문자를 구분하지 않습니다.
-- CSRF 적용 (API 체인): 상태 변경 메서드(POST, PUT, PATCH, DELETE)는 검증합니다. 단, `Authorization` 헤더의 스킴이 `Bearer`(대소문자 무시)인 요청만 CSRF 면제 대상입니다. Basic 등 다른 스킴, 쿠키 인증 요청, 헤더 없는 익명 요청은 검증합니다. 면제 판단은 스킴만 보며 토큰 값 검증과 분리합니다. 잘못된 Bearer 토큰은 CSRF 면제 후 인증 단계에서 401입니다. CSRF 필터는 JWT 필터보다 먼저 실행되고 인증 결과에 의존하지 않습니다. CSRF 전체 비활성화는 하지 않습니다.
+- 인증 수단 선택 (API 체인, API_SPEC 1.0): `Authorization` 헤더가 있으면 쿠키는 보지 않습니다. 헤더의 스킴이 `Bearer`(대소문자 무시)이고 토큰이 유효하면 인증합니다. 헤더가 있는데 스킴이 `Bearer`가 아니거나(예: Basic) 토큰이 비었거나 잘못되었으면 쿠키로 대체하지 않고 401입니다. 헤더 자체가 없으면 `access_token` 쿠키를 봅니다.
+- CSRF 적용 (API 체인): 상태 변경 메서드(POST, PUT, PATCH, DELETE)는 검증합니다. 면제는 `Authorization` 헤더의 스킴이 `Bearer`(대소문자 무시)인 요청에만 적용합니다. 헤더 존재 자체로는 면제하지 않습니다. Basic 등 다른 스킴, 쿠키 인증 요청, 헤더 없는 익명 요청은 검증합니다. 면제 판단은 스킴만 보며 토큰 값 검증과 분리합니다. 잘못된 Bearer 토큰은 CSRF 면제 후 인증 단계에서 401입니다. CSRF 필터는 JWT 필터보다 먼저 실행되고 인증 결과에 의존하지 않습니다. CSRF 전체 비활성화는 하지 않습니다.
 - API 체인의 CSRF 토큰 저장소는 `XSRF-TOKEN` 쿠키(`CookieCsrfTokenRepository`)입니다. 세션을 만들지 않고도 CSRF를 검증하기 위해서입니다. 쿠키 속성은 API_SPEC 1.1과 같습니다: HttpOnly 없음, SameSite=Lax, Path=/, 운영 프로필에서만 Secure. 화면 체인은 세션 기반 저장소를 그대로 씁니다.
 - API 체인의 인증 없이 허용하는 경로는 API_SPEC 2.1~2.4의 POST `/api/auth/signup`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` 네 개뿐입니다. 공개 조회 API는 구현 시 경로를 명시해서 추가합니다. `/api/**` 전체를 공개하지 않습니다.
 - JWT 인증 필터와 회원가입 집계 필터는 서블릿 빈으로 등록하지 않고 체인에 직접 추가합니다. 매 요청 새 SecurityContext를 만들고, 이전 인증 정보를 이어받지 않습니다.

@@ -64,9 +64,10 @@ public class SecurityConfig {
                 // API 인증은 세션을 쓰지 않는다. 화면 세션이 있어도 API 요청의 인증 근거가 되지 않는다.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .securityContext(context -> context.securityContextRepository(new NullSecurityContextRepository()))
-                // CSRF: 상태 변경 요청 중 Authorization 헤더가 없는 요청만 검증한다 (API_SPEC 1.0).
-                // Bearer 헤더 인증은 쿠키로 자동 전송되지 않으므로 CSRF 대상이 아니다.
-                // 헤더 존재 여부만 본다. CSRF 필터는 JWT 필터보다 먼저 실행되므로 인증 결과에 의존하지 않는다.
+                // CSRF: 상태 변경 요청(POST, PUT, PATCH, DELETE)은 검증하되, Authorization 스킴이 Bearer인 요청만 면제한다 (API_SPEC 1.0).
+                // Bearer 토큰은 쿠키로 자동 전송되지 않으므로 CSRF 대상이 아니다. Basic 등 다른 스킴과 쿠키 인증, 익명 요청은 검증한다.
+                // 면제 판단은 스킴만 보고 토큰 값은 보지 않는다. 잘못된 Bearer는 면제 후 JWT 인증 단계에서 401이 된다.
+                // CSRF 필터는 JWT 필터보다 먼저 실행되므로 인증 결과에 의존하지 않는다.
                 .csrf(csrf -> csrf
                         .requireCsrfProtectionMatcher(SecurityConfig::requiresCsrfForApi)
                         .csrfTokenRepository(apiCsrfTokenRepository(environment))

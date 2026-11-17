@@ -506,21 +506,33 @@
 ### 6.16 API/화면 SecurityFilterChain 분리와 API JWT 인증 필터 (2026-11-17)
 
 - 브랜치: `feat/stage2-3-jwt-auth-filter-security-chains` (기준: `main` 5168f07, PR #18 병합본). 병합 전.
+- PR #19 구현 완료 범위 (병합 전, 이 브랜치):
+  - API 전용 SecurityFilterChain 분리 (`/api/**`, `@Order(1)`)
+  - 화면용 SecurityFilterChain 유지 (`@Order(2)`, 기존 세션 인증 정책 그대로)
+  - API Stateless 인증 (세션 미생성·미사용)
+  - JWT Access Token 인증 필터 (`AccessTokenAuthenticationFilter`)
+  - Bearer 헤더 및 `access_token` 쿠키 인증
+  - Bearer 우선순위, 잘못된 Bearer의 쿠키 대체 방지
+  - Bearer 상태 변경 요청의 CSRF 면제 (스킴 기준)
+  - 쿠키 인증 및 비-Bearer 요청의 CSRF 보호
+  - `XSRF-TOKEN` 쿠키 설정 (API_SPEC 1.1)
+  - 회원가입 요청 제한 필터 연결 (CSRF 뒤, 본문 읽기 이전)
+  - 미구현(완료로 보지 않음): 화면 로그인·리다이렉트, API 로그인·Refresh·로그아웃 엔드포인트, Google OAuth2 체인, 닉네임 제출 집계, 공개 조회 API 경로
 - 구현:
   - API 체인 (`/api/**`, `@Order(1)`): JWT만 인증 근거로 쓴다. `STATELESS`, `NullSecurityContextRepository`. 세션을 만들지도 읽지도 않는다. 화면 세션만 있는 API 요청은 401이다.
   - 화면 체인 (그 밖의 모든 요청, `@Order(2)`): 기존 세션 인증과 기존 임시 허용 정책 유지. JWT 필터를 넣지 않는다. JWT 쿠키만 있어도 화면은 인증 상태가 되지 않는다.
-  - `AccessTokenAuthenticationFilter`: `access_token` 쿠키를 기존 `AccessTokenVerifier`로 검증한다. 성공하면 `AccessTokenAuthentication`(주체 = 회원 ID, 권한 = `ROLE_<role>`, 자격 증명 없음)을 설정한다. 실패하면 인증 없이 진행하고, 쿠키는 건드리지 않는다. 매 요청 새 컨텍스트를 만든다. 원문과 원인은 로그에 남기지 않는다.
+  - `AccessTokenAuthenticationFilter` (첫 구현): `access_token` 쿠키를 기존 `AccessTokenVerifier`로 검증한다. 성공하면 `AccessTokenAuthentication`(주체 = 회원 ID, 권한 = `ROLE_<role>`, 자격 증명 없음)을 설정한다. 실패하면 인증 없이 진행하고, 쿠키는 건드리지 않는다. 매 요청 새 컨텍스트를 만든다. 원문과 원인은 로그에 남기지 않는다. Bearer 헤더 지원과 우선순위는 아래 PR #19 보완에서 추가했다.
   - 인증 진입점: 보호된 API의 인증 실패는 401 `TOKEN_INVALID`(공통 오류 응답 형식)다. `ErrorCode.TOKEN_INVALID`를 추가했다.
-  - CSRF (API 체인): 켜 둔다. 토큰은 API_SPEC 1.1대로 `XSRF-TOKEN` 쿠키와 `X-XSRF-TOKEN` 헤더로 주고받는다. `CsrfCookieFilter`가 API 응답마다 쿠키를 내려준다. 화면 체인의 세션 기반 CSRF는 바꾸지 않았다.
+  - CSRF (API 체인): 켜 둔다. 토큰은 API_SPEC 1.1대로 `XSRF-TOKEN` 쿠키와 `X-XSRF-TOKEN` 헤더로 주고받는다. `CsrfCookieFilter`가 API 응답마다 쿠키를 내려준다. 화면 체인의 세션 기반 CSRF는 바꾸지 않았다. 면제 조건(Bearer 스킴만)은 아래 PR #19 추가 보완에서 정했다.
   - 공개 인증 경로: API 체인에서 POST `/api/auth/signup`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`만 인증 없이 허용한다. 공개 조회 API(예: `GET /api/categories`)는 아직 구현되지 않았으므로 열지 않았다. 구현 시 경로를 명시해서 추가한다.
   - 회원가입 집계 필터: 두 체인 모두에 두었다. CSRF 뒤, 본문 읽기 이전에 실행된다. 기존 429와 `Retry-After`, 쿠키 미삭제 정책 그대로다.
 - 설계 판단: 세션 저장소 설정만으로는 MockMvc에서 세션 재사용을 찾지 못했다. Spring Security 6은 명시적으로 저장할 때만 세션에 쓰고, JWT 필터는 매 요청 컨텍스트를 덮어쓴다. 그래서 두 겹으로 막았다. 설정(STATELESS, Null 저장소)과 필터의 컨텍스트 교체다. 그리고 "정상 API JWT 요청은 세션을 만들지 않는다"는 테스트를 추가했다. 설정만 제거한 돌연변이에서는 이 테스트도 통과했다. 설정 자체의 제거는 관찰 가능한 동작으로는 드러나지 않는다. 이 한계는 보고한다.
-- 테스트 (신규 24개):
+- 테스트 (첫 구현 시점, 신규 24개. 이후 보완 결과는 아래 참조):
   - `AccessTokenAuthenticationFilterTest` 4개: 쿠키 없음, 검증 성공 시 회원 ID와 ROLE, 검증 실패 시 이전 컨텍스트를 이어받지 않음, 빈 쿠키.
-  - `ApiSecurityFilterChainTest` 20개(실제 SecurityConfig와 실제 JwtConfig): 정상 USER·ADMIN JWT, JWT 없음 401, 만료·위조·형식 오류 401, 화면 세션만 있는 API 401, JWT만 있는 화면 익명, 화면 세션 인증 유지, 두 수단 동시 존재 시 각 체인 분리, API POST의 CSRF 403과 통과, 공개 인증 경로 허용, 목록 밖 `/api` POST 401, 인증 경로 GET 401, 인증 응답에 access_token 쿠키 없음, API 회원가입 집계와 429, API CSRF 실패 미집계, 한 번만 집계, 정상 API JWT 요청은 세션 미생성.
+  - `ApiSecurityFilterChainTest` 20개(첫 구현 시점, 보완 후 40개. 실제 SecurityConfig와 실제 JwtConfig): 정상 USER·ADMIN JWT, JWT 없음 401, 만료·위조·형식 오류 401, 화면 세션만 있는 API 401, JWT만 있는 화면 익명, 화면 세션 인증 유지, 두 수단 동시 존재 시 각 체인 분리, API POST의 CSRF 403과 통과, 공개 인증 경로 허용, 목록 밖 `/api` POST 401, 인증 경로 GET 401, 인증 응답에 access_token 쿠키 없음, API 회원가입 집계와 429, API CSRF 실패 미집계, 한 번만 집계, 정상 API JWT 요청은 세션 미생성.
   - 기존 테스트 유지. `HomeControllerTest`, `GlobalExceptionHandlerTest`에 `AccessTokenVerifier` 목을 추가했고, `SignupRateLimitFilterTest`의 `/api/auth/signup` 요청은 API 체인의 CSRF 방식(XSRF 쿠키와 헤더)으로 바꿨다. 검증 내용은 줄이지 않았다.
   - 돌연변이 확인: API CSRF를 끄면 CSRF 관련 테스트 7개가 실패한다. 되돌린 뒤 통과했다.
-- 검증 (커밋 기준):
+- 검증 (첫 구현 커밋 `932765b` 기준. 최종 결과는 아래 보완 항목 참조):
   - 테스트 DB 연결(SQL 001~003): 313개 전부 통과, 건너뜀 0개, 실패 0개.
   - 테스트 DB 미설정: 313개 중 261개 통과, 건너뜀 52개(DB 테스트), 실패 0개.
   - `./gradlew bootJar`: 성공.

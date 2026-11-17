@@ -16,7 +16,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 인증 수단 (2026-11-10 확정): 화면은 Spring Security 세션(`JSESSIONID`), API(`/api/**`)는 JWT로 인증합니다. 두 수단은 서로 대체하지 않습니다 (DEVELOPMENT_RULES 5.7).
 - API 인증: `access_token` 쿠키 또는 `Authorization: Bearer <accessToken>` 헤더
 - OAuth2 임시 상태(`state`, Authorization Request)는 기존 HTTP 세션에 저장합니다. Google 로그인과 계정 연동 흐름에서만 사용하며, `/api/**` 요청 인증에는 사용하지 않습니다 (DEVELOPMENT_RULES 5.7.1).
-- CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청(POST, PUT, DELETE)은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 함께 보냅니다. Bearer 헤더 요청은 CSRF 헤더를 요구하지 않습니다.
+- CSRF: 화면 세션 쿠키 기반 상태 변경 요청과 JWT 쿠키 기반 API 상태 변경 요청(POST, PUT, PATCH, DELETE)은 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 함께 보냅니다. `Authorization` 스킴이 `Bearer`인 상태 변경 요청만 CSRF 헤더를 요구하지 않습니다. Basic 등 다른 스킴의 상태 변경 요청은 CSRF 검사를 받습니다.
 - 권한 표기:
   - `누구나`: 인증 없이 접근 가능
   - `회원`: 로그인한 회원(`USER` 또는 `ADMIN`)
