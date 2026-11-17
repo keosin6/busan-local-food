@@ -284,6 +284,106 @@ class ApiSecurityFilterChainTest {
         verify(rateLimitService, times(1)).recordSignupRequest("127.0.0.1");
     }
 
+    private String tokenFor(long memberId, Role role) {
+        return issuer.issue(memberId, role).token();
+    }
+
+    private static String bearer(String token) {
+        return "Bearer " + token;
+    }
+
+    // ---- Bearer 헤더 인증 (API_SPEC 1.0) ----
+
+    @Test
+    void 정상_Bearer_JWT는_인증에_성공한다() throws Exception {
+        mockMvc.perform(get("/api/me").header("Authorization", bearer(validToken(Role.USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string("7|ROLE_USER"));
+    }
+
+    @Test
+    void Bearer_JWT의_회원_ID와_ADMIN_권한이_반영된다() throws Exception {
+        mockMvc.perform(get("/api/me").header("Authorization", bearer(tokenFor(42L, Role.ADMIN))))
+                .andExpect(status().isOk())
+                .andExpect(content().string("42|ROLE_ADMIN"));
+    }
+
+    @Test
+    void 잘못된_Bearer_JWT는_401이다() throws Exception {
+        mockMvc.perform(get("/api/me").header("Authorization", bearer("not-a-jwt")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("TOKEN_INVALID"));
+    }
+
+    @Test
+    void 만료된_Bearer_JWT는_401이다() throws Exception {
+        AccessTokenIssuer expired = new AccessTokenIssuer(jwtEncoder, Duration.ofMinutes(1),
+                Clock.fixed(Instant.now().minus(2, ChronoUnit.HOURS), java.time.ZoneId.of("Asia/Seoul")));
+
+        mockMvc.perform(get("/api/me").header("Authorization", bearer(expired.issue(7L, Role.USER).token())))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void Bearer_헤더가_있으면_쿠키보다_우선한다() throws Exception {
+        // 쿠키는 회원 9, Bearer는 회원 7이다. 인증 주체는 Bearer의 회원이어야 한다.
+        mockMvc.perform(get("/api/me").cookie(jwtCookie(tokenFor(9L, Role.ADMIN)))
+                        .header("Authorization", bearer(tokenFor(7L, Role.USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string("7|ROLE_USER"));
+    }
+
+    @Test
+    void 잘못된_Bearer_헤더가_있으면_유효한_쿠키로_우회_인증되지_않는다() throws Exception {
+        String validCookie = validToken(Role.ADMIN);
+        for (String header : List.of("Bearer ", "Bearer not a jwt", "Basic dXNlcjpwYXNz", "Bearer")) {
+            mockMvc.perform(get("/api/me").cookie(jwtCookie(validCookie)).header("Authorization", header))
+                    .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Test
+    void Bearer_스킴은_대소문자를_구분하지_않는다() throws Exception {
+        mockMvc.perform(get("/api/me").header("Authorization", "bearer " + validToken(Role.USER)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void Bearer_인증_상태_변경_요청은_CSRF_헤더_없이_통과한다() throws Exception {
+        mockMvc.perform(post("/api/me").header("Authorization", bearer(validToken(Role.USER))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 쿠키_인증_상태_변경_요청은_올바른_CSRF_헤더가_있으면_통과한다() throws Exception {
+        Cookie xsrf = xsrfCookie();
+
+        mockMvc.perform(post("/api/me").cookie(jwtCookie(validToken(Role.USER)), xsrf)
+                        .header("X-XSRF-TOKEN", xsrf.getValue()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 쿠키_인증_상태_변경_요청은_틀린_CSRF_헤더면_403이다() throws Exception {
+        Cookie xsrf = xsrfCookie();
+
+        mockMvc.perform(post("/api/me").cookie(jwtCookie(validToken(Role.USER)), xsrf)
+                        .header("X-XSRF-TOKEN", "wrong-value"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 인증_없는_상태_변경_요청도_CSRF가_인증보다_먼저_판정되어_403이다() throws Exception {
+        // CSRF 필터가 JWT 필터보다 먼저 실행된다. 쿠키가 없는 익명 POST도 CSRF 헤더가 없으면 403이다.
+        mockMvc.perform(post("/api/other")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 잘못된_Bearer_상태_변경_요청은_CSRF_대상이_아니므로_403이_아니라_401이다() throws Exception {
+        mockMvc.perform(post("/api/me").header("Authorization", bearer("not-a-jwt")))
+                .andExpect(status().isUnauthorized());
+    }
+
     private MockHttpSession screenSession(String username) {
         Authentication auth = new UsernamePasswordAuthenticationToken(username, null,
                 AuthorityUtils.createAuthorityList("ROLE_USER"));
