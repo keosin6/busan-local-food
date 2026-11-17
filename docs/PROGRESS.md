@@ -525,6 +525,12 @@
   - 테스트 DB 미설정: 313개 중 261개 통과, 건너뜀 52개(DB 테스트), 실패 0개.
   - `./gradlew bootJar`: 성공.
   - 실제 jar: `GET /` 200. 인증 없는 `GET /api/x` 401 `TOKEN_INVALID`. 위조 JWT 401. XSRF 쿠키 발급. CSRF 토큰이 있는 `POST /api/auth/logout`은 인증을 통과해 404(엔드포인트 없음). CSRF 토큰 없는 `POST /api/auth/signup`은 403이고 집계 0건.
+- PR #19 보완 (2026-11-17, Bearer 인증과 CSRF 명세 일치):
+  - `AccessTokenAuthenticationFilter`: `Authorization: Bearer` 헤더를 읽는다. 헤더가 있으면 쿠키는 보지 않는다. 잘못된 Bearer 형식(빈 값, 공백 포함, 다른 스킴)과 위조·만료 토큰은 인증 실패이며, 쿠키로 우회하지 않는다. 기존 `AccessTokenVerifier`를 그대로 쓴다. 토큰과 실패 원인은 로그에 남기지 않는다. 쿠키는 지우거나 바꾸지 않는다.
+  - CSRF (API 체인): 상태 변경 요청 중 `Authorization` 헤더가 없는 요청만 검증한다. Bearer 헤더 요청은 CSRF 헤더 없이 통과한다. CSRF 필터가 JWT 필터보다 먼저 실행되므로, 판단은 헤더 존재 여부만 본다. 화면 체인과 CSRF 전체 비활성화는 바꾸지 않았다.
+  - `XSRF-TOKEN` 쿠키 속성 검증: HttpOnly 없음, SameSite=Lax, Path=/, 운영 프로필에서만 Secure. 서블릿 6 환경에서 SameSite는 쿠키 속성으로 붙으며, MockMvc는 이를 헤더 문자열에 쓰지 않으므로 테스트는 쿠키 객체의 속성을 확인한다. 실제 서버 응답 헤더는 별도 확인했다(아래 검증).
+  - 테스트 추가: Bearer 정상·잘못된·만료·ADMIN 권한, Bearer 우선순위, 잘못된 Bearer로 쿠키 우회 불가, 스킴 대소문자, Bearer 상태 변경 CSRF 없이 통과, 쿠키 상태 변경 CSRF 없이 403과 올바른 헤더 통과와 틀린 헤더 403, CSRF가 인증보다 먼저 판정됨, 잘못된 Bearer 상태 변경은 401, 쿠키 속성(로컬·운영), 필터 단위 Bearer 파싱.
+  - 돌연변이 확인: (1) CSRF 대상을 모든 상태 변경 요청으로 되돌리면 Bearer CSRF 테스트 2개가 실패한다. (2) 쿠키를 Bearer보다 먼저 읽으면 우선순위와 우회 테스트 4개가 실패한다. 되돌린 뒤 통과했다.
 - 미구현 (이 브랜치 범위 밖):
   - 화면 체인의 로그인 실패 리다이렉트(현재 임시 전체 허용)
   - 화면 로그인과 API 로그인 엔드포인트, 로그인 요청 제한 연결
