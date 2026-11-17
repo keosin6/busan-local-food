@@ -12,8 +12,8 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17, merge commit `9f881a0cca892b28f342dec9fc399814b40001a8`, 2026-11-17)**. 병합된 구현: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 서비스 시간대 고정, 요청 제한 서비스 R1~R10(PR #16, `50963bc`), Refresh 요청 제한 연결과 잠금 재시도, 공통 429 `RATE_LIMITED`와 `Retry-After`, 회원가입 요청 집계 필터(CSRF 뒤, 본문 읽기 이전), 요청 제한 저장소 장애 시 fail-closed. **`main`에 없는 것**: 로그인·Refresh·Google OAuth2의 HTTP 엔드포인트, 로그인·재발급·로그아웃 컨트롤러와 쿠키, JWT 인증 필터와 SecurityFilterChain 분리는 PR #19(`feat/stage2-3-jwt-auth-filter-security-chains`)에서 구현 완료, `main` 병합 대기(6.16). 나머지는 아래 7절 |
-| **다음 개발 단계** | 인증 HTTP 연결 (Stage 2-3 잔여): 화면 로그인과 API 로그인 `POST /api/auth/login` 연결(로그인 요청 제한 포함), Refresh `POST /api/auth/refresh` 연결(요청 제한과 429 처리 포함), Google OAuth2 시작·연결·콜백과 Google 신규 가입 닉네임 제출의 요청 제한 연결, 로그인·재발급·로그아웃 컨트롤러와 쿠키 처리. JWT 인증 필터와 화면용·API용 SecurityFilterChain 분리는 PR #19에서 구현 완료(병합 대기, 6.16). 그다음 Stage 2-4 (화면 세션, Google OAuth2 로그인·계정 연결·해제). 상세는 7절 |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17, merge commit `9f881a0cca892b28f342dec9fc399814b40001a8`, 2026-11-17)**. 병합된 구현: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 서비스 시간대 고정, 요청 제한 서비스 R1~R10(PR #16, `50963bc`), Refresh 요청 제한 연결과 잠금 재시도, 공통 429 `RATE_LIMITED`와 `Retry-After`, 회원가입 요청 집계 필터(CSRF 뒤, 본문 읽기 이전), 요청 제한 저장소 장애 시 fail-closed. PR #19(`main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`, 6.16)에서 JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·Cookie 인증, API CSRF 정책이 `main`에 들어갔다. **`main`에 없는 것**: 로그인·Refresh·Google OAuth2의 HTTP 엔드포인트, 로그인·재발급·로그아웃 컨트롤러와 쿠키 처리. 나머지는 아래 7절 |
+| **다음 개발 단계** | 인증 HTTP 연결 (Stage 2-3 잔여): 화면 로그인과 API 로그인 `POST /api/auth/login` 연결(로그인 요청 제한 포함), Refresh `POST /api/auth/refresh` 연결(요청 제한과 429 처리 포함), Google OAuth2 시작·연결·콜백과 Google 신규 가입 닉네임 제출의 요청 제한 연결, 로그인·재발급·로그아웃 컨트롤러와 쿠키 처리. 그다음 Stage 2-4 (화면 세션, Google OAuth2 로그인·계정 연결·해제). 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -21,7 +21,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17, `9f881a0`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 시간대 고정, 요청 제한 서비스 R1~R10(PR #16), 공통 429와 `Retry-After`, 회원가입 집계 필터(`POST /signup`, `POST /api/auth/signup`). PR #19(병합 대기, 6.16): JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, CSRF 정책 구현 완료. **미구현**: 로그인 HTTP 연결, Refresh HTTP 연결과 재발급 요청 제한, Google OAuth2 시작·연결·콜백 집계, Google 신규 가입 닉네임 제출 집계(경로 미확정), 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키, 화면 세션 인증과 API JWT 인증의 실제 연결, 프런트엔드 T20 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 회원가입 집계 HTTP 연결 `main` 병합 (6.2~6.15) |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17, `9f881a0`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 시간대 고정, 요청 제한 서비스 R1~R10(PR #16), 공통 429와 `Retry-After`, 회원가입 집계 필터(`POST /signup`, `POST /api/auth/signup`). PR #19(`main` 병합 완료, `dd147e3`, 6.16): JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, CSRF 정책. **미구현**: 로그인 HTTP 연결, Refresh HTTP 연결과 재발급 요청 제한, Google OAuth2 시작·연결·콜백 집계, Google 신규 가입 닉네임 제출 집계(경로 미확정), 로그인·회원가입·재발급·로그아웃 컨트롤러와 쿠키, 화면 세션 인증과 API JWT 인증의 실제 연결, 프런트엔드 T20 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 회원가입 집계 HTTP 연결 `main` 병합 (6.2~6.15) |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -36,7 +36,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | `main`(PR #17, `9f881a0`) 기준 전체 289개. DB 연결 시 289개 전부 실행, DB 미설정 시 237개 통과·52개 건너뜀(DB 테스트). 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). PR #19 브랜치 전체 340개: DB 연결 시 340개 전부 실행, DB 미설정 시 288개 통과·52개 건너뜀 (6.16, 커밋 `eceb2e8` 기준). 웹 계층 테스트(MockMvc)는 회원가입 필터와 공통 오류 응답에 한정 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). 서비스 계층과 회원가입 집계 HTTP 연결 `main` 병합. JWT 인증 필터와 API·화면 SecurityFilterChain 분리는 PR #19에서 구현 완료(병합 대기, 6.16). 로그인·Refresh·Logout HTTP API, 관련 컨트롤러와 쿠키 발급·갱신, Google OAuth2 HTTP 연동, 화면 로그인·로그아웃 흐름, 프런트엔드 Access Token 자동 갱신과 T20은 미구현 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | PR #17 병합 시점(`9f881a0`) 기준 289개(DB 연결 시 전부 실행, DB 미설정 시 237개 통과·52개 건너뜀). 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). PR #19 병합 후 전체 테스트는 PR 작업 당시 보고값으로 기록: DB 테스트 연결 시 340/340 통과, DB 미설정 시 288 통과·52 건너뜀 (커밋 `eceb2e8` 기준, 현재 `main`에서 새로 실행한 결과 아님). 웹 계층 테스트(MockMvc)는 회원가입 필터와 공통 오류 응답에 한정 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). 서비스 계층과 회원가입 집계 HTTP 연결 `main` 병합. JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책은 PR #19로 `main` 병합 완료(6.16). 로그인·Refresh·Logout HTTP API, 관련 컨트롤러와 쿠키 발급·갱신, Google OAuth2 HTTP 연동, 화면 로그인·로그아웃 흐름, 프런트엔드 Access Token 자동 갱신과 T20은 미구현 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -505,9 +505,9 @@
 
 ### 6.16 API/화면 SecurityFilterChain 분리와 API JWT 인증 필터 (2026-11-17)
 
-- 브랜치: `feat/stage2-3-jwt-auth-filter-security-chains` (기준: `main` 5168f07, PR #18 병합본).
-- 상태: 구현 완료, PR #19 `main` 병합 대기. 완료 항목은 아래 구현 범위, 미구현 항목은 아래 미구현 목록을 따른다.
-- PR #19 구현 완료 범위 (병합 대기):
+- 브랜치: `feat/stage2-3-jwt-auth-filter-security-chains` (기준: `main` 5168f07, PR #18 병합본). PR #19는 `main`에 squash 병합.
+- 상태: PR #19 `main` 병합 완료 (merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`). 구현 범위, 보안 정책, 테스트 기록은 아래에 보존한다. 미구현 항목은 아래 미구현 목록과 7절을 따른다.
+- PR #19 구현 범위 (`main` 병합 완료):
   - API 전용 SecurityFilterChain 분리 (`/api/**`, `@Order(1)`)
   - 화면용 SecurityFilterChain 유지 (`@Order(2)`, 기존 세션 인증 정책 그대로)
   - API Stateless 인증 (세션 미생성·미사용)
@@ -547,7 +547,7 @@
 - PR #19 추가 보완 (2026-11-17, CSRF 면제를 Bearer 스킴으로 제한): 이전 구현은 `Authorization` 헤더만 있으면 CSRF를 면제했다. 그래서 Basic 헤더가 있는 상태 변경 요청이 CSRF를 우회했다. 면제 조건을 `Bearer` 스킴(대소문자 무시)으로 좁혔다. 토큰 값 검증은 하지 않으므로 CSRF 판단과 JWT 검증은 분리된다. 필터 순서(CSRF가 JWT보다 먼저)와 쿠키 인증 정책, 화면 체인, 429 처리는 바꾸지 않았다.
   - 추가 테스트: Basic POST는 CSRF 없으면 403, 올바른 CSRF가 있으면 CSRF를 통과해 인증 401. Basic과 유효 JWT 쿠키가 함께 있어도 쿠키로 우회하지 않고 403. 헤더 없는 익명 상태 변경 403. 공개 인증 경로 4개는 Basic 헤더로 CSRF를 우회하지 못함. `Bearer`와 토큰 사이에 공백이 없으면 Bearer가 아니므로 403. 대소문자 혼합 스킴(`bEARER`) 면제. 면제된 Bearer 요청에 쿠키가 있어도 잘못된 Bearer는 401.
   - 검증: `./gradlew clean test` DB 미연결 340개 중 52개 건너뜀, 실패 0. DB 연결(isolated MySQL 8.0.46, SQL 001→002→003 적용) 340개, 실패 0, 건너뜀 0.
-- 미구현 (PR #19 범위 밖):
+- 미구현 (6.16 범위 밖):
   - 화면 체인의 로그인 실패 리다이렉트(현재 임시 전체 허용)
   - 화면 로그인과 API 로그인 엔드포인트, 로그인 요청 제한 연결
   - Refresh HTTP 엔드포인트와 재발급 요청 제한·429 매핑
@@ -558,7 +558,7 @@
 
 ## 7. 다음 작업
 
-1. 완료 (`main` 병합, PR #17, merge commit `9f881a0cca892b28f342dec9fc399814b40001a8`, 2026-11-17):
+1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`):
    - 인증 요청 제한 R1~R10 서비스 구현 (PR #16, `50963bc`, 6.14)
    - 회원가입 요청 제한 HTTP 연결: `SignupRateLimitFilter`가 `POST /signup`, `POST /api/auth/signup`을 집계합니다. 화면 회원가입과 API 회원가입은 같은 IP 제한을 공유합니다.
    - 실행 순서: CSRF 검증 → 회원가입 요청 제한 필터 → Controller(본문 읽기, 파싱, DTO 검증). 요청 본문을 읽기 전에 제한 여부를 검사합니다. CSRF 실패 요청은 집계되지 않습니다.
@@ -566,20 +566,26 @@
    - 요청 제한 초과 시 쿠키를 삭제하거나 로그아웃시키지 않습니다. 세션과 JWT는 그대로 둡니다.
    - 요청 제한 저장소 장애 시 fail-closed 처리: 판정을 끝내지 못하면 요청을 진행시키지 않고 500 `INTERNAL_ERROR`로 응답합니다.
    - 상세 기록: 6.14(R1~R10), 6.15(HTTP 연결)
-2. 다음 작업 (`main` 기준 미구현. PR #19 항목은 구현 완료·병합 대기로 표시하고, `main` 병합 후 완료로 바꿉니다). 현재 `main`의 엔드포인트는 홈 화면 `GET /` 하나뿐입니다:
+   - PR #19 (`main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`, 6.16):
+     - JWT 인증 필터 (`AccessTokenAuthenticationFilter`)
+     - API용 SecurityFilterChain (`/api/**`, Stateless, `@Order(1)`)
+     - 화면용 SecurityFilterChain 유지 (`@Order(2)`)
+     - Bearer·Cookie 인증 정책 (Bearer 우선, 잘못된 Bearer의 쿠키 대체 방지)
+     - API CSRF 정책 (Bearer 스킴 상태 변경만 면제, 그 밖은 검사, `XSRF-TOKEN` 쿠키)
+2. 다음 작업 (`main` 기준 미구현. 완료 항목은 1번에 기록). 현재 `main`의 엔드포인트는 홈 화면 `GET /` 하나뿐입니다:
    - 화면 로그인 HTTP 연결 (화면 세션 로그인 엔드포인트 미구현)
    - API 로그인 `POST /api/auth/login` 연결 및 로그인 요청 제한 연결 (로그인 컨트롤러 미구현)
    - Refresh HTTP `POST /api/auth/refresh` 연결, Refresh 요청 제한과 429 처리 연결 (재발급 컨트롤러 미구현)
    - Google OAuth2 시작(`GET /oauth2/authorization/google`), 계정 연결 시작 POST(경로 미확정), 콜백(`GET /login/oauth2/code/google`)의 요청 제한 연결 (OAuth2 흐름 미구현)
    - Google 신규 가입 닉네임 설정 제출 경로와 요청 제한 연결 (경로 미확정)
    - 회원가입·로그인·Refresh·Logout 컨트롤러 및 쿠키 처리의 나머지 구현
-   - JWT 인증 필터: PR #19에서 구현 완료, 병합 대기 (6.16)
-   - 화면용 및 API용 SecurityFilterChain 분리: PR #19에서 구현 완료, 병합 대기 (6.16)
-   - 화면 세션 인증과 API JWT 인증의 실제 연결: 체인 수준 분리는 6.16에서 구현. 실제 발급과 로그인 흐름 연결은 로그인 HTTP 엔드포인트가 생긴 뒤 가능 (미구현)
+   - 화면 세션 인증과 API JWT 인증의 실제 연결: 실제 발급과 로그인 흐름 연결은 로그인 HTTP 엔드포인트가 생긴 뒤 가능 (미구현)
    - 프론트엔드 Access Token 자동 갱신과 T20 처리 (미구현)
    - Google OAuth2 로그인 및 계정 연결·해제 (미구현)
+   - 화면 로그인 실패 리다이렉트 (화면 체인, 미구현)
+   - 공개 조회 API 경로 (구현 시 명시적으로 추가, 미구현)
    위 경로 중 현재 코드에 없는 것은 확정하지 않았습니다. API_SPEC의 표기는 설계 기준입니다.
-3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), 화면 로그인 실패 리다이렉트(화면 체인). SecurityFilterChain 분리 자체는 PR #19에서 구현 완료, 병합 대기 (6.16).
+3. Stage 2-4: 화면 세션 로그인·회원가입, Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), 화면 로그인 실패 리다이렉트(화면 체인).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
 6. 실제 MySQL 스키마 적용은 사용자가 `db/manual/`의 SQL 파일을 직접 실행합니다. 이번 작업에서는 실행하지 않았습니다.
