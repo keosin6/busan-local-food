@@ -52,16 +52,16 @@
 
 ## 환경 변수
 
-보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 애플리케이션이 실제로 읽는 변수는 DB 3개, JWT 3개, `AUTH_RATE_LIMIT_HMAC_SECRET`입니다. `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`이 없으면 기동하지 않습니다.
+보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 애플리케이션이 실제로 읽는 변수는 DB 3개, JWT 3개(`JWT_SECRET`과 만료 시간 2개), `AUTH_RATE_LIMIT_HMAC_SECRET`, Google 2개(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`)입니다. `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`이 없으면 기동하지 않습니다. Google 두 값은 함께 설정해야 하며, 한쪽만 있으면 기동하지 않고, 둘 다 없으면 local에서 Google 로그인만 꺼집니다.
 
 ```
 DB_URL, DB_USERNAME, DB_PASSWORD
 JWT_SECRET, JWT_ACCESS_TOKEN_EXPIRY_SECONDS, JWT_REFRESH_TOKEN_EXPIRY_SECONDS
 AUTH_RATE_LIMIT_HMAC_SECRET
 GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-AWS_REGION, AWS_S3_BUCKET
-OPENROUTER_API_KEY, OPENROUTER_MODEL
 ```
+
+`AWS_REGION`, `AWS_S3_BUCKET`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`은 계획된 변수이며 아직 애플리케이션이 읽지 않습니다.
 
 ## 실행 방법
 
