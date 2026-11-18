@@ -95,8 +95,11 @@ public class AuthController {
     /** 로그아웃. 인증 없이 호출할 수 있고, 쿠키가 없거나 폐기된 토큰이어도 200이다. */
     @PostMapping("/logout")
     public ResponseEntity<ApiSuccessResponse<Void>> logout(
-            @CookieValue(name = AuthCookies.REFRESH_COOKIE, required = false) String refreshToken) {
+            @CookieValue(name = AuthCookies.REFRESH_COOKIE, required = false) String refreshToken,
+            HttpServletRequest request) {
         authService.logout(refreshToken);
+        // API 로그아웃이 예외 없이 끝난 뒤에만 기존 화면 세션에 승인을 남긴다 (T12 서버 측 순서 보장, API_SPEC 2.11).
+        ScreenLogoutApproval.grant(request);
         return ResponseEntity.ok()
                 .headers(expiredHeaders())
                 .body(ApiSuccessResponse.of(null));

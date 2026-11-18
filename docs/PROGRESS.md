@@ -633,13 +633,43 @@
   - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
 - 미구현 (6.19 범위 밖): Google OAuth2 시작·콜백·계정 연동·해제, Google 요청 제한 연결과 닉네임 제출 집계, 프런트엔드 Access Token 자동 갱신과 T20, 화면 보호 페이지와 `/login` 리다이렉트 규칙, 화면용 429 안내 페이지, `/mypage`, F1-02~F1-09.
 - 위험과 한계:
-  - `validation_failed`(로그인 입력 오류)는 명세 밖 값이다. 확정이 필요하다.
+  - `validation_failed`(로그인 입력 오류)는 6.20에서 API_SPEC 정식 명세에 추가되었다.
   - 화면 로그인은 Spring `formLogin` 대신 컨트롤러가 처리한다. 경로와 결과는 명세와 같지만 `formLogin`의 성공·실패 핸들러 이벤트는 쓰지 않는다.
-  - T12 순서는 브라우저 스크립트가 지킨다. 서버는 `/logout`만 따로 와도 세션을 끊는다.
+  - T12 순서는 6.20에서 서버 측 승인으로 강제되었다. 이 절의 해당 설명은 PR #25 첫 구현 시점 기록이다.
   - 화면 429는 JSON 본문이다. 안내 페이지가 없다.
   - 화면 로그인 흐름의 브라우저 자동 테스트는 없다. 위 Playwright 확인은 수동 스크립트 실행이다.
   - 세션 타임아웃과 동시 세션 정책은 아직 정하지 않았다(T11의 OAuth2 세션 정책은 Google 단계에서 확정).
   - DB 테스트는 로컬 격리 MySQL에서만 실행했다. CI는 없다.
+
+### 6.20 PR #25 보완: T12 서버 측 로그아웃 승인과 validation_failed 명세 (2026-11-18)
+
+- 브랜치: `fix/stage2-4-screen-logout-guard` (기준: PR #25 head `26e3aee`, 보완 PR의 base는 `feat/stage2-4-screen-auth`). PR #25와 함께 병합 대기.
+- 배경: 6.19의 첫 구현은 T12 순서를 브라우저 스크립트에만 맡겼다. 서버의 `/logout`은 CSRF만 통과하면 세션을 끊었다.
+- 구현:
+  - 승인 소비 원자성 보완 (2026-11-18): `consume`은 승인 조회, 제거, 만료 검증을 세션 객체를 기준으로 한 동기화 구간에서 한다. `grant`도 같은 기준으로 동기화한다. 무효화된 세션에서 호출되면 예외 없이 false다. 동시 소비 테스트는 래치로 실행 순서를 맞추며, 동기화를 제거한 변형에서 실패함을 확인했다.
+  - `ScreenLogoutApproval`: API 로그아웃이 예외 없이 끝난 뒤 같은 요청의 기존 화면 세션에만 일회성 승인을 기록한다(`getSession(false)`, 새 세션을 만들지 않음). 유효 기간 120초. 소비는 1회만 가능하다.
+  - `AuthController.logout`: 서비스 로그아웃이 성공한 뒤에만 `ScreenLogoutApproval.grant`를 호출한다. API 체인의 STATELESS 설정과 NullSecurityContextRepository는 그대로다.
+  - `ScreenLogoutController`: `POST /logout`을 처리한다. 세션이 없으면 `302 /login`. 승인이 유효하면 소비하고, SecurityContext를 지우고, 세션을 무효화하고, `JSESSIONID`를 만료시키고, `302 /login`. 승인이 없거나 만료되었거나 소비되었으면 `403`이고 세션을 유지한다.
+  - `SecurityConfig`: 기본 LogoutFilter를 끈다(`logout` disable). 승인 검증 없이 세션을 끊는 경로가 남지 않도록 하기 위해서다. CSRF 필터는 여전히 컨트롤러보다 먼저 실행된다.
+  - `docs/API_SPEC.md`: 2.9·2.10 화면 오류 식별자 표(`validation_failed` 포함)를 추가했다. 2.11에 서버 측 승인 규칙을 추가했다.
+  - `logout.js`, 화면 템플릿, 세션 고정 방어(`ScreenSession`)는 바꾸지 않았다.
+- 테스트:
+  - 화면 로그아웃 승인 규칙 (MockMvc, `ScreenAuthHttpTest`): 승인 없는 직접 호출 거부와 세션 유지, API 로그아웃 실패 시 승인 없음과 화면 거부, 다른 세션 승인으로 로그아웃 불가, 만료된 승인 거부, 승인 유지 중 CSRF 실패 후 재시도 성공, API 예외 시 승인 미생성, API 로그아웃 멱등, 세션 없는 API 로그아웃이 세션을 만들지 않음, 승인이 있어도 API 요청은 세션으로 인증되지 않음, 로그인 시 승인이 새 세션으로 이전되지 않음, 로그인 실패 리다이렉트 주소에 이메일·비밀번호 없음, 중복 화면 로그아웃은 CSRF에서 거부되고 세션을 새로 만들지 않음, API 로그아웃은 Refresh Token을 한 번만 폐기.
+  - `ScreenLogoutApprovalTest` (단위): 1회 소비, 만료 승인 제거, 승인 없음, 유효 기간 120초.
+  - `ScreenAuthDbTest` (MySQL): T12 순서 흐름의 API 로그아웃에 같은 세션을 넘김. 승인 없는 재시도는 403. API 로그아웃 실패 시 DB 토큰이 그대로 남고 화면 로그아웃이 거부됨.
+  - `AuthApiDbTest`: 미가입과 불일치 비밀번호의 응답 비교에서 `timestamp`를 제외한다. 초 단위 timestamp 때문에 간헐적으로 실패할 수 있던 테스트를 고쳤다.
+- 실행 결과 (이 브랜치 HEAD, 작업 중 실행. 현재 `main` 결과가 아님):
+  - `./gradlew clean test`, DB 연결(격리 MySQL 8.0.46, SQL 001→003): 426개 전부 통과, 실패 0, 건너뜀 0.
+  - `./gradlew clean test`, DB 미설정: 426개 중 359개 통과, 67개 건너뜀(DB 테스트), 실패 0.
+  - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
+- 브라우저 확인 (Playwright, 헤드리스 Chromium, 실제 jar와 격리 MySQL, 저장소 밖 스크립트): 정상 로그아웃 순서 `POST /api/auth/logout` → `POST /logout` → `/login`. API 실패 시 `/logout` 미호출과 세션 유지. API 성공 뒤 화면 실패 시 재시도 성공. 승인 없이 `POST /logout`을 직접 호출하면 403이고 로그인 상태가 유지된다.
+- 명세 변경: `validation_failed`를 API_SPEC 2.9·2.10의 화면 오류 식별자 표에 추가했다. 기존 API 오류 응답은 바꾸지 않았다.
+- 미구현 (6.20 범위 밖): 6.19의 미구현 목록과 같다.
+- 위험과 한계:
+  - 승인 저장소는 HttpSession이다. 세션 저장소를 외부화하면 속성 직렬화가 필요하다. 레코드는 `Serializable`로 선언했다.
+  - 120초 안에 화면 로그아웃을 해야 한다. 지나면 API 로그아웃부터 다시 한다.
+  - 브라우저 확인에서 화면 로그아웃 실패는 Playwright 라우팅으로 만들었다. 서버 측 재시도 규칙은 MockMvc와 DB 테스트가 확인했다.
+  - 기본 LogoutFilter를 끈 탓에 `POST /logout` 이외의 로그아웃 처리(예: `remember-me`)가 필요해지면 다시 설계해야 한다. 지금은 `remember-me`를 쓰지 않는다.
 
 ## 7. 다음 작업
 
@@ -657,7 +687,7 @@
      - 화면용 SecurityFilterChain 유지 (`@Order(2)`)
      - Bearer·Cookie 인증 정책 (Bearer 우선, 잘못된 Bearer의 쿠키 대체 방지)
      - API CSRF 정책 (Bearer 스킴 상태 변경만 면제, 그 밖은 검사, `XSRF-TOKEN` 쿠키)
-   - 구현 완료, `main` 병합 대기 (6.19, `feat/stage2-4-screen-auth`): 화면 회원가입(`GET`·`POST /signup`), 화면 로그인(`GET`·`POST /login`, 실패는 `error` 값으로 리다이렉트), 화면 로그아웃(`POST /logout`, T12 순서는 `logout.js`), 세션 고정 방어, 화면 세션과 API JWT 분리 유지.
+   - 구현 완료, `main` 병합 대기 (6.19, `feat/stage2-4-screen-auth`): 화면 회원가입(`GET`·`POST /signup`), 화면 로그인(`GET`·`POST /login`, 실패는 `error` 값으로 리다이렉트), 화면 로그아웃(`POST /logout`, T12 순서는 `logout.js`와 서버 승인(6.20)), 세션 고정 방어, 화면 세션과 API JWT 분리 유지.
    - PR #23 (`main` 병합 완료, merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18):
      - API 인증 HTTP 5종: `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
      - JWT 쿠키 발급·갱신·만료 (`access_token` Path `/api`, `refresh_token` Path `/api/auth`, API_SPEC 1.1)

@@ -223,7 +223,7 @@ class ScreenAuthDbTest {
 
         // 1) API 로그아웃: Refresh Token 폐기.
         Cookie xsrf = xsrf();
-        mockMvc.perform(post("/api/auth/logout")
+        mockMvc.perform(post("/api/auth/logout").session(session)
                         .cookie(xsrf, new Cookie("access_token", access), new Cookie("refresh_token", refresh))
                         .header("X-XSRF-TOKEN", xsrf.getValue()))
                 .andExpect(status().isOk());
@@ -240,14 +240,34 @@ class ScreenAuthDbTest {
                 .anyMatch(h -> h.startsWith("JSESSIONID=") && h.contains("Max-Age=0"));
 
         // 3) 재시도: 이미 로그아웃된 상태에서도 안전하다.
+        // 승인이 없는 새 세션의 화면 로그아웃은 거부된다. 세션은 그대로 남는다.
         Screen after = screen("/login", null);
         mockMvc.perform(post("/logout").session(after.session()).param("_csrf", after.csrf()))
-                .andExpect(status().isFound())
-                .andExpect(header().string("Location", "/login"));
+                .andExpect(status().isForbidden());
+        assertThat(after.session().isInvalid()).isFalse();
         xsrf = xsrf();
         mockMvc.perform(post("/api/auth/logout").cookie(xsrf, new Cookie("refresh_token", refresh))
                         .header("X-XSRF-TOKEN", xsrf.getValue()))
                 .andExpect(status().isOk());
         assertThat(activeTokens("flow@example.com")).isZero();
+    }
+
+    @Test
+    void API_로그아웃이_실패하면_DB_토큰은_그대로_남고_화면_로그아웃도_거부된다() throws Exception {
+        MvcResult signup = screenSignup("guard@example.com", "가드회원", PASSWORD);
+        MockHttpSession session = (MockHttpSession) signup.getRequest().getSession(false);
+        String refresh = cookieValue(signup, "refresh_token");
+
+        // XSRF 헤더가 없어 API 로그아웃이 403으로 실패한다.
+        mockMvc.perform(post("/api/auth/logout").session(session)
+                        .cookie(new Cookie("refresh_token", refresh)))
+                .andExpect(status().isForbidden());
+        assertThat(activeTokens("guard@example.com")).isEqualTo(1);
+
+        Screen home = screen("/", session);
+        mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf()))
+                .andExpect(status().isForbidden());
+        assertThat(session.isInvalid()).isFalse();
+        assertThat(activeTokens("guard@example.com")).isEqualTo(1);
     }
 }

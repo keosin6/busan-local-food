@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -36,6 +37,7 @@ import com.busanlocalfood.member.service.MemberRegistrationService;
 import com.busanlocalfood.web.HomeController;
 import jakarta.servlet.http.Cookie;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -71,7 +73,7 @@ import org.springframework.http.HttpHeaders;
 })
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         RefreshTokenConfig.class, AuthApiService.class, AuthCookies.class, AuthController.class,
-        ScreenAuthController.class, ScreenAuthAdvice.class, HomeController.class,
+        ScreenAuthController.class, ScreenLogoutController.class, ScreenAuthAdvice.class, HomeController.class,
         ScreenAuthHttpTest.ClientIpConfig.class})
 class ScreenAuthHttpTest {
 
@@ -180,6 +182,15 @@ class ScreenAuthHttpTest {
         assertThat(header).as("Set-Cookie " + name).isNotNull();
         int end = header.indexOf(';');
         return header.substring(name.length() + 1, end < 0 ? header.length() : end);
+    }
+
+    /** 같은 화면 세션에서 API 로그아웃을 성공시킨다. 화면 로그아웃 승인이 세션에 남는다. */
+    private void apiLogout(MockHttpSession session) throws Exception {
+        Cookie xsrf = xsrf();
+        mockMvc.perform(post("/api/auth/logout").session(session)
+                        .cookie(xsrf, new Cookie("refresh_token", "screen-refresh-raw"))
+                        .header("X-XSRF-TOKEN", xsrf.getValue()))
+                .andExpect(status().isOk());
     }
 
     private Cookie xsrf() throws Exception {
@@ -436,6 +447,7 @@ class ScreenAuthHttpTest {
                         .param("email", "user@example.com").param("password", VALID_PASSWORD))
                 .andReturn();
         MockHttpSession session = (MockHttpSession) signedIn.getRequest().getSession(false);
+        apiLogout(session); // 화면 로그아웃 승인은 같은 세션의 API 로그아웃 성공으로만 생긴다.
         Screen home = screen("/", session);
 
         MvcResult result = mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf()))
@@ -447,16 +459,29 @@ class ScreenAuthHttpTest {
         assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
                 .anyMatch(h -> h.startsWith("JSESSIONID=") && h.contains("Max-Age=0"))
                 .noneMatch(h -> h.startsWith("access_token=") || h.startsWith("refresh_token="));
-        verify(refreshTokens, never()).logout(anyString());
+        // API 로그아웃 호출 1회만 Refresh Token을 폐기한다. 화면 로그아웃은 폐기하지 않는다.
+        verify(refreshTokens, times(1)).logout(anyString());
     }
 
     @Test
-    void 세션이_없는_화면_로그아웃도_로그인으로_보낸다() throws Exception {
-        Screen page = screen("/login", null);
+    void 중복_화면_로그아웃은_CSRF에서_거부되고_세션을_새로_만들지_않는다() throws Exception {
+        stubLoginSuccess();
+        Screen login = screen("/login", null);
+        MvcResult signedIn = mockMvc.perform(post("/login").session(login.session()).param("_csrf", login.csrf())
+                        .param("email", "user@example.com").param("password", VALID_PASSWORD))
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) signedIn.getRequest().getSession(false);
+        apiLogout(session);
+        Screen home = screen("/", session);
+        mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf())).andExpect(status().isFound());
 
-        mockMvc.perform(post("/logout").session(page.session()).param("_csrf", page.csrf()))
-                .andExpect(status().isFound())
-                .andExpect(header().string("Location", "/login"));
+        // 이미 끝난 세션에 이전 CSRF 토큰으로 다시 요청한다. 세션이 없으므로 CSRF에서 거부되고 세션은 생기지 않는다.
+        MvcResult again = mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf())).andReturn();
+        assertThat(again.getResponse().getStatus()).isEqualTo(403);
+        // 새 세션을 만들었다면 새 JSESSIONID가 내려온다. 만료 쿠키(Max-Age=0) 말고는 없어야 한다.
+        assertThat(again.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                .noneMatch(h -> h.startsWith("JSESSIONID=") && !h.contains("Max-Age=0"));
+        assertThat(session.isInvalid()).isTrue();
     }
 
     @Test
@@ -507,7 +532,7 @@ class ScreenAuthHttpTest {
         MockHttpSession session = (MockHttpSession) signedIn.getRequest().getSession(false);
 
         Cookie xsrf = xsrf();
-        mockMvc.perform(post("/api/auth/logout").cookie(xsrf, new Cookie("refresh_token", "screen-refresh-raw"))
+        mockMvc.perform(post("/api/auth/logout").session(session).cookie(xsrf, new Cookie("refresh_token", "screen-refresh-raw"))
                         .header("X-XSRF-TOKEN", xsrf.getValue()))
                 .andExpect(status().isOk());
 
@@ -521,6 +546,171 @@ class ScreenAuthHttpTest {
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "/login"));
         assertThat(session.isInvalid()).isTrue();
+    }
+
+    // ---- 화면 로그아웃 승인 (T12 서버 측 강제, API_SPEC 2.11) ----
+
+    /** 같은 테스트에서 로그인 스텁은 한 번만 설정한다. 목을 when() 안에서 다시 호출하면 응답 함수가 빈 인자로 실행된다. */
+    private boolean loginStubbed;
+
+    private MockHttpSession loggedInSession() throws Exception {
+        if (!loginStubbed) {
+            stubLoginSuccess();
+            loginStubbed = true;
+        }
+        Screen login = screen("/login", null);
+        MvcResult signedIn = mockMvc.perform(post("/login").session(login.session()).param("_csrf", login.csrf())
+                        .param("email", "user@example.com").param("password", VALID_PASSWORD))
+                .andReturn();
+        return (MockHttpSession) signedIn.getRequest().getSession(false);
+    }
+
+    @Test
+    void 승인_없이_화면_로그아웃을_직접_호출하면_거부하고_세션을_유지한다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        Screen home = screen("/", session);
+
+        mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf()))
+                .andExpect(status().isForbidden());
+
+        assertThat(session.isInvalid()).isFalse();
+        assertThat(contextPrincipal(session)).isEqualTo("7");
+    }
+
+    @Test
+    void API_로그아웃이_실패하면_승인이_남지_않아_화면_로그아웃도_거부된다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        // XSRF 헤더가 없어 API 로그아웃이 403으로 실패한다.
+        mockMvc.perform(post("/api/auth/logout").session(session)
+                        .cookie(new Cookie("refresh_token", "screen-refresh-raw")))
+                .andExpect(status().isForbidden());
+        assertThat(session.getAttribute(ScreenLogoutApproval.SESSION_KEY)).isNull();
+
+        Screen home = screen("/", session);
+        mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf()))
+                .andExpect(status().isForbidden());
+        assertThat(session.isInvalid()).isFalse();
+        assertThat(contextPrincipal(session)).isEqualTo("7");
+    }
+
+    @Test
+    void 다른_세션의_승인으로는_로그아웃되지_않고_승인도_소비되지_않는다() throws Exception {
+        MockHttpSession sessionA = loggedInSession();
+        apiLogout(sessionA);
+        MockHttpSession sessionB = loggedInSession();
+        Screen homeB = screen("/", sessionB);
+
+        mockMvc.perform(post("/logout").session(sessionB).param("_csrf", homeB.csrf()))
+                .andExpect(status().isForbidden());
+
+        assertThat(sessionB.isInvalid()).isFalse();
+        assertThat(contextPrincipal(sessionB)).isEqualTo("7");
+        assertThat(sessionA.getAttribute(ScreenLogoutApproval.SESSION_KEY)).isNotNull();
+    }
+
+    @Test
+    void 만료된_승인으로는_화면_로그아웃이_거부되고_세션이_유지된다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        apiLogout(session);
+        session.setAttribute(ScreenLogoutApproval.SESSION_KEY, new ScreenLogoutApproval(Instant.now().minusSeconds(1)));
+        Screen home = screen("/", session);
+
+        mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf()))
+                .andExpect(status().isForbidden());
+
+        assertThat(session.isInvalid()).isFalse();
+        assertThat(contextPrincipal(session)).isEqualTo("7");
+    }
+
+    @Test
+    void API_로그아웃_후_화면_로그아웃_CSRF_실패는_승인을_유지하고_재시도하면_성공한다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        apiLogout(session);
+
+        mockMvc.perform(post("/logout").session(session)).andExpect(status().isForbidden());
+        assertThat(session.getAttribute(ScreenLogoutApproval.SESSION_KEY)).isNotNull();
+        assertThat(session.isInvalid()).isFalse();
+
+        Screen home = screen("/", session);
+        mockMvc.perform(post("/logout").session(session).param("_csrf", home.csrf()))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", "/login"));
+        assertThat(session.isInvalid()).isTrue();
+    }
+
+    @Test
+    void API_로그아웃_중_예외가_나면_승인을_만들지_않는다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        doThrow(new IllegalStateException("refresh revoke failed")).when(refreshTokens).logout(anyString());
+        Cookie xsrf = xsrf();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> mockMvc.perform(post("/api/auth/logout").session(session)
+                        .cookie(xsrf, new Cookie("refresh_token", "screen-refresh-raw"))
+                        .header("X-XSRF-TOKEN", xsrf.getValue())))
+                .hasRootCauseInstanceOf(IllegalStateException.class);
+
+        assertThat(session.getAttribute(ScreenLogoutApproval.SESSION_KEY)).isNull();
+    }
+
+    @Test
+    void API_로그아웃을_두_번_해도_멱등이고_승인은_남는다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        apiLogout(session);
+        apiLogout(session);
+
+        assertThat(session.getAttribute(ScreenLogoutApproval.SESSION_KEY)).isNotNull();
+    }
+
+    @Test
+    void API_로그아웃은_세션이_없으면_세션을_새로_만들지_않는다() throws Exception {
+        Cookie xsrf = xsrf();
+
+        MvcResult result = mockMvc.perform(post("/api/auth/logout")
+                        .cookie(xsrf, new Cookie("refresh_token", "screen-refresh-raw"))
+                        .header("X-XSRF-TOKEN", xsrf.getValue()))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(result.getRequest().getSession(false)).isNull();
+    }
+
+    @Test
+    void 승인이_있는_세션도_API_요청은_인증하지_않는다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        apiLogout(session);
+
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 로그인_전_승인은_새_세션으로_이전되지_않는다() throws Exception {
+        MockHttpSession session = loggedInSession();
+        apiLogout(session);
+        Screen login = screen("/login", session);
+
+        MvcResult again = mockMvc.perform(post("/login").session(session).param("_csrf", login.csrf())
+                        .param("email", "user@example.com").param("password", VALID_PASSWORD))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        MockHttpSession current = (MockHttpSession) again.getRequest().getSession(false);
+        assertThat(session.isInvalid()).isTrue();
+        assertThat(current.getAttribute(ScreenLogoutApproval.SESSION_KEY)).isNull();
+    }
+
+    @Test
+    void 로그인_실패_리다이렉트_주소에는_이메일과_비밀번호가_없다() throws Exception {
+        stubLoginFailure();
+        Screen page = screen("/login", null);
+
+        MvcResult result = mockMvc.perform(post("/login").session(page.session()).param("_csrf", page.csrf())
+                        .param("email", "secret-user@example.com").param("password", "Secret-Pass1!"))
+                .andReturn();
+
+        String location = result.getResponse().getRedirectedUrl();
+        assertThat(location).isEqualTo("/login?error=invalid_credentials");
+        assertThat(location).doesNotContain("secret").doesNotContain("Secret").doesNotContain("@");
     }
 
     // ---- 도우미 매처 ----

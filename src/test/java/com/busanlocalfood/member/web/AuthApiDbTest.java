@@ -108,6 +108,10 @@ class AuthApiDbTest {
         return header.substring(name.length() + 1, end < 0 ? header.length() : end);
     }
 
+    private static String withoutTimestamp(String json) {
+        return json.replaceAll("\"timestamp\":\"[^\"]*\"", "");
+    }
+
     private Long memberId(String email) {
         return jdbc.queryForObject("SELECT id FROM member WHERE email = ?", Long.class, email);
     }
@@ -231,8 +235,9 @@ class AuthApiDbTest {
 
         assertThat(unknown.getResponse().getStatus()).isEqualTo(401);
         assertThat(wrong.getResponse().getStatus()).isEqualTo(401);
-        assertThat(unknown.getResponse().getContentAsString())
-                .isEqualTo(wrong.getResponse().getContentAsString());
+        // timestamp는 초 단위라 두 요청 사이에 바뀔 수 있다. 본문의 나머지가 같은지만 본다.
+        assertThat(withoutTimestamp(unknown.getResponse().getContentAsString()))
+                .isEqualTo(withoutTimestamp(wrong.getResponse().getContentAsString()));
     }
 
     @Test

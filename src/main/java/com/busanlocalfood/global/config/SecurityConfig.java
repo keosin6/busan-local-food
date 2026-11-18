@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -29,7 +30,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 /**
  * 보안 체인 분리 (PR 구현 기준).
  *
- * 1) API 체인 (/api/**): JWT 인증만 쓴다. 세션을 만들지도 읽지도 않는다 (STATELESS, Null 컨텍스트 저장소).
+ * 1) API 체인 (/api/**): JWT 인증만 쓴다. 세션을 인증에 쓰지 않고 만들지 않는다 (STATELESS, Null 컨텍스트 저장소).
+ *    예외: API 로그아웃은 기존 화면 세션이 있으면 화면 로그아웃 승인만 기록한다 (ScreenLogoutApproval). 인증이 아니다.
  *    CSRF는 켜 두고, 토큰은 XSRF-TOKEN 쿠키와 X-XSRF-TOKEN 헤더로 주고받는다 (API_SPEC 1.1).
  *    공개 경로는 API_SPEC 2.1~2.4의 인증 경로 네 개만 명시한다. 그 밖의 /api/** 는 인증을 요구한다.
  * 2) 화면 체인 (그 밖의 모든 요청): 기존 세션 인증을 그대로 쓴다. JWT 필터를 넣지 않는다.
@@ -122,15 +124,10 @@ public class SecurityConfig {
         http.addFilterAfter(new SignupRateLimitFilter(rateLimitService, clientIpResolver, exceptionResolver),
                 CsrfFilter.class);
 
-        // 화면 로그아웃 (API_SPEC 2.11, T12 A안). 세션을 무효화하고 SecurityContext를 지우며 JSESSIONID만 만료시킨다.
-        // refresh_token과 access_token 쿠키는 이 필터에서 읽지도 지우지도 않는다. API 로그아웃은 브라우저가 먼저 호출한다.
-        // 로그아웃 URL은 POST만 받는다(CSRF 활성). 세션이 없어도 /login으로 이동한다.
-        http.logout(logout -> logout
-                .logoutUrl("/logout")
-                .logoutSuccessUrl("/login")
-                .invalidateHttpSession(true)
-                .clearAuthentication(true)
-                .deleteCookies("JSESSIONID"));
+        // 화면 로그아웃 POST /logout은 ScreenLogoutController가 처리한다 (API_SPEC 2.11, T12).
+        // 기본 LogoutFilter는 쓰지 않는다. 필터는 승인 검증 없이 세션을 끊기 때문이다.
+        // 같은 세션에서 API 로그아웃이 성공했을 때만 승인이 남고, 컨트롤러가 승인을 소비한 뒤에만 세션을 무효화한다.
+        http.logout(AbstractHttpConfigurer::disable);
 
         // TODO(T11): OAuth2 임시 세션 정책은 Google OAuth2 단계에서 확정한다. 지금은 화면 로그인의 세션 고정 방어만 적용한다
         //  (ScreenSession). 세션 정책을 완전 Stateless로 고정하지 않는다 (DEVELOPMENT_RULES 5.7).
