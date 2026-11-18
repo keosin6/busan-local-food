@@ -1,6 +1,7 @@
 package com.busanlocalfood.member.security;
 
 import com.busanlocalfood.member.service.AuthApiService;
+import com.busanlocalfood.member.service.GoogleSignupService;
 import com.busanlocalfood.member.web.AuthCookies;
 import com.busanlocalfood.member.ratelimit.ClientIpResolver;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +33,9 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         ApiSecurityFilterChainTest.ClientIpConfig.class, ApiSecurityFilterChainTest.Probes.class})
 class XsrfCookieAttributeTest {
+
+    @MockitoBean
+    private GoogleSignupService googleSignupService;
 
     @MockitoBean
     private AuthApiService authApiService;

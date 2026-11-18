@@ -131,8 +131,9 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 > 로그인·재발급 HTTP 연결은 PR #23(merge commit `56faff2`, 6.18)으로 `main`에 병합 완료되었습니다 (2.2, 2.3).
 >
 > HTTP 계층 (남은 항목):
-> - Google OAuth2 시작·연동·콜백 집계 연결: OAuth2 로그인·연동 흐름과 클라이언트 설정이 아직 없습니다. 흐름이 생기면 OAuth2 임시 상태 보존 규칙(시작 제한 시 임시 상태 미생성, 콜백 제한 시 해당 임시 상태만 제거, 화면 세션과 JWT 유지)을 지켜 연결합니다.
-> - Google 신규 가입 닉네임 제출 집계: 제출 경로가 아직 확정되지 않았습니다.
+> - Google OAuth2 로그인 시작·콜백 집계: 구현 완료(6.21, `main` 병합 대기). 시작 1회, 콜백 1회를 같은 IP 카운터(15분 10회)로 센다. 초과하면 429와 `Retry-After`를 내고, 콜백에서는 해당 요청의 임시 상태만 지운다. 기존 세션과 JWT는 유지한다.
+> - Google 계정 연동 시작(2.6)·연동 콜백(2.6.1)의 집계 연결: 연동 흐름이 아직 없습니다(PR B 범위).
+> - Google 신규 가입 닉네임 제출 집계: 구현 완료(6.21). `POST /signup/google/nickname`을 회원가입과 같은 카운터로 집계합니다.
 > - 프런트엔드 T20 처리.
 >
 > **CSRF와 집계 순서 (2026-11-12 조사, 확정):** CSRF 필터는 DispatcherServlet과 사용자 정의 요청 제한 필터보다 먼저 실행됩니다. CSRF 검증에 실패한 요청(토큰 없음, 토큰 불일치)은 집계하지 않고 403으로 거부합니다. 회원가입 집계는 CSRF 검증 이후, JSON 본문 읽기 및 파싱 이전에 수행합니다. 영향 범위: 토큰 없는 대량 요청은 집계 없이 거부되어 DB 부하가 없습니다. 다만 `XSRF-TOKEN` 쿠키는 GET으로 누구나 받을 수 있으므로, 토큰을 받은 요청은 정상적으로 집계됩니다. CSRF 정책과 요청 제한 정책은 변경하지 않습니다.
@@ -327,6 +328,9 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.5 Google 로그인 (시작 및 콜백)
 
+- 구현 상태: 로그인 시작·콜백·신규 가입 진입 구현 완료(`feat/stage2-4-google-oauth2-login`, 6.21). `main` 병합 대기. 계정 연동 콜백(2.6.1)은 미구현이다.
+- 확정 경로: 시작 `GET /oauth2/authorization/google`, 콜백 `GET /login/oauth2/code/google`. 설정 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`은 둘 다 있을 때만 켜진다(local에서 없으면 꺼짐, prod에서 없으면 기동 실패).
+- 콜백 판정 순서: 이메일 미검증 거부 → sub 연결 회원 로그인 → 같은 이메일 기존 회원이면 자동 연결 없이 안내 → 신규 가입 진행. 정식 로그인이 아닌 결과에서는 콜백 전의 인증 상태를 복원해 기존 로그인 세션을 유지한다.
 - 메서드·URL: `GET /oauth2/authorization/google` (시작), `GET /login/oauth2/code/google` (콜백)
 - 인증: 불필요
 - 권한: 누구나
@@ -346,6 +350,8 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.5.1 Google 신규 가입 닉네임 설정 (화면, T3 A안)
 
+- 구현 상태: 구현 완료(`feat/stage2-4-google-oauth2-login`, 6.21). `main` 병합 대기.
+- 확정 경로: `GET /signup/google/nickname`, `POST /signup/google/nickname`. 가입 진행 상태가 없으면 `/login`으로 간다. 제출은 회원가입 요청 제한(IP별 1시간 5회)을 회원가입과 같은 카운터로 먼저 집계한다.
 - 메서드·URL: `GET <닉네임 설정 화면 경로>` (화면 표시), `POST <닉네임 설정 화면 경로>` (제출). 경로는 구현 단계에서 확정합니다. 화면 경로이며 `/api/**`가 아닙니다.
 - 인증: 불필요. 대신 OAuth2 임시 세션에 신규 가입 진행 상태가 있어야 합니다. 없으면 `/login`으로 이동합니다.
 - 권한: Google 신규 가입을 진행 중인 사용자
@@ -888,7 +894,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
-- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). 나머지 화면 URL(`/mypage`, `/restaurants` 이하, `/admin/**` 등)은 미구현이다.
+- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 구현 완료(6.21, `main` 병합 대기). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. 나머지 화면 URL(`/mypage`, `/restaurants` 이하, `/admin/**` 등)은 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---

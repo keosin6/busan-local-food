@@ -28,6 +28,8 @@ public final class SignupRateLimitFilter extends OncePerRequestFilter {
 
     static final String SCREEN_SIGNUP_PATH = "/signup";
     static final String API_SIGNUP_PATH = "/api/auth/signup";
+    /** Google 신규 가입 닉네임 제출. 회원가입과 같은 IP 카운터를 쓴다 (API_SPEC 2.5.1, 1.4). */
+    static final String GOOGLE_NICKNAME_PATH = "/signup/google/nickname";
     private static final String FORWARDED_FOR = "X-Forwarded-For";
 
     private final AuthRateLimitService rateLimitService;
@@ -71,6 +73,6 @@ public final class SignupRateLimitFilter extends OncePerRequestFilter {
             return false;
         }
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        return SCREEN_SIGNUP_PATH.equals(path) || API_SIGNUP_PATH.equals(path);
+        return SCREEN_SIGNUP_PATH.equals(path) || API_SIGNUP_PATH.equals(path) || GOOGLE_NICKNAME_PATH.equals(path);
     }
 }

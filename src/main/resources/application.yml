@@ -45,6 +45,12 @@ auth:
 app:
   security:
     trusted-proxies: []
+  oauth2:
+    google:
+      # Google OAuth2 클라이언트. 값은 환경 변수로만 받는다. 코드와 설정 파일에 실제 값을 두지 않는다.
+      # 둘 다 없으면 Google 로그인은 꺼진다(local). 운영(prod)에서 없으면 기동하지 않는다.
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
 
 jwt:
   # Base64로 인코딩한 32바이트 이상의 서명 키. 환경 변수로만 주입하며 저장소에 커밋하지 않는다.

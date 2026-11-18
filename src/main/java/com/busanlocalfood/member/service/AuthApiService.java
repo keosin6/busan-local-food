@@ -106,7 +106,8 @@ public class AuthApiService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.TOKEN_INVALID));
     }
 
-    private IssuedSession issueSession(Member member) {
+    /** 회원에게 화면 세션용 정보와 API 토큰 한 쌍을 발급한다. 화면 세션 생성은 호출자가 ScreenSession으로 한다. */
+    public IssuedSession issueSession(Member member) {
         IssuedRefreshToken refresh = refreshTokenService.issueForNewLogin(member.getId());
         IssuedAccessToken access = accessTokenIssuer.issue(member.getId(), member.getRole());
         return new IssuedSession(member, new IssuedTokens(access, refresh));

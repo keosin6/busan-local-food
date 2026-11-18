@@ -3,7 +3,7 @@
 
 사용자가 부산의 맛집을 등록·검색하고, 리뷰와 평점을 남기며, AI가 요약한 리뷰와 AI 맛집 추천을 받을 수 있는 웹 서비스입니다.
 
-> **현재 상태 (`main` 기준, 기준 커밋 `d1b9e1d`):** 프로젝트 기본 골격과 F1-01 회원·인증의 기반이 `main`에 구현되었습니다. 구현된 기반: 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 인증 요청 제한 서비스 R1~R10, 회원가입 요청 제한 HTTP 필터와 공통 HTTP 429 응답(PR #17), API 전용 JWT 인증 필터, API용 STATELESS SecurityFilterChain과 화면용 세션 SecurityFilterChain 분리, Bearer 및 `access_token` 쿠키 인증, API CSRF 정책(PR #19), API 인증 HTTP 5종(`POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`)과 JWT 쿠키 발급·갱신·만료, 로그인·재발급의 요청 제한 HTTP 연결(PR #23). 화면 인증은 `main`에 병합되었습니다(PR #25): 화면 회원가입(`/signup`), 화면 로그인(`/login`)과 로그인 실패 리다이렉트, 화면 로그아웃(`/logout`), 화면 세션과 API JWT 인증의 분리. 화면 로그아웃은 같은 세션에서 API 로그아웃이 성공한 뒤에만 허용되는 서버 측 일회성 승인을 거칩니다(T12, PR #26 보완). **아직 미구현:** Google OAuth2 로그인·계정 연동·해제와 요청 제한 연결, Google 신규 가입 닉네임 제출 흐름, 프런트엔드 Access Token 자동 갱신과 T20, 화면 보호 페이지(`/mypage` 등)와 화면용 429 안내 페이지, F1-02 ~ F1-09(맛집 관리·이미지·리뷰·AI 요약·찜·AI 추천·메인 페이지·관리자 기능)는 미착수.
+> **현재 상태 (`main` 기준, 기준 커밋 `d4bf023`):** 프로젝트 기본 골격과 F1-01 회원·인증의 기반이 `main`에 구현되었습니다. 구현된 기반: 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 인증 요청 제한 서비스 R1~R10, 회원가입 요청 제한 HTTP 필터와 공통 HTTP 429 응답(PR #17), API 전용 JWT 인증 필터, API용 STATELESS SecurityFilterChain과 화면용 세션 SecurityFilterChain 분리, Bearer 및 `access_token` 쿠키 인증, API CSRF 정책(PR #19), API 인증 HTTP 5종과 JWT 쿠키 발급·갱신·만료, 로그인·재발급의 요청 제한 HTTP 연결(PR #23), 화면 회원가입·로그인·로그아웃과 화면 세션, T12 서버 측 로그아웃 승인(PR #25, PR #26). **Google 로그인과 Google 신규 가입은 구현 완료, `main` 병합 대기 (`feat/stage2-4-google-oauth2-login`, 6.21):** Google 로그인 시작과 콜백, Google 계정으로 가입한 회원의 로그인, 이메일이 같은 기존 회원은 자동 연결하지 않고 안내, 미검증 이메일 거부, 신규 가입 닉네임 설정 화면(`/signup/google/nickname`), Google 로그인 요청 제한(IP별 15분 10회)과 닉네임 제출 요청 제한. **아직 미구현:** Google 계정 연동·해제(마이페이지에서 기존 계정에 Google 연결)와 로컬 비밀번호 설정, 프런트엔드 Access Token 자동 갱신과 T20, 화면 보호 페이지(`/mypage` 등)와 화면용 429 안내 페이지, F1-02 ~ F1-09(맛집 관리·이미지·리뷰·AI 요약·찜·AI 추천·메인 페이지·관리자 기능)는 미착수.
 
 ## 필수 기능
 
@@ -155,10 +155,10 @@ java -jar build/libs/busan-local-food-0.0.1-SNAPSHOT.jar
 
 ### 5. 운영 실행 (EC2)
 
-운영은 `prod` 프로필을 사용하고, 다음 다섯 환경 변수를 모두 서버 환경변수로 지정합니다. 기본값은 없습니다. `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`. `JWT_SECRET`과 `AUTH_RATE_LIMIT_HMAC_SECRET`은 서로 다른 값이어야 하며, 같으면 기동이 실패합니다.
+운영은 `prod` 프로필을 사용하고, 다음 일곱 환경 변수를 모두 서버 환경변수로 지정합니다. 기본값은 없습니다. `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. `JWT_SECRET`과 `AUTH_RATE_LIMIT_HMAC_SECRET`은 서로 다른 값이어야 하며, 같으면 기동이 실패합니다. `GOOGLE_CLIENT_ID`와 `GOOGLE_CLIENT_SECRET`은 함께 설정해야 하며, 한쪽만 있거나 둘 다 없으면 기동이 실패합니다. Google Cloud Console의 OAuth 클라이언트에 승인된 리디렉션 URI `https://<운영 도메인>/login/oauth2/code/google`을 등록해야 합니다. 로그인 시작 경로는 `GET /oauth2/authorization/google`입니다.
 
 ```bash
-SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAME='<사용자>' DB_PASSWORD='<비밀번호>' JWT_SECRET='<Base64 서명 키>' AUTH_RATE_LIMIT_HMAC_SECRET='<Base64 요청 제한 키>' java -jar busan-local-food.jar
+SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAME='<사용자>' DB_PASSWORD='<비밀번호>' JWT_SECRET='<Base64 서명 키>' AUTH_RATE_LIMIT_HMAC_SECRET='<Base64 요청 제한 키>' GOOGLE_CLIENT_ID='<Google 클라이언트 ID>' GOOGLE_CLIENT_SECRET='<Google 클라이언트 시크릿>' java -jar busan-local-food.jar
 ```
 
 ### 문제 해결
@@ -168,4 +168,5 @@ SPRING_PROFILES_ACTIVE=prod DB_URL='<서버 내부 MySQL 접속 URL>' DB_USERNAM
 | `필수 환경변수가 설정되지 않았습니다: DB_PASSWORD` | 누락된 환경변수를 지정합니다. 목록에 표시된 변수만 확인하면 됩니다. |
 | `AUTH_RATE_LIMIT_HMAC_SECRET 환경 변수가 설정되지 않았습니다` 또는 `AUTH_RATE_LIMIT_HMAC_SECRET은 JWT_SECRET과 다른 값이어야 합니다` | 요청 제한용 키를 Base64 32바이트 이상으로 지정하고, `JWT_SECRET`과 다른 값인지 확인합니다. |
 | `JWT_SECRET 환경 변수가 설정되지 않았습니다` 또는 `JWT_SECRET은 Base64 형식이어야 합니다` | `JWT_SECRET`에 Base64로 인코딩한 32바이트 이상의 값을 지정합니다 (위 2번 참조). |
+| `운영 환경에서는 GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET을 설정해야 합니다` 또는 `GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET은 함께 설정해야 합니다` | 두 값을 Google OAuth 클라이언트의 값으로 함께 지정합니다. local에서 둘 다 비우면 Google 로그인만 꺼지고 기동은 됩니다. |
 | `데이터베이스 연결 또는 초기화에 실패했습니다` | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`가 맞는지, MySQL 8이 실행 중인지, 사용자에게 권한이 있는지 확인합니다. 실패 원인 메시지가 함께 출력됩니다. |
