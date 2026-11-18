@@ -632,7 +632,7 @@
      - API 인증 HTTP 5종: `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
      - JWT 쿠키 발급·갱신·만료 (`access_token` Path `/api`, `refresh_token` Path `/api/auth`, API_SPEC 1.1)
      - 로그인·재발급 요청 제한 HTTP 연결 (429·`Retry-After`, 재발급 429는 쿠키 유지)
-     - 4개 엔드포인트 세션 미생성, CSRF 정책 유지
+     - 5개 엔드포인트 세션 미생성, CSRF 정책 유지
 2. 다음 작업 (`main` 기준 미구현. 완료 항목은 1번에 기록).
    - 화면 로그인 `POST /login`(화면 세션 로그인, 2.10)과 화면 회원가입(2.9), 화면 로그아웃(2.11) (미구현)
    - 화면 로그인 실패 리다이렉트 (화면 체인, 미구현)
