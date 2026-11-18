@@ -455,6 +455,8 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ### 2.9 회원가입 (화면)
 
+- 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
+- 구현: `ScreenAuthController`가 처리한다. 가입과 토큰 발급은 `AuthApiService.signup`을 그대로 쓰고, 화면 세션은 `ScreenSession`이 만든다. 실패 값 `email_duplicated`, `nickname_duplicated`, `validation_failed`는 명세 값이다.
 - 메서드·URL: `POST /signup` (화면 폼 제출)
 - 인증: 불필요
 - 권한: 누구나
@@ -466,6 +468,10 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ### 2.10 로그인 (화면)
 
+- 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
+- 구현: 경로와 결과는 위 명세와 같다. 다만 Spring Security `formLogin` 필터를 쓰지 않고 `ScreenAuthController`가 처리한다. 자격 증명과 제한 판정은 API 로그인과 같은 `AuthApiService.login`이다.
+- 명세 밖 값: 로그인 입력 형식 오류(빈 값, 이메일 형식 오류)는 `302 /login?error=validation_failed`로 응답한다. 이 값은 2.10 명세에 없으며 확정이 필요하다. 이 경우 제한 판정은 하지 않는다.
+- 429: 화면 로그인의 제한 초과도 명세대로 HTTP 429와 `Retry-After`를 쓴다. 본문은 공통 JSON 오류(`RATE_LIMITED`)이며, 화면용 안내 페이지는 아직 없다. 쿠키와 세션은 바꾸지 않는다.
 - 메서드·URL: `POST /login` (Spring Security 폼 로그인 처리 경로)
 - 인증: 불필요
 - 권한: 누구나
@@ -477,6 +483,10 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ### 2.11 로그아웃 (화면)
 
+- 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
+- 구현: 화면 체인의 로그아웃 필터가 `POST /logout`을 처리한다. 세션을 무효화하고 SecurityContext를 지우며 `JSESSIONID`만 만료시킨 뒤 `302 /login`으로 보낸다. `refresh_token`과 `access_token` 쿠키는 이 경로에서 읽지도 지우지도 않는다.
+- 순서 보장: 브라우저 스크립트 `static/js/logout.js`가 순서를 지킨다. `GET /api/auth/me`로 `XSRF-TOKEN`을 받은 뒤 `POST /api/auth/logout`이 성공(2xx)할 때만 화면 폼을 제출한다. 서버는 `/logout`을 단독으로 받을 수 있으며, 이때도 세션은 끊긴다. 순서 강제는 클라이언트 쪽에서만 이루어진다.
+- API 로그아웃이 실패하면 화면 세션을 끊지 않고 오류를 표시한다. 화면 로그아웃이 실패해도 API 토큰은 이미 폐기된 상태이며, 버튼을 다시 누르면 두 단계를 안전하게 반복한다.
 - 메서드·URL: `POST /logout`
 - 인증: 세션 (세션이 없어도 `/login`으로 이동)
 - 권한: 누구나 (로그인 상태에서 사용)
@@ -857,6 +867,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
+- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 구현 완료(`feat/stage2-4-screen-auth`, 6.19, `main` 병합 대기). 나머지 화면 URL(`/mypage`, `/restaurants` 이하, `/admin/**` 등)은 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---

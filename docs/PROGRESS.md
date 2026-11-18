@@ -12,8 +12,8 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17, `9f881a0`; PR #19, `dd147e3`; PR #23, `56faff2`)**. 병합된 구현: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 서비스 시간대 고정, 요청 제한 서비스 R1~R10, Refresh 요청 제한 연결과 잠금 재시도, 공통 429 `RATE_LIMITED`와 `Retry-After`, 회원가입 요청 집계 필터, 요청 제한 저장소 장애 시 fail-closed, API 전용 JWT 인증 필터와 API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책. **PR #23로 `main` 병합 완료 (merge commit `56faff2`, 6.17·6.18)**: API 인증 HTTP 5종(`POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`), JWT 쿠키 발급·갱신·만료, 로그인·재발급의 요청 제한 HTTP 연결. **`main`에 없는 것**: 화면 로그인·회원가입·로그아웃, Google OAuth2의 HTTP 엔드포인트와 요청 제한 연결, 닉네임 제출 흐름, 프런트엔드 자동 갱신(T20). 나머지는 아래 7절 |
-| **다음 개발 단계** | 화면 인증 (Stage 2-4): 화면 로그인·회원가입·로그아웃(2.9~2.11), 화면 로그인 실패 리다이렉트, 화면 세션과 API JWT 인증의 실제 연결. Google OAuth2 시작·계정 연결·콜백의 요청 제한 연결과 Google 신규 가입 닉네임 제출 흐름(경로 확정 후). PR #23은 `main`에 병합 완료(6.18). 상세는 7절 |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결. **구현 완료, `main` 병합 대기 (6.19, `feat/stage2-4-screen-auth`)**: 화면 회원가입·로그인(실패 리다이렉트)·로그아웃(T12 순서)과 화면 세션, 세션 고정 방어. **`main`에 없는 것**: Google OAuth2의 HTTP 엔드포인트와 요청 제한 연결, 닉네임 제출 흐름, 프런트엔드 자동 갱신(T20), 화면 보호 페이지. 나머지는 아래 7절 |
+| **다음 개발 단계** | Google OAuth2 (Stage 2-4 잔여): 시작·계정 연결·콜백과 요청 제한 연결, Google 신규 가입 닉네임 제출 흐름(경로 확정 후), Google 계정 연동·해제. 화면 보호 페이지와 화면용 429 안내 페이지. 6.19 병합 후 `main` 기준으로 다시 확인. 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -21,7 +21,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책. `main` 병합 완료(PR #23, `56faff2`, 6.18): 회원가입·로그인·재발급·로그아웃·내 정보 API, JWT 쿠키 발급·갱신·만료, 로그인·재발급 요청 제한 HTTP 연결. **미구현**: 화면 로그인·회원가입·로그아웃, Google OAuth2 HTTP와 계정 연동·해제, Google 요청 제한 연결과 닉네임 제출 집계, 화면 세션과 API JWT 인증의 실제 연결, 프런트엔드 T20 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.18 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결. 구현 완료, `main` 병합 대기(6.19, `feat/stage2-4-screen-auth`): 화면 회원가입·로그인·로그아웃, 화면 세션과 API JWT 연동. **미구현**: Google OAuth2 HTTP와 계정 연동·해제, Google 요청 제한 연결과 닉네임 제출 집계, 프런트엔드 T20, 화면 보호 페이지 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.19 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -36,7 +36,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 두 값은 작업 당시 보고값이며 현재 `main`에서 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340 통과, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (`feat/stage2-3-auth-http-api`, merge commit `56faff2`): DB 연결 382/382 통과, DB 미설정 323 통과·59 건너뜀, 실패 0, bootJar 성공, git diff --check 통과. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 회원가입·로그인·재발급·로그아웃·내 정보 엔드포인트 포함 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종 `main` 병합 완료(PR #23, 6.18). 화면 로그인·회원가입·로그아웃, Google OAuth2 HTTP와 계정 연동·해제, Google 요청 제한 연결, 프런트엔드 Access Token 자동 갱신과 T20은 미구현 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`, 기록 당시): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) 6.19 브랜치 (`feat/stage2-4-screen-auth`, 작업 중 실행): DB 연결 410/410 통과, DB 미설정 344 통과·66 건너뜀, 실패 0. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증 엔드포인트 포함 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종 `main` 병합 완료(PR #23). 화면 회원가입·로그인·로그아웃은 구현 완료, `main` 병합 대기(6.19). Google OAuth2 HTTP와 계정 연동·해제, Google 요청 제한 연결, 프런트엔드 Access Token 자동 갱신과 T20은 미구현 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -612,6 +612,35 @@
 - 미구현 (6.18 범위 밖): 화면 로그인·회원가입·로그아웃(2.9~2.11)과 로그인 실패 리다이렉트, Google OAuth2 시작·콜백·계정 연동·해제, Google 요청 제한 연결과 닉네임 제출 집계, 프런트엔드 Access Token 자동 갱신과 T20, 공개 조회 API 경로, F1-02~F1-09.
 - 위험과 한계 (6.17과 같음): 재발급 응답 유실 시 재사용으로 판정(T14 A안이 수용한 한계), 로그인 BCrypt 검증이 잠금 구간 안에서 실행됨, 알 수 없는 필드 거부는 전역 Jackson 설정, Google 전용 계정과 동시 재발급은 새 HTTP 테스트에서 직접 검증하지 않음(목 기반 또는 기존 DB 테스트), DB 테스트는 로컬 격리 MySQL에서만 실행, CI 없음.
 
+### 6.19 Stage 2-4 화면 세션 인증: 회원가입·로그인·로그아웃 (2026-11-18)
+
+- 브랜치: `feat/stage2-4-screen-auth` (기준: `main` 15fd1df). `main` 병합 대기.
+- 구현:
+  - `GET /signup`, `POST /signup` (2.9): `AuthApiService.signup`(검증, 가입, Refresh 계열, Access Token)을 그대로 쓴다. 성공하면 화면 세션을 만들고 JWT 쿠키 두 개를 내려 `302 /`로 보낸다. 실패는 `302 /signup?error=email_duplicated | nickname_duplicated | validation_failed`. 회원은 만들지 않는다. 가입 집계는 `SignupRateLimitFilter`가 한 번만 한다. 제한 초과는 429와 `Retry-After`.
+  - `GET /login`, `POST /login` (2.10): `AuthApiService.login`(입력 검증, `attemptLogin`, 자격 증명)을 그대로 쓴다. 성공하면 화면 세션과 JWT 쿠키를 만들고 `302 /`. 실패는 `302 /login?error=invalid_credentials`. 미가입, 비밀번호 불일치, Google 전용 계정은 같은 결과다. 입력 형식 오류는 `302 /login?error=validation_failed`(명세 밖 값, 확정 필요). 제한 초과는 429와 `Retry-After`이며 세션과 쿠키를 바꾸지 않는다.
+  - `POST /logout` (2.11): 화면 체인의 로그아웃 필터가 처리한다. 세션을 무효화하고 SecurityContext를 지우며 `JSESSIONID`만 만료시킨 뒤 `302 /login`. `access_token`, `refresh_token` 쿠키는 읽지도 지우지도 않는다.
+  - T12 순서: `static/js/logout.js`가 `GET /api/auth/me`로 `XSRF-TOKEN`을 받은 뒤 `POST /api/auth/logout`에 성공했을 때만 화면 폼을 제출한다. API가 실패하면 화면 세션을 유지하고 오류를 표시한다. 화면 로그아웃이 실패해도 API 토큰은 이미 폐기된 상태이므로 버튼을 다시 누르면 된다.
+  - 세션 고정 방어: `ScreenSession.establish`가 로그인과 가입 성공 시 기존 세션을 버리고 새 세션에 SecurityContext를 저장한다.
+  - 세션과 JWT 분리 유지: 화면 로그인 상태는 SecurityContext로만 판단한다(`ScreenAuthAdvice`). JWT 쿠키만으로는 화면에서 로그인되지 않는다. 세션만으로는 `/api/**`가 인증되지 않는다.
+  - 템플릿: `login.html`, `signup.html` 신규. `fragments/layout.html`은 로그인 상태에 따라 로그인·회원가입 링크 또는 로그아웃 폼을 보여 준다. `home.html`의 미구현 목록을 고쳤다.
+- 테스트 (작업 중 실행 결과, `feat/stage2-4-screen-auth` 기준):
+  - `ScreenAuthHttpTest` 21개: MockMvc. 실제 화면·API 체인과 쿠키 정책을 쓰고 인증 서비스 경계만 목으로 바꾼다. 가입 성공·검증 실패·중복·제한 초과·CSRF, 로그인 성공·실패·Google 전용 동일 결과·입력 오류·제한 초과·CSRF, 세션 고정, 로그인 후 API JWT 인증, 세션만 있는 API 401, JWT만 있는 화면 비로그인, 로그아웃 세션·쿠키 정리, 세션 없는 로그아웃, 로그아웃 CSRF, API 실패 뒤 세션 유지와 재시도, API 성공 뒤 화면 실패와 재시도.
+  - `ScreenAuthDbTest` 7개: 실제 MySQL 8. 가입 결과와 Refresh Token 해시 저장(원문 없음, 64자), 검증 실패 미생성, 중복 이메일 미추가, 로그인 실패 5회 뒤 6번째 429와 실패 기록 5건, Google 전용 계정과 미가입의 같은 결과, JWT만으로 화면 비로그인, T12 순서와 재시도 안전성.
+  - 브라우저 확인(Playwright, 헤드리스 Chromium, 실제 jar와 격리 MySQL): 가입 후 홈에서 로그인 상태, 정상 로그아웃 순서 `POST /api/auth/logout` → `POST /logout` → `/login`. API 로그아웃을 실패시키면 오류가 표시되고 `/logout`은 호출되지 않으며 세션과 쿠키가 남는다. API 성공 뒤 화면 로그아웃을 403으로 실패시키면 API 쿠키는 제거되고 세션은 유지되며, 재시도하면 `/login`으로 간다. 이 확인은 저장소에 자동 테스트로 넣지 않았다(Playwright는 의존성에 없음).
+  - `./gradlew clean test`, DB 연결(격리 MySQL 8.0.46, SQL 001→003): 410개 전부 통과, 실패 0, 건너뜀 0.
+  - `./gradlew clean test`, DB 미설정: 410개 중 344개 통과, 66개 건너뜀(DB 테스트), 실패 0.
+  - 기존 API 인증 테스트 382개는 모두 통과(회귀 없음).
+  - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
+- 미구현 (6.19 범위 밖): Google OAuth2 시작·콜백·계정 연동·해제, Google 요청 제한 연결과 닉네임 제출 집계, 프런트엔드 Access Token 자동 갱신과 T20, 화면 보호 페이지와 `/login` 리다이렉트 규칙, 화면용 429 안내 페이지, `/mypage`, F1-02~F1-09.
+- 위험과 한계:
+  - `validation_failed`(로그인 입력 오류)는 명세 밖 값이다. 확정이 필요하다.
+  - 화면 로그인은 Spring `formLogin` 대신 컨트롤러가 처리한다. 경로와 결과는 명세와 같지만 `formLogin`의 성공·실패 핸들러 이벤트는 쓰지 않는다.
+  - T12 순서는 브라우저 스크립트가 지킨다. 서버는 `/logout`만 따로 와도 세션을 끊는다.
+  - 화면 429는 JSON 본문이다. 안내 페이지가 없다.
+  - 화면 로그인 흐름의 브라우저 자동 테스트는 없다. 위 Playwright 확인은 수동 스크립트 실행이다.
+  - 세션 타임아웃과 동시 세션 정책은 아직 정하지 않았다(T11의 OAuth2 세션 정책은 Google 단계에서 확정).
+  - DB 테스트는 로컬 격리 MySQL에서만 실행했다. CI는 없다.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`):
@@ -628,23 +657,23 @@
      - 화면용 SecurityFilterChain 유지 (`@Order(2)`)
      - Bearer·Cookie 인증 정책 (Bearer 우선, 잘못된 Bearer의 쿠키 대체 방지)
      - API CSRF 정책 (Bearer 스킴 상태 변경만 면제, 그 밖은 검사, `XSRF-TOKEN` 쿠키)
+   - 구현 완료, `main` 병합 대기 (6.19, `feat/stage2-4-screen-auth`): 화면 회원가입(`GET`·`POST /signup`), 화면 로그인(`GET`·`POST /login`, 실패는 `error` 값으로 리다이렉트), 화면 로그아웃(`POST /logout`, T12 순서는 `logout.js`), 세션 고정 방어, 화면 세션과 API JWT 분리 유지.
    - PR #23 (`main` 병합 완료, merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18):
      - API 인증 HTTP 5종: `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
      - JWT 쿠키 발급·갱신·만료 (`access_token` Path `/api`, `refresh_token` Path `/api/auth`, API_SPEC 1.1)
      - 로그인·재발급 요청 제한 HTTP 연결 (429·`Retry-After`, 재발급 429는 쿠키 유지)
      - 5개 엔드포인트 세션 미생성, CSRF 정책 유지
 2. 다음 작업 (`main` 기준 미구현. 완료 항목은 1번에 기록).
-   - 화면 로그인 `POST /login`(화면 세션 로그인, 2.10)과 화면 회원가입(2.9), 화면 로그아웃(2.11) (미구현)
-   - 화면 로그인 실패 리다이렉트 (화면 체인, 미구현)
+   - 화면 보호 페이지(`/mypage` 등)의 세션 필요 규칙과 `/login` 리다이렉트, 화면용 429 안내 페이지 (미구현)
    - Google OAuth2 시작(`GET /oauth2/authorization/google`), 계정 연결 시작 POST(경로 미확정), 콜백(`GET /login/oauth2/code/google`)의 요청 제한 연결 (OAuth2 흐름 미구현)
    - Google 신규 가입 닉네임 설정 제출 경로와 요청 제한 연결 (경로 미확정)
    - Google OAuth2 로그인 및 계정 연결·해제 (미구현)
-   - 화면 세션 인증과 API JWT 인증의 실제 연결: 화면 로그인 구현 뒤 가능 (미구현)
+   - 화면 세션과 API JWT 인증의 연결: 화면 로그인·로그아웃은 6.19에서 구현(병합 대기). 화면 보호 페이지가 생기면 그때 연결을 확인 (미구현)
    - 프론트엔드 Access Token 자동 갱신과 T20 처리 (미구현)
    - 공개 조회 API 경로 (구현 시 명시적으로 추가, 미구현)
    - F1-02~F1-09 기능 (미착수)
    위 경로 중 현재 코드에 없는 것은 확정하지 않았습니다. API_SPEC의 표기는 설계 기준입니다.
-3. Stage 2-4: 화면 세션 로그인·회원가입 (API 인증 HTTP는 PR #23으로 `main` 병합 완료, 6.18), Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안), 화면 로그인 실패 리다이렉트(화면 체인).
+3. Stage 2-4 잔여: Google OAuth2 로그인, 계정 연동·해제, 신규 가입 닉네임 설정(T3 A안). 화면 회원가입·로그인·로그아웃은 6.19에서 구현(병합 대기).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
 5. 미확정 항목(T1, T2, T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
 6. 실제 MySQL 스키마 적용은 사용자가 `db/manual/`의 SQL 파일을 직접 실행합니다. 이번 작업에서는 실행하지 않았습니다.

@@ -114,16 +114,26 @@ public class SecurityConfig {
                                                          @Qualifier("handlerExceptionResolver")
                                                          HandlerExceptionResolver exceptionResolver) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                // TODO(인증 구현 단계): 임시 접근 정책이다. 회원가입·로그인 경로와 USER/ADMIN 권한 규칙
-                //  (FR-01-08, FR-09-07)으로 교체한다. 지금은 모든 요청을 허용한다.
+                // TODO(화면 보호 페이지 단계): 화면 보호 페이지(/mypage, /restaurants/new 등)가 생기면
+                //  세션 필요 규칙과 /login 리다이렉트를 추가한다 (API_SPEC 10). 지금은 공개 화면만 있어 모든 요청을 허용한다.
                 .anyRequest().permitAll());
 
         // 회원가입 요청 집계 (API_SPEC 1.4). CSRF 검증 뒤, 본문 읽기 이전에 실행한다. CSRF 실패 요청은 집계되지 않는다.
         http.addFilterAfter(new SignupRateLimitFilter(rateLimitService, clientIpResolver, exceptionResolver),
                 CsrfFilter.class);
 
-        // TODO(T11): OAuth2 임시 세션 정책은 인증 구현 단계에서 확정한다.
-        //  세션 정책을 완전 Stateless로 고정하지 않는다 (DEVELOPMENT_RULES 5.7).
+        // 화면 로그아웃 (API_SPEC 2.11, T12 A안). 세션을 무효화하고 SecurityContext를 지우며 JSESSIONID만 만료시킨다.
+        // refresh_token과 access_token 쿠키는 이 필터에서 읽지도 지우지도 않는다. API 로그아웃은 브라우저가 먼저 호출한다.
+        // 로그아웃 URL은 POST만 받는다(CSRF 활성). 세션이 없어도 /login으로 이동한다.
+        http.logout(logout -> logout
+                .logoutUrl("/logout")
+                .logoutSuccessUrl("/login")
+                .invalidateHttpSession(true)
+                .clearAuthentication(true)
+                .deleteCookies("JSESSIONID"));
+
+        // TODO(T11): OAuth2 임시 세션 정책은 Google OAuth2 단계에서 확정한다. 지금은 화면 로그인의 세션 고정 방어만 적용한다
+        //  (ScreenSession). 세션 정책을 완전 Stateless로 고정하지 않는다 (DEVELOPMENT_RULES 5.7).
         // CSRF 보호는 기본값(활성)을 유지한다. 쿠키 기반 인증을 사용하므로 비활성화하지 않는다.
         return http.build();
     }
