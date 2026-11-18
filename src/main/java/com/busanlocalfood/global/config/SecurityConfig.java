@@ -30,7 +30,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 /**
  * 보안 체인 분리 (PR 구현 기준).
  *
- * 1) API 체인 (/api/**): JWT 인증만 쓴다. 세션을 만들지도 읽지도 않는다 (STATELESS, Null 컨텍스트 저장소).
+ * 1) API 체인 (/api/**): JWT 인증만 쓴다. 세션을 인증에 쓰지 않고 만들지 않는다 (STATELESS, Null 컨텍스트 저장소).
+ *    예외: API 로그아웃은 기존 화면 세션이 있으면 화면 로그아웃 승인만 기록한다 (ScreenLogoutApproval). 인증이 아니다.
  *    CSRF는 켜 두고, 토큰은 XSRF-TOKEN 쿠키와 X-XSRF-TOKEN 헤더로 주고받는다 (API_SPEC 1.1).
  *    공개 경로는 API_SPEC 2.1~2.4의 인증 경로 네 개만 명시한다. 그 밖의 /api/** 는 인증을 요구한다.
  * 2) 화면 체인 (그 밖의 모든 요청): 기존 세션 인증을 그대로 쓴다. JWT 필터를 넣지 않는다.

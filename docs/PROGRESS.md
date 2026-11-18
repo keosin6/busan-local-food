@@ -646,6 +646,7 @@
 - 브랜치: `fix/stage2-4-screen-logout-guard` (기준: PR #25 head `26e3aee`, 보완 PR의 base는 `feat/stage2-4-screen-auth`). PR #25와 함께 병합 대기.
 - 배경: 6.19의 첫 구현은 T12 순서를 브라우저 스크립트에만 맡겼다. 서버의 `/logout`은 CSRF만 통과하면 세션을 끊었다.
 - 구현:
+  - 승인 소비 원자성 보완 (2026-11-18): `consume`은 승인 조회, 제거, 만료 검증을 세션 객체를 기준으로 한 동기화 구간에서 한다. `grant`도 같은 기준으로 동기화한다. 무효화된 세션에서 호출되면 예외 없이 false다. 동시 소비 테스트는 래치로 실행 순서를 맞추며, 동기화를 제거한 변형에서 실패함을 확인했다.
   - `ScreenLogoutApproval`: API 로그아웃이 예외 없이 끝난 뒤 같은 요청의 기존 화면 세션에만 일회성 승인을 기록한다(`getSession(false)`, 새 세션을 만들지 않음). 유효 기간 120초. 소비는 1회만 가능하다.
   - `AuthController.logout`: 서비스 로그아웃이 성공한 뒤에만 `ScreenLogoutApproval.grant`를 호출한다. API 체인의 STATELESS 설정과 NullSecurityContextRepository는 그대로다.
   - `ScreenLogoutController`: `POST /logout`을 처리한다. 세션이 없으면 `302 /login`. 승인이 유효하면 소비하고, SecurityContext를 지우고, 세션을 무효화하고, `JSESSIONID`를 만료시키고, `302 /login`. 승인이 없거나 만료되었거나 소비되었으면 `403`이고 세션을 유지한다.

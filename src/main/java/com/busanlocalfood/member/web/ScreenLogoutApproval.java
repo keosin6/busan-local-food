@@ -31,7 +31,10 @@ public record ScreenLogoutApproval(Instant expiresAt) implements Serializable {
     public static void grant(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
-            session.setAttribute(SESSION_KEY, new ScreenLogoutApproval(Instant.now().plus(TTL)));
+            // consume과 같은 세션 객체를 기준으로 동기화해 승인 기록과 소비가 서로 교차하지 않게 한다.
+            synchronized (session) {
+                session.setAttribute(SESSION_KEY, new ScreenLogoutApproval(Instant.now().plus(TTL)));
+            }
         }
     }
 
@@ -40,8 +43,17 @@ public record ScreenLogoutApproval(Instant expiresAt) implements Serializable {
      * 승인 속성은 결과와 관계없이 제거한다. 승인은 한 번만 쓸 수 있다.
      */
     public static boolean consume(HttpSession session) {
-        Object value = session.getAttribute(SESSION_KEY);
-        session.removeAttribute(SESSION_KEY);
-        return value instanceof ScreenLogoutApproval approval && Instant.now().isBefore(approval.expiresAt());
+        // 조회, 제거, 검증을 하나의 동기화 구간에서 한다. 같은 승인을 두 요청이 모두 읽고 성공하는 일을 막는다.
+        // 세션 객체를 기준으로 잠근다. Tomcat은 한 세션에 같은 HttpSession 파사드를 돌려준다.
+        synchronized (session) {
+            try {
+                Object value = session.getAttribute(SESSION_KEY);
+                session.removeAttribute(SESSION_KEY);
+                return value instanceof ScreenLogoutApproval approval && Instant.now().isBefore(approval.expiresAt());
+            } catch (IllegalStateException invalidated) {
+                // 다른 요청이 이미 세션을 무효화했다. 무효화된 세션에는 승인이 없다.
+                return false;
+            }
+        }
     }
 }
