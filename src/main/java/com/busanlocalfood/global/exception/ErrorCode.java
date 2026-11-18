@@ -10,6 +10,9 @@ public enum ErrorCode {
     // 공통 입력 오류: 잘못된 JSON, 알 수 없는 필드, 지원하지 않는 Content-Type (API_SPEC 1.3)
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "입력값을 확인해 주세요."),
 
+    // Google 계정 연결 (API_SPEC 1.3). 이미 다른 회원에게 연결된 Google 계정이다.
+    GOOGLE_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 회원에게 연결된 Google 계정입니다."),
+
     // 회원가입·로그인 검증 (FUNCTION_SPEC F1-01, API_SPEC 1.3)
     EMAIL_REQUIRED(HttpStatus.BAD_REQUEST, "이메일을 입력해 주세요."),
     EMAIL_INVALID(HttpStatus.BAD_REQUEST, "올바른 이메일 형식이 아닙니다. 255자 이하로 입력해 주세요."),

@@ -73,7 +73,7 @@ public class MemberRegistrationService {
         return e;
     }
 
-    private static String findConstraintName(Throwable throwable) {
+    static String findConstraintName(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
             if (current instanceof ConstraintViolationException cve) {

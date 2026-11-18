@@ -4,12 +4,14 @@ import com.busanlocalfood.member.jwt.AccessTokenAuthenticationFilter;
 import com.busanlocalfood.member.jwt.AccessTokenVerifier;
 import com.busanlocalfood.member.ratelimit.AuthRateLimitService;
 import com.busanlocalfood.member.ratelimit.ClientIpResolver;
+import com.busanlocalfood.member.oauth.GoogleOAuth2Wiring;
 import com.busanlocalfood.member.ratelimit.SignupRateLimitFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Set;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +24,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.context.NullSecurityContextRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -114,7 +117,8 @@ public class SecurityConfig {
                                                          AuthRateLimitService rateLimitService,
                                                          ClientIpResolver clientIpResolver,
                                                          @Qualifier("handlerExceptionResolver")
-                                                         HandlerExceptionResolver exceptionResolver) throws Exception {
+                                                         HandlerExceptionResolver exceptionResolver,
+                                                         ObjectProvider<GoogleOAuth2Wiring> googleWiring) throws Exception {
         http.authorizeHttpRequests(auth -> auth
                 // TODO(화면 보호 페이지 단계): 화면 보호 페이지(/mypage, /restaurants/new 등)가 생기면
                 //  세션 필요 규칙과 /login 리다이렉트를 추가한다 (API_SPEC 10). 지금은 공개 화면만 있어 모든 요청을 허용한다.
@@ -123,6 +127,20 @@ public class SecurityConfig {
         // 회원가입 요청 집계 (API_SPEC 1.4). CSRF 검증 뒤, 본문 읽기 이전에 실행한다. CSRF 실패 요청은 집계되지 않는다.
         http.addFilterAfter(new SignupRateLimitFilter(rateLimitService, clientIpResolver, exceptionResolver),
                 CsrfFilter.class);
+
+        // Google OAuth2 로그인 (API_SPEC 2.5). 화면 체인에만 적용한다. 설정(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)이 있을 때만 구성한다.
+        // 요청 제한 필터는 Spring의 시작·콜백 필터보다 먼저 실행한다. state 검증과 인가 요청 저장은 Spring 기본 세션 방식을 쓴다.
+        // 성공·실패 핸들러는 정식 로그인이 아닌 경우 기존 인증 상태를 복원한다. 화면 세션은 기존 ScreenSession으로만 만든다.
+        GoogleOAuth2Wiring google = googleWiring.getIfAvailable();
+        if (google != null && google.enabled()) {
+            http.oauth2Login(oauth2 -> oauth2
+                    .loginPage("/login")
+                    .authorizationEndpoint(endpoint -> endpoint
+                            .authorizationRequestRepository(google.authorizationRequests()))
+                    .successHandler(google.success())
+                    .failureHandler(google.failure()));
+            http.addFilterBefore(google.guard(), OAuth2AuthorizationRequestRedirectFilter.class);
+        }
 
         // 화면 로그아웃 POST /logout은 ScreenLogoutController가 처리한다 (API_SPEC 2.11, T12).
         // 기본 LogoutFilter는 쓰지 않는다. 필터는 승인 검증 없이 세션을 끊기 때문이다.

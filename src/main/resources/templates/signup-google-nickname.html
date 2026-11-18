@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('닉네임 설정')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-5 flex-grow-1" style="max-width: 480px;">
+    <h1 class="h3 mb-3">닉네임 설정</h1>
+    <p class="text-muted">Google 계정으로 가입을 마무리합니다. 사용할 닉네임을 정해 주세요.</p>
+
+    <div th:if="${error == 'nickname_duplicated'}" class="alert alert-danger" role="alert">
+        이미 사용 중인 닉네임입니다.
+    </div>
+    <div th:if="${error == 'validation_failed'}" class="alert alert-danger" role="alert">
+        닉네임은 한글, 영문, 숫자로 2~20자 입력해 주세요.
+    </div>
+
+    <form th:action="@{/signup/google/nickname}" method="post" novalidate>
+        <div class="mb-3">
+            <label for="nickname" class="form-label">닉네임</label>
+            <input type="text" class="form-control" id="nickname" name="nickname" maxlength="20" required autocomplete="nickname">
+        </div>
+        <button type="submit" class="btn btn-primary w-100">가입 완료</button>
+    </form>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

@@ -85,8 +85,8 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
 | `JWT_REFRESH_TOKEN_EXPIRY_SECONDS` | 리프레시 토큰 만료 초 (기본 1209600) |
 | `AUTH_RATE_LIMIT_HMAC_SECRET` | 요청 제한 키의 HMAC-SHA256 비밀키. Base64 인코딩, 디코딩 후 32바이트 이상. 누락·형식 오류·길이 부족이면 기동 실패. `JWT_SECRET`과 달라야 하며 같으면 기동 실패. 기본값과 개발용 고정 키를 두지 않는다. EC2 환경 변수로만 주입하며 Git에 커밋하지 않는다 (R2) |
 | `app.security.trusted-proxies` (설정 프로퍼티, 환경 변수 아님) | 신뢰 프록시 IP 목록. 비어 있으면 `X-Forwarded-For`를 신뢰하지 않는다. 운영 기본값을 코드에 두지 않는다 |
-| `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth 클라이언트 시크릿 |
+| `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID. 코드, 설정 파일, 로그에 값을 두지 않는다. `GOOGLE_CLIENT_SECRET`과 함께 설정한다. 둘 다 없으면 local에서는 Google 로그인이 꺼지고, prod에서는 기동이 실패한다. 한쪽만 있으면 항상 기동이 실패한다 (6.21) |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 클라이언트 시크릿. `GOOGLE_CLIENT_ID`와 같은 규칙을 따르며, 로그와 오류 메시지에 값을 남기지 않는다 (6.21) |
 | `AWS_REGION` | S3 리전 |
 | `AWS_S3_BUCKET` | 이미지 버킷 이름 |
 | `OPENROUTER_API_KEY` | OpenRouter API 키 |
@@ -329,6 +329,12 @@ Access Token 만료 시 자동 재발급 (T13 A안):
 
 주의:
 - 닉네임 중복 방지는 두 단계입니다. 8번의 사전 검사로 사용자에게 빠르게 안내합니다. 최종 방어는 `uk_member_nickname` UNIQUE 제약입니다. 사전 검사만으로는 동시 가입 요청을 막을 수 없습니다. 9번 저장 시 제약 위반이 나면 6.4 규칙에 따라 `nickname_duplicated`로 처리합니다 (ERD 2.1).
+
+구현 상태 (6.21, `feat/stage2-4-google-oauth2-login`, `main` 병합 대기):
+- 신규 가입 대상은 `GoogleSignupPending`(Google sub, 검증된 이메일, 만료 15분)만 세션 속성에 둔다. 정식 인증 객체를 만들지 않는다.
+- Spring `oauth2Login`이 콜백에서 OAuth2 인증을 SecurityContext에 넣으므로, 정식 로그인이 아닌 결과(신규 가입 진행, 오류)는 콜백 전의 인증 상태를 복원한다. 기존 로그인 세션을 바꾸지 않기 위해서다.
+- 정식 로그인(sub 연결 회원)만 `ScreenSession.establish`로 화면 세션을 만들고 JWT 쿠키를 발급한다.
+- 닉네임 제출은 회원 생성과 토큰 발급을 한 트랜잭션에서 한다. 토큰 발급이 실패하면 회원도 만들어지지 않는다.
 
 ### 5.7.4 Refresh Token 재사용 탐지 (T7 A안 확정)
 
