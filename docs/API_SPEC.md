@@ -488,7 +488,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 - 구현: 경로와 결과는 위 명세와 같다. 다만 Spring Security `formLogin` 필터를 쓰지 않고 `ScreenAuthController`가 처리한다. 자격 증명과 제한 판정은 API 로그인과 같은 `AuthApiService.login`이다.
 - 입력값 검증 실패: 로그인 입력 형식 오류(빈 값, 이메일 형식 오류)는 `302 /login?error=validation_failed`로 응답한다. 이 값은 위 "화면 오류 식별자" 표에 정식 명세로 추가되었다(6.20). 이 경우 제한 판정은 하지 않는다.
 - 429: 화면 로그인의 제한 초과도 명세대로 HTTP 429와 `Retry-After`를 쓴다. 본문은 공통 JSON 오류(`RATE_LIMITED`)이며, 화면용 안내 페이지는 아직 없다. 쿠키와 세션은 바꾸지 않는다.
-- 메서드·URL: `POST /login` (Spring Security 폼 로그인 처리 경로)
+- 메서드·URL: `POST /login` (화면 로그인 폼 제출, `ScreenAuthController` 처리)
 - 인증: 불필요
 - 권한: 누구나
 - 요청: 폼 필드 `email`, `password`. CSRF 토큰 필요.

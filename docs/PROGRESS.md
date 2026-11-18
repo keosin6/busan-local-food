@@ -659,8 +659,9 @@
   - `ScreenAuthDbTest` (MySQL): T12 순서 흐름의 API 로그아웃에 같은 세션을 넘김. 승인 없는 재시도는 403. API 로그아웃 실패 시 DB 토큰이 그대로 남고 화면 로그아웃이 거부됨.
   - `AuthApiDbTest`: 미가입과 불일치 비밀번호의 응답 비교에서 `timestamp`를 제외한다. 초 단위 timestamp 때문에 간헐적으로 실패할 수 있던 테스트를 고쳤다.
 - 실행 결과 (이 브랜치 HEAD, 작업 중 실행. 현재 `main` 결과가 아님):
-  - `./gradlew clean test`, DB 연결(격리 MySQL 8.0.46, SQL 001→003): 426개 전부 통과, 실패 0, 건너뜀 0.
-  - `./gradlew clean test`, DB 미설정: 426개 중 359개 통과, 67개 건너뜀(DB 테스트), 실패 0.
+  - 실행 조건: PR #26 최종 HEAD `8e3df8798f29c49bf760ccb4b899519c69151bf4`, 격리 MySQL 8.0.46, SQL 001→003 적용. 아래 수치는 PR #26 작업 당시 보고값이며, PR #27에서 새로 실행한 결과가 아니다.
+  - `./gradlew clean test`, DB 연결: 429개 전부 통과, 건너뜀 0, 실패 0.
+  - `./gradlew clean test`, DB 미설정: 429개 중 362개 통과, 67개 건너뜀(DB 테스트), 실패 0.
   - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
 - 브라우저 확인 (Playwright, 헤드리스 Chromium, 실제 jar와 격리 MySQL, 저장소 밖 스크립트): 정상 로그아웃 순서 `POST /api/auth/logout` → `POST /logout` → `/login`. API 실패 시 `/logout` 미호출과 세션 유지. API 성공 뒤 화면 실패 시 재시도 성공. 승인 없이 `POST /logout`을 직접 호출하면 403이고 로그인 상태가 유지된다.
 - 명세 변경: `validation_failed`를 API_SPEC 2.9·2.10의 화면 오류 식별자 표에 추가했다. 기존 API 오류 응답은 바꾸지 않았다.
