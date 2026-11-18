@@ -453,6 +453,22 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 ```
 - 주요 오류: 401 TOKEN_INVALID
 
+> **화면 오류 식별자 (2.9, 2.10 공통)**
+>
+> 화면 폼의 실패는 JSON이 아니라 리다이렉트로 알린다. 쿼리 `error` 값은 화면 메시지 식별자이며, JSON API의 `error.code`와 다른 체계다. 민감한 입력값(이메일, 비밀번호)은 리다이렉트 주소에 넣지 않는다.
+>
+> | 경로 | 상황 | 응답 |
+> |---|---|---|
+> | `POST /signup` | 입력값 검증 실패 | `302 /signup?error=validation_failed` |
+> | `POST /signup` | 이메일 중복 | `302 /signup?error=email_duplicated` |
+> | `POST /signup` | 닉네임 중복 | `302 /signup?error=nickname_duplicated` |
+> | `POST /signup` | 요청 제한 초과 | `429`, `Retry-After`. 회원 미생성 |
+> | `POST /login` | 입력값 검증 실패 | `302 /login?error=validation_failed` |
+> | `POST /login` | 인증 실패(미가입, 비밀번호 불일치, Google 전용 계정) | `302 /login?error=invalid_credentials` |
+> | `POST /login` | 요청 제한 초과 | `429`, `Retry-After`. 세션·쿠키 미변경 |
+>
+> 입력값 검증 실패와 인증 실패는 구분한다. 인증 실패는 외부에서 미가입, 불일치, Google 전용을 구분하지 않는다. 429 응답은 공통 JSON 오류 본문(`RATE_LIMITED`)을 쓰며, 화면 안내 페이지는 아직 없다.
+
 ### 2.9 회원가입 (화면)
 
 - 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
@@ -470,7 +486,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 - 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
 - 구현: 경로와 결과는 위 명세와 같다. 다만 Spring Security `formLogin` 필터를 쓰지 않고 `ScreenAuthController`가 처리한다. 자격 증명과 제한 판정은 API 로그인과 같은 `AuthApiService.login`이다.
-- 명세 밖 값: 로그인 입력 형식 오류(빈 값, 이메일 형식 오류)는 `302 /login?error=validation_failed`로 응답한다. 이 값은 2.10 명세에 없으며 확정이 필요하다. 이 경우 제한 판정은 하지 않는다.
+- 입력값 검증 실패: 로그인 입력 형식 오류(빈 값, 이메일 형식 오류)는 `302 /login?error=validation_failed`로 응답한다. 이 값은 위 "화면 오류 식별자" 표에 정식 명세로 추가되었다(6.20). 이 경우 제한 판정은 하지 않는다.
 - 429: 화면 로그인의 제한 초과도 명세대로 HTTP 429와 `Retry-After`를 쓴다. 본문은 공통 JSON 오류(`RATE_LIMITED`)이며, 화면용 안내 페이지는 아직 없다. 쿠키와 세션은 바꾸지 않는다.
 - 메서드·URL: `POST /login` (Spring Security 폼 로그인 처리 경로)
 - 인증: 불필요
@@ -484,8 +500,13 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 ### 2.11 로그아웃 (화면)
 
 - 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
-- 구현: 화면 체인의 로그아웃 필터가 `POST /logout`을 처리한다. 세션을 무효화하고 SecurityContext를 지우며 `JSESSIONID`만 만료시킨 뒤 `302 /login`으로 보낸다. `refresh_token`과 `access_token` 쿠키는 이 경로에서 읽지도 지우지도 않는다.
-- 순서 보장: 브라우저 스크립트 `static/js/logout.js`가 순서를 지킨다. `GET /api/auth/me`로 `XSRF-TOKEN`을 받은 뒤 `POST /api/auth/logout`이 성공(2xx)할 때만 화면 폼을 제출한다. 서버는 `/logout`을 단독으로 받을 수 있으며, 이때도 세션은 끊긴다. 순서 강제는 클라이언트 쪽에서만 이루어진다.
+- 구현: `ScreenLogoutController`가 `POST /logout`을 처리한다. 기본 Spring LogoutFilter는 쓰지 않는다. 필터는 승인 검증 없이 세션을 끊기 때문이다. 세션이 없으면 `302 /login`, 승인이 유효하면 승인을 소비하고 SecurityContext를 지우고 세션을 무효화하고 `JSESSIONID`를 만료시킨 뒤 `302 /login`으로 보낸다. `refresh_token`과 `access_token` 쿠키는 이 경로에서 읽지도 지우지도 않는다.
+- 서버 측 순서 보장 (T12, 6.20): 화면 로그아웃은 같은 세션에서 API 로그아웃이 성공했을 때만 허용된다.
+  1. `POST /api/auth/logout`이 예외 없이 성공하면, 같은 요청의 **기존** 화면 세션(`getSession(false)`)에만 일회성 승인을 기록한다. 세션을 새로 만들지 않는다. API 체인은 여전히 STATELESS이며 이 속성을 인증에 쓰지 않는다.
+  2. 승인 유효 기간은 120초다. 승인은 세션 속성이므로 다른 세션이나 브라우저에서는 쓸 수 없다. 로그인과 가입 성공 시 기존 세션을 버리므로 승인도 함께 사라진다.
+  3. `POST /logout`은 CSRF 검증 뒤에 승인을 소비한다. 승인이 없거나, 만료되었거나, 이미 소비되었으면 `403`으로 거부하고 세션과 SecurityContext를 유지한다. 승인은 결과와 관계없이 제거된다.
+  4. API 로그아웃이 실패하면 승인이 생기지 않는다. CSRF 실패로 화면 로그아웃이 거부되면 승인은 소비되지 않으므로, 승인 유효 기간 안에서는 다시 시도할 수 있다.
+  5. 승인 유효 기간이 지나면 API 로그아웃부터 다시 해야 한다. 브라우저 스크립트 `static/js/logout.js`는 이 순서를 항상 지킨다.
 - API 로그아웃이 실패하면 화면 세션을 끊지 않고 오류를 표시한다. 화면 로그아웃이 실패해도 API 토큰은 이미 폐기된 상태이며, 버튼을 다시 누르면 두 단계를 안전하게 반복한다.
 - 메서드·URL: `POST /logout`
 - 인증: 세션 (세션이 없어도 `/login`으로 이동)

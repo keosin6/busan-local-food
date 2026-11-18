@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -122,15 +123,10 @@ public class SecurityConfig {
         http.addFilterAfter(new SignupRateLimitFilter(rateLimitService, clientIpResolver, exceptionResolver),
                 CsrfFilter.class);
 
-        // 화면 로그아웃 (API_SPEC 2.11, T12 A안). 세션을 무효화하고 SecurityContext를 지우며 JSESSIONID만 만료시킨다.
-        // refresh_token과 access_token 쿠키는 이 필터에서 읽지도 지우지도 않는다. API 로그아웃은 브라우저가 먼저 호출한다.
-        // 로그아웃 URL은 POST만 받는다(CSRF 활성). 세션이 없어도 /login으로 이동한다.
-        http.logout(logout -> logout
-                .logoutUrl("/logout")
-                .logoutSuccessUrl("/login")
-                .invalidateHttpSession(true)
-                .clearAuthentication(true)
-                .deleteCookies("JSESSIONID"));
+        // 화면 로그아웃 POST /logout은 ScreenLogoutController가 처리한다 (API_SPEC 2.11, T12).
+        // 기본 LogoutFilter는 쓰지 않는다. 필터는 승인 검증 없이 세션을 끊기 때문이다.
+        // 같은 세션에서 API 로그아웃이 성공했을 때만 승인이 남고, 컨트롤러가 승인을 소비한 뒤에만 세션을 무효화한다.
+        http.logout(AbstractHttpConfigurer::disable);
 
         // TODO(T11): OAuth2 임시 세션 정책은 Google OAuth2 단계에서 확정한다. 지금은 화면 로그인의 세션 고정 방어만 적용한다
         //  (ScreenSession). 세션 정책을 완전 Stateless로 고정하지 않는다 (DEVELOPMENT_RULES 5.7).
