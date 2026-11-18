@@ -34,7 +34,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 별도 쿠키 없음 | OAuth2 임시 상태는 HTTP 세션(`JSESSIONID`)에 저장 | - | - | - | - | 세션과 같음 |
 
 - `access_token`의 Path는 `/api`로 제한합니다. API 요청에서만 전송됩니다. 화면 요청은 `JSESSIONID`로 인증합니다.
-- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 PR #23(merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18)으로 `main`에 병합 완료되었습니다. 화면 로그인 리다이렉트, 화면 로그인·회원가입·로그아웃(2.9~2.11), Google OAuth2 체인은 미구현입니다. 화면 체인(`@Order(2)`)은 기존 세션 인증과 임시 허용 정책을 유지하며 JWT 필터를 넣지 않습니다.
+- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 PR #23(merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18)으로 `main`에 병합 완료되었습니다. 화면 인증(회원가입·로그인·로그아웃, 2.9~2.11)은 PR #25(merge commit `d1b9e1d`, 6.19)로 `main`에 병합 완료되었습니다. 화면 로그아웃은 PR #26 보완(6.20)에 따라 같은 세션의 API 로그아웃 성공 뒤에만 허용되는 서버 측 일회성 승인을 확인합니다. 화면 세션(`JSESSIONID`)은 API 인증 수단으로 쓰이지 않고, API JWT는 화면 로그인 상태를 만들지 않습니다. 화면 보호 페이지, 화면용 429 안내 페이지, Google OAuth2 체인은 미구현입니다. 화면 체인(`@Order(2)`)은 세션 인증을 쓰며, 현재 공개 화면만 있어 모든 요청을 허용하는 임시 정책을 유지합니다. JWT 필터는 넣지 않습니다.
 - `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다. 화면 로그아웃은 먼저 `POST /api/auth/logout`을 호출합니다 (T12, 2.11).
 - 쿠키를 만료시킬 때는 발급 당시와 같은 Path와 Domain을 사용합니다.
 - 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
@@ -208,7 +208,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 검증 실패 기준은 다음과 같습니다. 서명 위조와 변조, 알고리즘 불일치, 발급자 불일치, 대상 불일치, 만료(60초 초과), 미래 발급 시각(60초 초과), 필수 클레임 누락, `sub` 형식 오류, `role` 값 오류는 모두 검증 실패입니다.
 - 검증 실패의 구체적인 원인은 외부 응답에 노출하지 않으며, 공통 인증 실패(401 `TOKEN_INVALID`)로 매핑합니다. 이 매핑은 인증 필터 단계에서 구현합니다.
 - Access Token은 `access_token` 쿠키로만 전달합니다. JSON 응답 본문에는 포함하지 않습니다 (1.1절).
-- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 PR #23(merge commit `56faff2`)으로 `main`에 병합 완료되었습니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증과 Google 요청 제한 연결은 미구현입니다.
+- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 PR #23(merge commit `56faff2`)으로 `main`에 병합 완료되었습니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증(회원가입·로그인·로그아웃)은 PR #25(`d1b9e1d`)로 `main`에 병합 완료되었습니다. 화면 보호 페이지와 Google 요청 제한 연결은 미구현입니다.
 
 ## 2. 인증 API (F1-01)
 
@@ -471,7 +471,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ### 2.9 회원가입 (화면)
 
-- 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #25, merge commit `d1b9e1d`, 6.19). 보완 PR #26(6.20)의 서버 측 승인 내용을 포함합니다.
 - 구현: `ScreenAuthController`가 처리한다. 가입과 토큰 발급은 `AuthApiService.signup`을 그대로 쓰고, 화면 세션은 `ScreenSession`이 만든다. 실패 값 `email_duplicated`, `nickname_duplicated`, `validation_failed`는 명세 값이다.
 - 메서드·URL: `POST /signup` (화면 폼 제출)
 - 인증: 불필요
@@ -484,11 +484,11 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ### 2.10 로그인 (화면)
 
-- 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #25, merge commit `d1b9e1d`, 6.19). 보완 PR #26(6.20)의 서버 측 승인 내용을 포함합니다.
 - 구현: 경로와 결과는 위 명세와 같다. 다만 Spring Security `formLogin` 필터를 쓰지 않고 `ScreenAuthController`가 처리한다. 자격 증명과 제한 판정은 API 로그인과 같은 `AuthApiService.login`이다.
 - 입력값 검증 실패: 로그인 입력 형식 오류(빈 값, 이메일 형식 오류)는 `302 /login?error=validation_failed`로 응답한다. 이 값은 위 "화면 오류 식별자" 표에 정식 명세로 추가되었다(6.20). 이 경우 제한 판정은 하지 않는다.
 - 429: 화면 로그인의 제한 초과도 명세대로 HTTP 429와 `Retry-After`를 쓴다. 본문은 공통 JSON 오류(`RATE_LIMITED`)이며, 화면용 안내 페이지는 아직 없다. 쿠키와 세션은 바꾸지 않는다.
-- 메서드·URL: `POST /login` (Spring Security 폼 로그인 처리 경로)
+- 메서드·URL: `POST /login` (화면 로그인 폼 제출, `ScreenAuthController` 처리)
 - 인증: 불필요
 - 권한: 누구나
 - 요청: 폼 필드 `email`, `password`. CSRF 토큰 필요.
@@ -499,7 +499,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ### 2.11 로그아웃 (화면)
 
-- 구현 상태: 구현 완료 (`feat/stage2-4-screen-auth`, 6.19). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #25, merge commit `d1b9e1d`, 6.19). 보완 PR #26(6.20)의 서버 측 승인 내용을 포함합니다.
 - 구현: `ScreenLogoutController`가 `POST /logout`을 처리한다. 기본 Spring LogoutFilter는 쓰지 않는다. 필터는 승인 검증 없이 세션을 끊기 때문이다. 세션이 없으면 `302 /login`, 승인이 유효하면 승인을 소비하고 SecurityContext를 지우고 세션을 무효화하고 `JSESSIONID`를 만료시킨 뒤 `302 /login`으로 보낸다. `refresh_token`과 `access_token` 쿠키는 이 경로에서 읽지도 지우지도 않는다.
 - 서버 측 순서 보장 (T12, 6.20): 화면 로그아웃은 같은 세션에서 API 로그아웃이 성공했을 때만 허용된다.
   1. `POST /api/auth/logout`이 예외 없이 성공하면, 같은 요청의 **기존** 화면 세션(`getSession(false)`)에만 일회성 승인을 기록한다. 세션을 새로 만들지 않는다. API 체인은 여전히 STATELESS이며 이 속성을 인증에 쓰지 않는다.
@@ -888,7 +888,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
-- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 구현 완료(`feat/stage2-4-screen-auth`, 6.19, `main` 병합 대기). 나머지 화면 URL(`/mypage`, `/restaurants` 이하, `/admin/**` 등)은 미구현이다.
+- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). 나머지 화면 URL(`/mypage`, `/restaurants` 이하, `/admin/**` 등)은 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---
