@@ -1,5 +1,7 @@
 package com.busanlocalfood.global.exception;
 
+import com.busanlocalfood.member.service.AuthApiService;
+import com.busanlocalfood.member.web.AuthCookies;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -28,6 +30,12 @@ import org.springframework.web.bind.annotation.RestController;
 })
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, GlobalExceptionHandlerTest.FailingController.class})
 class GlobalExceptionHandlerTest {
+
+    @MockitoBean
+    private AuthApiService authApiService;
+
+    @MockitoBean
+    private AuthCookies authCookies;
 
     @Autowired
     private MockMvc mockMvc;
