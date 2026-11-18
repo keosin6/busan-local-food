@@ -34,7 +34,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 별도 쿠키 없음 | OAuth2 임시 상태는 HTTP 세션(`JSESSIONID`)에 저장 | - | - | - | - | 세션과 같음 |
 
 - `access_token`의 Path는 `/api`로 제한합니다. API 요청에서만 전송됩니다. 화면 요청은 `JSESSIONID`로 인증합니다.
-- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 `feat/stage2-3-auth-http-api`(6.17)에서 구현되었고 `main` 병합 대기입니다. 화면 로그인 리다이렉트, 화면 로그인·회원가입·로그아웃(2.9~2.11), Google OAuth2 체인은 미구현입니다. 화면 체인(`@Order(2)`)은 기존 세션 인증과 임시 허용 정책을 유지하며 JWT 필터를 넣지 않습니다.
+- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 PR #23(merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18)으로 `main`에 병합 완료되었습니다. 화면 로그인 리다이렉트, 화면 로그인·회원가입·로그아웃(2.9~2.11), Google OAuth2 체인은 미구현입니다. 화면 체인(`@Order(2)`)은 기존 세션 인증과 임시 허용 정책을 유지하며 JWT 필터를 넣지 않습니다.
 - `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다. 화면 로그아웃은 먼저 `POST /api/auth/logout`을 호출합니다 (T12, 2.11).
 - 쿠키를 만료시킬 때는 발급 당시와 같은 Path와 Domain을 사용합니다.
 - 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
@@ -124,11 +124,11 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 > - Refresh 잠금 재시도: 잠금 대기와 교착 상태는 `LockRetryTemplate`이 최대 3번 새 트랜잭션에서 다시 실행합니다. 한도를 넘으면 요청을 허용하지 않습니다(fail-closed).
 > - 이벤트 정리: 생성 후 24시간 보존. 요청 시 정리와 주기 정리.
 >
-> HTTP 계층 (`main` 병합 완료: 공통 429와 회원가입 집계는 PR #17, 두 체인 연결은 PR #19):
+> HTTP 계층 (`main` 병합 완료: 공통 429와 회원가입 집계는 PR #17, 두 체인 연결은 PR #19, 로그인·재발급 HTTP 연결은 PR #23):
 > - 공통 429: `RateLimitExceededException`을 `GlobalExceptionHandler`가 `429 RATE_LIMITED`로 바꿉니다. `Retry-After`에는 재시도까지 남은 초가 들어갑니다. 쿠키와 세션은 건드리지 않습니다. 본문에는 제한 기준, IP, 이메일, family_id가 없습니다.
 > - 회원가입 집계: `SignupRateLimitFilter`가 `POST /signup`, `POST /api/auth/signup`을 집계합니다. 두 SecurityFilterChain(API 체인, 화면 체인) 모두에서 CSRF 검증 뒤, 본문 읽기와 파싱 이전에 실행됩니다. 집계 실패는 500 `INTERNAL_ERROR`로 fail-closed 합니다. 화면과 API 회원가입은 같은 IP 카운터를 씁니다.
 >
-> 로그인·재발급 HTTP 연결은 6.17(`feat/stage2-3-auth-http-api`)에서 구현되었고 `main` 병합 대기입니다 (2.2, 2.3).
+> 로그인·재발급 HTTP 연결은 PR #23(merge commit `56faff2`, 6.18)으로 `main`에 병합 완료되었습니다 (2.2, 2.3).
 >
 > HTTP 계층 (남은 항목):
 > - Google OAuth2 시작·연동·콜백 집계 연결: OAuth2 로그인·연동 흐름과 클라이언트 설정이 아직 없습니다. 흐름이 생기면 OAuth2 임시 상태 보존 규칙(시작 제한 시 임시 상태 미생성, 콜백 제한 시 해당 임시 상태만 제거, 화면 세션과 JWT 유지)을 지켜 연결합니다.
@@ -208,7 +208,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 검증 실패 기준은 다음과 같습니다. 서명 위조와 변조, 알고리즘 불일치, 발급자 불일치, 대상 불일치, 만료(60초 초과), 미래 발급 시각(60초 초과), 필수 클레임 누락, `sub` 형식 오류, `role` 값 오류는 모두 검증 실패입니다.
 - 검증 실패의 구체적인 원인은 외부 응답에 노출하지 않으며, 공통 인증 실패(401 `TOKEN_INVALID`)로 매핑합니다. 이 매핑은 인증 필터 단계에서 구현합니다.
 - Access Token은 `access_token` 쿠키로만 전달합니다. JSON 응답 본문에는 포함하지 않습니다 (1.1절).
-- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 `feat/stage2-3-auth-http-api`(6.17)에서 구현되었고 `main` 병합 대기입니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증과 Google 요청 제한 연결은 미구현입니다.
+- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 PR #23(merge commit `56faff2`)으로 `main`에 병합 완료되었습니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증과 Google 요청 제한 연결은 미구현입니다.
 
 ## 2. 인증 API (F1-01)
 
@@ -216,7 +216,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.1 회원가입 (API)
 
-- 구현 상태: 구현 완료 (`feat/stage2-3-auth-http-api`, 6.17). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #23, merge commit `56faff2`, 6.18).
 
 - 메서드·URL: `POST /api/auth/signup`
 - 인증: 불필요
@@ -242,7 +242,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.2 로그인 (API)
 
-- 구현 상태: 구현 완료 (`feat/stage2-3-auth-http-api`, 6.17). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #23, merge commit `56faff2`, 6.18).
 
 - 메서드·URL: `POST /api/auth/login`
 - 인증: 불필요
@@ -264,7 +264,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.3 Access Token 재발급 (Refresh Token 로테이션)
 
-- 구현 상태: 구현 완료 (`feat/stage2-3-auth-http-api`, 6.17). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #23, merge commit `56faff2`, 6.18).
 
 - 메서드·URL: `POST /api/auth/refresh`
 - 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
@@ -310,7 +310,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.4 로그아웃 (API)
 
-- 구현 상태: 구현 완료 (`feat/stage2-3-auth-http-api`, 6.17). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #23, merge commit `56faff2`, 6.18).
 
 - 메서드·URL: `POST /api/auth/logout`
 - 인증: 불필요 (Access Token이 만료되었어도 로그아웃할 수 있어야 하므로 요구하지 않습니다)
@@ -437,7 +437,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ### 2.8 내 정보 조회
 
-- 구현 상태: 구현 완료 (`feat/stage2-3-auth-http-api`, 6.17). `main` 병합 대기.
+- 구현 상태: `main` 병합 완료 (PR #23, merge commit `56faff2`, 6.18).
 
 - 메서드·URL: `GET /api/auth/me`
 - 인증: 필요 (`access_token`, API 인증)
