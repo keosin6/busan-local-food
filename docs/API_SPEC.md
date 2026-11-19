@@ -330,18 +330,18 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 - 구현 상태: `main` 병합 완료 (PR #28, merge commit `37df8e024ffea4065c6c1213265010527970dc48`, 6.21). 로그인 시작·콜백·신규 가입 진입이 구현되어 있다. 계정 연동 콜백(2.6.1)은 미구현이다.
 - 확정 경로: 시작 `GET /oauth2/authorization/google`, 콜백 `GET /login/oauth2/code/google`. 설정 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`은 둘 다 있을 때만 켜진다(local에서 없으면 꺼짐, prod에서 없으면 기동 실패).
-- 콜백 판정 순서: 이메일 미검증 거부 → sub 연결 회원 로그인 → 같은 이메일 기존 회원이면 자동 연결 없이 안내 → 신규 가입 진행. 정식 로그인이 아닌 결과에서는 콜백 전의 인증 상태를 복원해 기존 로그인 세션을 유지한다.
+- 콜백 판정 순서: 프로필 값 확인(`sub`, `email`, 실패 시 `google_failed`) → `email_verified` 미검증 거부(`google_unverified`) → `google_sub`가 연결된 회원 로그인 → 같은 이메일의 기존 회원이 있으면 자동 연결 없이 안내(`email_account_exists`) → 신규 가입 진행. 정식 로그인이 아닌 결과에서는 콜백 전의 인증 상태를 복원해 기존 로그인 세션을 유지한다.
 - 메서드·URL: `GET /oauth2/authorization/google` (시작), `GET /login/oauth2/code/google` (콜백)
 - 인증: 불필요
 - 권한: 누구나
 - 요청: 브라우저 리다이렉트. Google 인증 페이지로 이동합니다.
 - 콜백 처리 (FR-01-09, Q1):
   1. OAuth2 `state`를 검증합니다. 세션의 연동 진행 상태가 있으면 2.6.1 계정 연동 콜백 절차로, 없으면 아래 일반 로그인 절차로 처리합니다. `state`가 일치하지 않으면 로그인하지 않고 `/login?error=google_failed`로 이동합니다.
-  2. Google 프로필의 `sub`, `email`, `email_verified`를 확인합니다.
-  3. `google_sub`가 같은 회원이 있으면 로그인합니다. Spring Security 화면 세션을 생성하고 JWT 쿠키(`access_token`, `refresh_token`)를 설정한 뒤 `/`로 리다이렉트합니다.
-  4. 없고 같은 `email`의 기존 회원이 있으면 **자동 연결하지 않습니다.** `/login?error=email_account_exists`로 리다이렉트합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요." 를 표시합니다.
-  5. `email_verified`가 아니면 `/login?error=google_unverified`로 리다이렉트합니다.
-  6. 둘 다 없으면 회원을 만들지 않습니다. 신규 가입 진행 상태(Google `sub`, `email`, 흐름 = 신규 가입)를 세션 속성에 저장하고, 로그인 상태 없이 닉네임 설정 화면(`GET /signup/google/nickname`)으로 리다이렉트합니다. 화면 세션과 JWT는 발급하지 않습니다 (T3 A안, 2.5.1).
+  2. Google 프로필의 `sub`와 `email`을 확인합니다. 값이 없거나 형식이 맞지 않으면 `/login?error=google_failed`로 리다이렉트합니다.
+  3. `email_verified`가 아니면 로그인하지 않고 `/login?error=google_unverified`로 리다이렉트합니다. 이 검사는 4번의 연결 회원 조회보다 먼저 합니다. 연결된 회원이라도 미검증 이메일이면 거부합니다.
+  4. `google_sub`가 같은 회원이 있으면 로그인합니다. Spring Security 화면 세션을 생성하고 JWT 쿠키(`access_token`, `refresh_token`)를 설정한 뒤 `/`로 리다이렉트합니다.
+  5. 없고 같은 `email`의 기존 회원이 있으면 **자동 연결하지 않습니다.** `/login?error=email_account_exists`로 리다이렉트합니다. 화면에는 "기존 계정으로 로그인한 뒤 마이페이지에서 Google 계정을 연동해 주세요." 를 표시합니다.
+  6. 연결된 회원도 없고 같은 이메일의 회원도 없으면 신규 가입으로 처리합니다. 이 단계에서는 회원을 만들지 않습니다. 신규 가입 진행 상태(Google `sub`, `email`, 흐름 = 신규 가입)를 세션 속성에 저장하고, 로그인 상태 없이 닉네임 설정 화면(`GET /signup/google/nickname`)으로 리다이렉트합니다. 화면 세션과 JWT는 발급하지 않습니다 (T3 A안, 2.5.1).
 - 실패(Google 인증 오류 등): `/login?error=google_failed`로 리다이렉트합니다.
 - 콜백 처리는 사용자 정의 `AuthenticationSuccessHandler`(성공)와 `AuthenticationFailureHandler`(실패)가 담당합니다. 세션의 연동 진행 상태가 없으면 위 일반 로그인 처리를 유지합니다 (DEVELOPMENT_RULES 5.7.1 Callback 핸들러 원칙).
 - 발급: 성공하면 화면 세션과 JWT를 함께 발급합니다 (FR-01-17).
@@ -367,7 +367,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   6. `302` → `/`로 리다이렉트합니다.
 - 닉네임 설정이 끝나기 전에는 회원을 만들지 않습니다. 흐름이 중단되면 가입 진행 상태만 제거하고, 회원은 만들지 않습니다.
 - 주요 오류(리다이렉트 쿼리): `validation_failed`, `nickname_duplicated`.
-- 요청 제한 (1.4): 닉네임 제출은 회원가입 요청으로 계산합니다 (IP별 1시간 5회). 초과하면 HTTP 429와 `Retry-After`를 반환하고 회원을 만들지 않습니다. 가입 진행 상태의 처리는 구현 단계에서 확인합니다.
+- 요청 제한 (1.4): 닉네임 제출은 회원가입 요청으로 계산합니다 (IP별 1시간 5회). 초과하면 HTTP 429와 `Retry-After`를 반환하고 회원을 만들지 않습니다. `SignupRateLimitFilter`가 컨트롤러보다 먼저 요청을 제한하므로, 초과 요청은 컨트롤러가 실행되지 않습니다. 따라서 `GoogleSignupPending` 가입 진행 상태는 세션에 그대로 남으며, 제한이 풀리고 15분 TTL 안이면 같은 세션에서 다시 제출할 수 있습니다.
 - 참고: `nickname`에는 `uk_member_nickname` UNIQUE 제약이 있습니다. 사전 검사 후 저장 시 위반이 나면 같은 `nickname_duplicated`로 처리합니다 (ERD 2.1, DEVELOPMENT_RULES 5.7.3, 6.4).
 
 ### 2.6 Google 계정 연동 시작 (화면, 세션 기반)
