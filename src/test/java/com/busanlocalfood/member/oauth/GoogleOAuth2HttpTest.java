@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.oauth;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -67,6 +68,9 @@ import org.springframework.test.web.servlet.MvcResult;
         GoogleSignupController.class, ScreenAuthAdvice.class, HomeController.class,
         GoogleOAuth2HttpTest.ClientIpConfig.class})
 class GoogleOAuth2HttpTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     static final String CLIENT_ID = "test-client-" + randomToken();
     private static final String CLIENT_SECRET = "test-secret-" + randomToken();

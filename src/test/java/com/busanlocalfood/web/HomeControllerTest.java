@@ -1,5 +1,6 @@
 package com.busanlocalfood.web;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -23,6 +24,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 })
 @Import(SecurityConfig.class)
 class HomeControllerTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     @Autowired
     private MockMvc mockMvc;

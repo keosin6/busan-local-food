@@ -58,7 +58,12 @@ public final class SignupRateLimitFilter extends OncePerRequestFilter {
                 throw new RateLimitExceededException(limited.retryAfterSeconds());
             }
         } catch (RuntimeException e) {
-            // 요청을 진행시키지 않는다. 처리된 예외는 공통 오류 응답으로 나가고, 처리되지 않은 예외는 그대로 다시 던진다.
+            // 화면 요청의 제한 초과는 안내 페이지로 보낸다 (API_SPEC 1.4). 그 밖에는 요청을 진행시키지 않는다.
+            if (e instanceof RateLimitExceededException limited && ScreenRateLimitPage.isScreenRequest(request)) {
+                ScreenRateLimitPage.forward(request, response, limited.getRetryAfterSeconds());
+                return;
+            }
+            // 처리된 예외는 공통 오류 응답으로 나가고, 처리되지 않은 예외는 그대로 다시 던진다.
             if (exceptionResolver.resolveException(request, response, null, e) == null) {
                 throw e;
             }

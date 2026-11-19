@@ -69,6 +69,7 @@ class GoogleOAuth2ConfigTest {
         AuthCookies cookies = new AuthCookies(environment, new RefreshTokenProperties(1209600L));
         return new GoogleOAuth2Config().googleOAuth2Wiring(environment, clientId, clientSecret,
                 mock(AuthRateLimitService.class), mock(ClientIpResolver.class), mock(HandlerExceptionResolver.class),
-                mock(GoogleLoginService.class), mock(AuthApiService.class), cookies);
+                mock(GoogleLoginService.class), mock(AuthApiService.class), cookies,
+                mock(com.busanlocalfood.member.service.MemberAccountService.class));
     }
 }

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('요청 제한')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-5 flex-grow-1" style="max-width: 560px;">
+    <h1 class="h3 mb-3">요청이 너무 많습니다</h1>
+    <p>짧은 시간에 요청이 많아 잠시 제한되었습니다.</p>
+    <p class="mb-4">약 <span th:text="${retryMinutes}">1</span>분 후에 다시 시도해 주세요.</p>
+    <p class="text-muted small">이 안내는 로그인 상태를 바꾸지 않습니다. 기다린 뒤 이전 화면에서 다시 시도해 주세요.</p>
+    <a class="btn btn-outline-dark" th:href="@{/}">홈으로</a>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

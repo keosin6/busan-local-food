@@ -4,6 +4,7 @@ import com.busanlocalfood.member.ratelimit.AuthRateLimitService;
 import com.busanlocalfood.member.ratelimit.ClientIpResolver;
 import com.busanlocalfood.member.service.AuthApiService;
 import com.busanlocalfood.member.service.GoogleLoginService;
+import com.busanlocalfood.member.service.MemberAccountService;
 import com.busanlocalfood.member.web.AuthCookies;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -17,7 +18,9 @@ import org.springframework.security.config.oauth2.client.CommonOAuth2Provider;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 /**
@@ -31,7 +34,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 @Configuration
 public class GoogleOAuth2Config {
 
-    static final String REGISTRATION_ID = "google";
+    public static final String REGISTRATION_ID = "google";
 
     @Bean
     GoogleOAuth2Wiring googleOAuth2Wiring(
@@ -44,7 +47,8 @@ public class GoogleOAuth2Config {
             @Lazy @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
             GoogleLoginService googleLoginService,
             AuthApiService authService,
-            AuthCookies cookies) {
+            AuthCookies cookies,
+            MemberAccountService accountService) {
         validateCredentials(environment.acceptsProfiles(Profiles.of("prod")), clientId, clientSecret);
         boolean enabled = hasText(clientId) && hasText(clientSecret);
         List<ClientRegistration> registrations = enabled
@@ -57,13 +61,18 @@ public class GoogleOAuth2Config {
         ClientRegistrationRepository repository = enabled
                 ? new InMemoryClientRegistrationRepository(registrations)
                 : registrationId -> null;
+        // 계정 연동 시작이 쓰는 해석기. 시작 경로 기본값과 같은 기준 경로를 쓰고, 등록 ID는 호출 때 고정한다.
+        OAuth2AuthorizationRequestResolver linkResolver =
+                new DefaultOAuth2AuthorizationRequestResolver(repository, "/oauth2/authorization");
         return new GoogleOAuth2Wiring(
                 enabled,
                 repository,
                 requests,
+                linkResolver,
                 new GoogleOAuth2LoginGuardFilter(rateLimitService, clientIpResolver, exceptionResolver, requests),
-                new GoogleOAuth2SuccessHandler(googleLoginService, authService, cookies),
-                new GoogleOAuth2FailureHandler());
+                new GoogleOAuth2SuccessHandler(googleLoginService, authService, cookies, accountService),
+                new GoogleOAuth2FailureHandler(),
+                new GoogleLinkAwareSessionAuthenticationStrategy());
     }
 
     @Bean

@@ -16,6 +16,7 @@
             <a class="nav-link text-white p-0" th:href="@{/signup}">회원가입</a>
         </div>
         <form th:if="${loggedIn}" id="logout-form" th:action="@{/logout}" method="post" class="d-flex align-items-center gap-2 mb-0">
+            <a class="nav-link text-white p-0" th:href="@{/mypage}">마이페이지</a>
             <span id="logout-error" class="small text-warning d-none" role="alert"></span>
             <button type="submit" class="btn btn-sm btn-outline-light">로그아웃</button>
         </form>

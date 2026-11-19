@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.ratelimit;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import com.busanlocalfood.member.service.AuthApiService;
 import com.busanlocalfood.member.web.AuthCookies;
 import com.busanlocalfood.member.ratelimit.ClientIpResolver;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -53,6 +55,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class,
         SignupRateLimitFilterTest.ClientIpConfig.class, SignupRateLimitFilterTest.SignupProbe.class})
 class SignupRateLimitFilterTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     @MockitoBean
     private AuthApiService authApiService;
@@ -138,10 +143,10 @@ class SignupRateLimitFilterTest {
     }
 
     @Test
-    void 제한_초과는_JSON_파싱_전에_429로_끝나고_본문을_읽지_않는다() throws Exception {
+    void API_제한_초과는_JSON_파싱_전에_429로_끝나고_본문을_읽지_않는다() throws Exception {
         when(rateLimitService.recordSignupRequest(any())).thenReturn(new RateLimitDecision.Limited(42));
 
-        mockMvc.perform(signup("/signup", "{not-json"))
+        mockMvc.perform(apiSignup("{not-json"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Retry-After", "42"))
                 .andExpect(jsonPath("$.error.code").value("RATE_LIMITED"))
@@ -151,10 +156,23 @@ class SignupRateLimitFilterTest {
     }
 
     @Test
-    void 제한_응답_본문에는_IP와_내부_판정_정보가_없다() throws Exception {
+    void 화면_제한_초과는_안내_페이지로_전달되고_429와_Retry_After를_유지한다() throws Exception {
         when(rateLimitService.recordSignupRequest(any())).thenReturn(new RateLimitDecision.Limited(42));
 
         mockMvc.perform(signup("/signup", "{}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "42"))
+                .andExpect(forwardedUrl("/rate-limited"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
+
+        assertThat(SignupProbe.REACHED.get()).isZero();
+    }
+
+    @Test
+    void 제한_응답_본문에는_IP와_내부_판정_정보가_없다() throws Exception {
+        when(rateLimitService.recordSignupRequest(any())).thenReturn(new RateLimitDecision.Limited(42));
+
+        mockMvc.perform(apiSignup("{}"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.error.message").value("요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("127.0.0.1"))))

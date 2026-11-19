@@ -1,5 +1,6 @@
 package com.busanlocalfood.global.exception;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import com.busanlocalfood.member.service.AuthApiService;
 import com.busanlocalfood.member.service.GoogleSignupService;
 import com.busanlocalfood.member.web.AuthCookies;
@@ -31,6 +32,9 @@ import org.springframework.web.bind.annotation.RestController;
 })
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, GlobalExceptionHandlerTest.FailingController.class})
 class GlobalExceptionHandlerTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     @MockitoBean
     private GoogleSignupService googleSignupService;

@@ -12,8 +12,8 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **`main`에 없는 것**: Google 계정 연동·해제와 로컬 비밀번호 설정(PR B), 프런트엔드 자동 갱신(T20), 화면 보호 페이지와 화면용 429 안내 페이지. 나머지는 아래 7절 |
-| **다음 개발 단계** | PR B: Google 계정 연동 시작·콜백(2.6, 2.6.1)과 연동 해제(2.7), Google 전용 회원의 로컬 비밀번호 설정(2.7.1), 연동 요청 제한 연결. 화면 보호 페이지와 화면용 429 안내 페이지. 상세는 7절 |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR B(`feat/stage2-4-google-account-linking`, 6.22, `main` 병합 대기)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지. **`main`에 없는 것 (PR B 병합 뒤에도)**: 프런트엔드 자동 갱신(T20), `/mypage` 외 화면 보호 페이지. 나머지는 아래 7절 |
+| **다음 개발 단계** | PR B 병합 확인 후: `/mypage` 외 보호 화면, 프런트엔드 T20, F1-02~F1-09. 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -21,7 +21,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **미구현**: Google 계정 연동·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), 프런트엔드 T20, 화면 보호 페이지 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR B(6.22, `main` 병합 대기)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **미구현**: 프런트엔드 T20, `/mypage` 외 화면 보호 페이지 | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -36,7 +36,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 이번 문서 작업으로 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) PR #26 보완 HEAD (`8e3df87`): DB 연결 429/429, DB 미설정 362 통과·67 건너뜀. (4) PR #28 (병합 커밋 `37df8e0`): DB 연결 484/484 통과, DB 미설정 408 통과·76 건너뜀, 실패 0, bootJar 성공. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증과 Google OAuth2 엔드포인트 포함 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종, 화면 인증, T12 승인, Google 로그인 시작·콜백과 신규 가입·닉네임 설정은 `main` 병합 완료(PR #23, #25, #26, #28). Google 계정 연동·해제, 로컬 비밀번호 설정, 프런트엔드 Access Token 자동 갱신과 T20은 미구현 |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 이번 문서 작업으로 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) PR #26 보완 HEAD (`8e3df87`): DB 연결 429/429, DB 미설정 362 통과·67 건너뜀. (4) PR #28 (병합 커밋 `37df8e0`): DB 연결 484/484 통과, DB 미설정 408 통과·76 건너뜀, 실패 0, bootJar 성공. (5) PR B (`feat/stage2-4-google-account-linking`, 기준 `0291bfd`, 6.22, **이번 실행 결과**): `./gradlew clean test` 테스트 DB 연결 시 531개 실행, 건너뜀 0, 실패 0. 테스트 DB 미설정 시 531개 중 448 통과·83 건너뜀·실패 0. `bootJar` 성공. `git diff --check` 통과. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증과 Google OAuth2 엔드포인트 포함 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종, 화면 인증, T12 승인, Google 로그인 시작·콜백과 신규 가입·닉네임 설정은 `main` 병합 완료(PR #23, #25, #26, #28). Google 계정 연동·해제와 로컬 비밀번호 설정은 PR B(6.22, `main` 병합 대기)로 구현. 프런트엔드 Access Token 자동 갱신과 T20은 미구현 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -710,6 +710,41 @@
   - 리디렉션 URI는 요청의 기본 URL로 만든다. 운영의 리버스 프록시 뒤에서는 Google에 등록한 URI와 맞는지 배포 전에 확인해야 한다.
   - 화면 보호 페이지가 아직 없어 화면 세션 정책 전체(타임아웃, 동시 세션)는 확정되지 않았다(T11).
 
+### 6.22 Stage 2-4 PR B: Google 계정 연동·해제와 로컬 비밀번호 설정 (2026-11-19)
+
+- 브랜치: `feat/stage2-4-google-account-linking` (기준: `main` `0291bfd`). `main` 병합 대기.
+- 구현 범위
+  - 연동 시작 `POST /mypage/google/link`: 화면 세션 회원만, CSRF 검증, Google 요청 제한 1회 집계. 초과하면 429와 `Retry-After`를 화면 안내로 보내고 OAuth2 임시 상태를 만들지 않는다. 일반 로그인 진행 상태를 지운 뒤 같은 HTTP 세션 저장소에 인가 요청(state)을 저장하고 Google로 `302` 한다.
+  - 연동 콜백(기존 `GET /login/oauth2/code/google`): 연동 진행 상태(연동 대상 회원 ID, state, 15분)가 세션에 있을 때만 연동 처리. 순서는 state, 연동 대상 확인, sub와 `email_verified` 확인, sub 중복 확인, 저장이다. 같은 회원에게 이미 연결되어 있으면 멱등 성공, 다른 회원에게 연결되어 있으면 `google_already_linked`. 동시 요청은 `uk_member_google_sub` UNIQUE가 최종 방어한다. 성공은 `/mypage?google=linked`, 실패는 `/mypage?error=...`.
+  - 연동 모드의 세션 보존: 성공과 실패 모두 콜백 전 인증 상태를 SecurityContext에 되돌린다(`GoogleOAuth2AuthenticationRestore`). 연동 모드에서는 세션 ID를 바꾸는 전략을 건너뛴다(`GoogleLinkAwareSessionAuthenticationStrategy`). `ScreenSession.establish`와 JWT 쿠키 발급을 호출하지 않는다. 연동 모드에서 Spring이 OAuth2 클라이언트 저장소에 넣은 항목은 제거한다.
+  - 연동 해제 `POST /mypage/google/unlink`: 순서는 연결 여부, 비밀번호 존재 여부, BCrypt 검증이다. 성공하면 `google_sub`를 NULL로 바꾼다. 회원 행은 잠금 조회로 읽는다.
+  - 로컬 비밀번호 설정 `GET·POST /mypage/password`: 이미 설정된 회원은 `password_already_set`. 검증은 회원가입과 같은 `MemberInputRules`를 쓴다. BCrypt 해시만 저장한다. 회원 행 잠금으로 동시 요청을 직렬화하며, 두 번째 요청은 `password_already_set`이 된다. 비밀번호 변경은 지원하지 않는다.
+  - `/mypage`: 로그인 회원 전용. 미인증은 `/login`으로 보낸다. 이메일, 닉네임, Google 연결 여부, 비밀번호 설정 여부를 표시한다. 비밀번호가 없는 회원에게는 해제 폼 대신 설정 안내를 보여준다.
+  - 화면용 429 안내 페이지 `/rate-limited`: 화면 경로의 필터 제한(`SignupRateLimitFilter`, `GoogleOAuth2LoginGuardFilter`)은 이 페이지로 전달하고, 화면 컨트롤러의 제한 초과는 같은 안내를 어드바이스로 보낸다. 상태 429와 `Retry-After`를 유지하고, 쿠키와 세션은 건드리지 않으며, 자동 리다이렉트나 재로그인을 요구하지 않는다. `/api/**`의 429 JSON 응답은 그대로다.
+- 설계 결정과 근거
+  - 연동 시작은 Spring의 GET 시작 경로를 거치지 않는다. 그 경로는 일반 로그인 시작으로도 집계되므로 POST 한 번이 두 번 세어진다. 같은 해석기로 인가 요청을 만들어 같은 저장소에 저장한다.
+  - 리다이렉트 URI 템플릿의 동작 이름 기본값은 `authorize`다. 콜백 경로와 맞추려고 `action=login` 파라미터를 넣는다. 구현 과정에서 `redirect_uri`가 `/authorize/...`로 만들어지는 것을 테스트로 확인하고 고쳤다.
+  - 만료된 연동 상태는 일반 로그인으로 처리하지 않는다. 존재 확인만 하는 `peek`로 읽고, 만료되면 `google_failed`로 끝낸다.
+  - 일반 Google 시작 요청은 남아 있던 연동 상태를 지운다. 그렇지 않으면 이후 일반 콜백이 연동으로 잘못 분기된다.
+  - 엔티티 변경은 `Member.attachGoogleSub`, `detachGoogleSub`, `assignPasswordHash`로 한정하고, 불변식(로그인 수단 최소 하나, 해시 중복 설정 금지)을 메서드 안에서 지킨다.
+  - 트랜잭션 안에서는 업무 판정을 결과 값으로 돌려준다. DB UNIQUE 위반만 `BusinessException`으로 바꿔 트랜잭션 밖으로 던진다(`GoogleSignupService`와 같은 패턴).
+- 영향 범위(기존 기능)
+  - Google 일반 로그인: 세션 ID 변경 전략은 연동 상태가 있을 때만 건너뛴다. 일반 로그인 콜백과 신규 가입 흐름은 기존 전략과 기존 처리를 그대로 쓴다. 기존 회귀 테스트는 모두 통과했다.
+  - 화면 체인: `/mypage/**`만 `authenticated()`이고 나머지는 기존 `permitAll()`이다. 인증 실패의 진입점을 `/login`으로 명시했다.
+  - API 체인, SQL, `application.yml`, Gradle, 의존성은 변경하지 않았다.
+- 테스트 (이번 실행 결과)
+  - `./gradlew clean test`, 테스트 DB 미설정: 531개 중 448 통과, 83 건너뜀(DB 필요), 실패 0.
+  - `./gradlew clean test`, 테스트 DB 설정(MySQL 8.0.46, SQL 001~003 적용): 531개 모두 실행, 건너뜀 0, 실패 0. 새 DB 테스트 `MemberAccountDbTest` 7개에는 같은 비밀번호의 동시 설정 경합, 같은 Google sub의 동시 연결 경합, 연결 멱등성, 해제 영속성이 포함된다.
+  - 새 단위·슬라이스 테스트: `MemberAccountServiceTest`(13), `GoogleAccountLinkFlowTest`(12), `MyPageHttpTest`(14). 콜백 state 불일치는 실제 Spring OAuth2 필터를 거쳐 `/mypage?error=google_failed`, 기존 로그인 유지, 쿠키 미발급을 확인했다.
+  - `./gradlew bootJar` 성공. `git diff --check` 통과.
+  - 실행 jar 점검(`local` 프로필, 테스트 DB, 테스트용 Google 설정, 실제 Google 호출 없음): 미로그인 `/mypage`는 `/login`으로 302. 회원가입 후 `/mypage` 200, 연결 폼과 CSRF 필드 존재. 연결 시작 10회는 Google 인증 URL로 302이고 `redirect_uri`는 `http://localhost:8080/login/oauth2/code/google`. 11회째는 429, `Retry-After: 900`, 안내 페이지. 429 뒤 `/mypage`는 여전히 200. 일반 Google 시작은 같은 카운터로 429 안내 페이지(전달 경로 `/rate-limited`).
+- 알려진 제한과 미해결 사항
+  - Google 실서버의 토큰 교환과 콜백 성공 경로는 자동 테스트하지 않았다. 실제 자격 증명과 네트워크가 필요하다. 성공 경로의 세션 보존은 핸들러 단위 테스트와 실패 경로의 HTTP 테스트로만 확인했다.
+  - 연결 시 Google 이메일과 회원 이메일이 같은지는 검사하지 않는다. 명세는 이메일 기준 자동 연결만 금지하며, 연동 대상은 연동 시작 시점의 세션 회원이다. 이 정책은 확인이 필요하다.
+  - 연동 콜백에서도 Spring OAuth2 클라이언트 저장소에 Google 액세스 토큰이 잠깐 저장된 뒤 제거된다. 일반 로그인의 저장 정책은 6.21 위험 항목과 같이 그대로 두었다.
+  - 화면 안내 페이지의 HTML 렌더링은 실행 jar에 curl로 요청해 본문을 확인했다. 브라우저 화면 확인은 하지 않았다.
+  - 테스트용 MySQL은 `/var/lib/busan-mysql-test`에 임시로 만들었다. 작업 후 중지했다.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
@@ -723,10 +758,9 @@
    - Google 로그인 요청 제한: 시작과 콜백 각 1회, IP별 15분 10회, 초과 시 429와 `Retry-After`
    - 콜백 판정: 미검증 이메일 거부, sub 연결 회원 로그인, 같은 이메일 자동 연결 금지(`email_account_exists`), 신규 가입 진행
    - Google 신규 가입 닉네임 설정 `GET·POST /signup/google/nickname`, 닉네임 제출 요청 제한(회원가입 카운터 공유), 회원 생성과 토큰 발급의 한 트랜잭션 처리
-3. 다음 작업 (`main` 기준 미구현. 다음 개발 단계는 PR B):
-   - Google 계정 연동 시작 `POST`(2.6)와 연동 콜백(2.6.1), 연동 요청 제한 연결 (PR B)
-   - Google 계정 연동 해제(2.7)와 로컬 비밀번호 설정(2.7.1) (PR B)
-   - 화면 보호 페이지(`/mypage` 등)의 세션 필요 규칙과 `/login` 리다이렉트, 화면용 429 안내 페이지 (미구현)
+3. 다음 작업 (`main` 기준 미구현. PR B는 6.22에서 구현했고 `main` 병합 대기):
+   - PR B(`feat/stage2-4-google-account-linking`, 6.22) 리뷰와 `main` 병합 (병합 대기)
+   - `/mypage` 외 화면 보호 페이지(`/restaurants/new` 등)의 세션 필요 규칙과 `/login` 리다이렉트 (미구현). `/mypage`와 화면용 429 안내는 PR B에서 구현
    - 프론트엔드 Access Token 자동 갱신과 T20 처리 (미구현)
    - 공개 조회 API 경로 (구현 시 명시적으로 추가, 미구현)
    - F1-02~F1-09 기능 (미착수)
