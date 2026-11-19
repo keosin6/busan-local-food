@@ -34,7 +34,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 별도 쿠키 없음 | OAuth2 임시 상태는 HTTP 세션(`JSESSIONID`)에 저장 | - | - | - | - | 세션과 같음 |
 
 - `access_token`의 Path는 `/api`로 제한합니다. API 요청에서만 전송됩니다. 화면 요청은 `JSESSIONID`로 인증합니다.
-- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 PR #23(merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18)으로 `main`에 병합 완료되었습니다. 화면 인증(회원가입·로그인·로그아웃, 2.9~2.11)은 PR #25(merge commit `d1b9e1d`, 6.19)로 `main`에 병합 완료되었습니다. 화면 로그아웃은 PR #26 보완(6.20)에 따라 같은 세션의 API 로그아웃 성공 뒤에만 허용되는 서버 측 일회성 승인을 확인합니다. 화면 세션(`JSESSIONID`)은 API 인증 수단으로 쓰이지 않고, API JWT는 화면 로그인 상태를 만들지 않습니다. Google OAuth2 로그인 시작·콜백과 신규 가입 닉네임 설정(2.5, 2.5.1)은 PR #28(merge commit `37df8e024ffea4065c6c1213265010527970dc48`, 6.21)로 `main`에 병합 완료되었습니다. Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지는 PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다. `/mypage` 외 화면 보호 페이지는 미구현입니다. 화면 체인(`@Order(2)`)은 세션 인증을 쓰며, 현재 공개 화면만 있어 모든 요청을 허용하는 임시 정책을 유지합니다. JWT 필터는 넣지 않습니다.
+- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 PR #23(merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18)으로 `main`에 병합 완료되었습니다. 화면 인증(회원가입·로그인·로그아웃, 2.9~2.11)은 PR #25(merge commit `d1b9e1d`, 6.19)로 `main`에 병합 완료되었습니다. 화면 로그아웃은 PR #26 보완(6.20)에 따라 같은 세션의 API 로그아웃 성공 뒤에만 허용되는 서버 측 일회성 승인을 확인합니다. 화면 세션(`JSESSIONID`)은 API 인증 수단으로 쓰이지 않고, API JWT는 화면 로그인 상태를 만들지 않습니다. Google OAuth2 로그인 시작·콜백과 신규 가입 닉네임 설정(2.5, 2.5.1)은 PR #28(merge commit `37df8e024ffea4065c6c1213265010527970dc48`, 6.21)로 `main`에 병합 완료되었습니다. Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/mypage` 외 화면 보호 페이지는 미구현입니다. 화면 체인(`@Order(2)`)은 세션 인증을 쓰며, 현재 공개 화면만 있어 모든 요청을 허용하는 임시 정책을 유지합니다. JWT 필터는 넣지 않습니다.
 - `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다. 화면 로그아웃은 먼저 `POST /api/auth/logout`을 호출합니다 (T12, 2.11).
 - 쿠키를 만료시킬 때는 발급 당시와 같은 Path와 Domain을 사용합니다.
 - 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
@@ -132,8 +132,8 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 >
 > HTTP 계층 (남은 항목):
 > - Google OAuth2 로그인 시작·콜백 집계: 구현 완료, `main` 병합 완료(PR #28, 6.21). 시작 1회, 콜백 1회를 같은 IP 카운터(15분 10회)로 센다. 초과하면 429와 `Retry-After`를 내고, 콜백에서는 해당 요청의 임시 상태만 지운다. 기존 세션과 JWT는 유지한다.
-> - Google 계정 연동 시작(2.6)·연동 콜백(2.6.1)의 집계 연결: 구현 완료, PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다. 연동 시작 POST는 1회, 콜백은 1회 집계하며 같은 IP 카운터(15분 10회)를 씁니다. 초과하면 화면 429 안내를 보내고 OAuth2 임시 상태를 만들지 않습니다.
-> - 화면 요청의 429: 화면 경로에서 발생한 제한은 안내 페이지 `/rate-limited`(상태 429, `Retry-After` 유지)로 보냅니다. 세션과 쿠키는 바꾸지 않으며 재로그인을 요구하지 않습니다. `/api/**`의 429 JSON 응답은 그대로입니다. 구현: PR B(6.22).
+> - Google 계정 연동 시작(2.6)·연동 콜백(2.6.1)의 집계 연결: 구현 완료, PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. 연동 시작 POST는 1회, 콜백은 1회 집계하며 같은 IP 카운터(15분 10회)를 씁니다. 초과하면 화면 429 안내를 보내고 OAuth2 임시 상태를 만들지 않습니다.
+> - 화면 요청의 429: 화면 경로에서 발생한 제한은 안내 페이지 `/rate-limited`(상태 429, `Retry-After` 유지)로 보냅니다. 세션과 쿠키는 바꾸지 않으며 재로그인을 요구하지 않습니다. `/api/**`의 429 JSON 응답은 그대로입니다. 구현: PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`).
 > - Google 신규 가입 닉네임 제출 집계: 구현 완료, `main` 병합 완료(PR #28, 6.21). `POST /signup/google/nickname`을 회원가입과 같은 카운터로 집계합니다.
 > - 프런트엔드 T20 처리.
 >
@@ -210,7 +210,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 검증 실패 기준은 다음과 같습니다. 서명 위조와 변조, 알고리즘 불일치, 발급자 불일치, 대상 불일치, 만료(60초 초과), 미래 발급 시각(60초 초과), 필수 클레임 누락, `sub` 형식 오류, `role` 값 오류는 모두 검증 실패입니다.
 - 검증 실패의 구체적인 원인은 외부 응답에 노출하지 않으며, 공통 인증 실패(401 `TOKEN_INVALID`)로 매핑합니다. 이 매핑은 인증 필터 단계에서 구현합니다.
 - Access Token은 `access_token` 쿠키로만 전달합니다. JSON 응답 본문에는 포함하지 않습니다 (1.1절).
-- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 PR #23(merge commit `56faff2`)으로 `main`에 병합 완료되었습니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증(회원가입·로그인·로그아웃)은 PR #25(`d1b9e1d`)로 `main`에 병합 완료되었습니다. Google 로그인 요청 제한(시작·콜백, IP별 15분 10회)과 닉네임 제출 요청 제한은 PR #28로 구현·병합되었습니다. `/mypage`, 화면용 429 안내 페이지, Google 계정 연결·해제, 로컬 비밀번호 설정은 PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다. `/mypage` 외 화면 보호 페이지는 미구현입니다.
+- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 PR #23(merge commit `56faff2`)으로 `main`에 병합 완료되었습니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증(회원가입·로그인·로그아웃)은 PR #25(`d1b9e1d`)로 `main`에 병합 완료되었습니다. Google 로그인 요청 제한(시작·콜백, IP별 15분 10회)과 닉네임 제출 요청 제한은 PR #28로 구현·병합되었습니다. `/mypage`, 화면용 429 안내 페이지, Google 계정 연결·해제, 로컬 비밀번호 설정은 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/mypage` 외 화면 보호 페이지는 미구현입니다.
 
 ## 2. 인증 API (F1-01)
 
@@ -329,7 +329,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 ### 2.5 Google 로그인 (시작 및 콜백)
 
-- 구현 상태: `main` 병합 완료 (PR #28, merge commit `37df8e024ffea4065c6c1213265010527970dc48`, 6.21). 로그인 시작·콜백·신규 가입 진입이 구현되어 있다. 계정 연동 콜백(2.6.1)은 PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다.
+- 구현 상태: `main` 병합 완료 (PR #28, merge commit `37df8e024ffea4065c6c1213265010527970dc48`, 6.21). 로그인 시작·콜백·신규 가입 진입이 구현되어 있다. 계정 연동 콜백(2.6.1)은 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다.
 - 확정 경로: 시작 `GET /oauth2/authorization/google`, 콜백 `GET /login/oauth2/code/google`. 설정 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`은 둘 다 있을 때만 켜진다(local에서 없으면 꺼짐, prod에서 없으면 기동 실패).
 - 콜백 판정 순서: 프로필 값 확인(`sub`, `email`, 실패 시 `google_failed`) → `email_verified` 미검증 거부(`google_unverified`) → `google_sub`가 연결된 회원 로그인 → 같은 이메일의 기존 회원이 있으면 자동 연결 없이 안내(`email_account_exists`) → 신규 가입 진행. 정식 로그인이 아닌 결과에서는 콜백 전의 인증 상태를 복원해 기존 로그인 세션을 유지한다.
 - 메서드·URL: `GET /oauth2/authorization/google` (시작), `GET /login/oauth2/code/google` (콜백)
@@ -374,7 +374,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 ### 2.6 Google 계정 연동 시작 (화면, 세션 기반)
 
 - 메서드·URL: `POST /mypage/google/link`. 화면 경로이며 `/api/**`가 아닙니다.
-- 구현 상태: PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다. 구현 방식: 이 POST에서 Authorization Request를 만들어 HTTP 세션에 저장하고 Google 인증 페이지로 `302` 합니다. Spring의 GET 시작 경로(`/oauth2/authorization/google`)는 거치지 않으므로 이 POST만 요청 제한에 1회 집계됩니다. 리다이렉트 URI는 `/login/oauth2/code/google`입니다.
+- 구현 상태: PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. 구현 방식: 이 POST에서 Authorization Request를 만들어 HTTP 세션에 저장하고 Google 인증 페이지로 `302` 합니다. Spring의 GET 시작 경로(`/oauth2/authorization/google`)는 거치지 않으므로 이 POST만 요청 제한에 1회 집계됩니다. 리다이렉트 URI는 `/login/oauth2/code/google`입니다.
 - 이미 Google 계정이 연결된 회원은 시작하지 않고 `/mypage?error=google_already_linked`로 이동합니다.
 - 인증: 화면 세션 필요 (로그인된 회원). 세션이 없으면 `/login`으로 이동합니다.
 - 권한: 로그인된 회원 본인. 세션의 회원만 연동을 시작할 수 있습니다.
@@ -394,7 +394,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 
 Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진행 상태로 나눕니다 (T11 A안, DEVELOPMENT_RULES 5.7.1).
 
-구현 상태: PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다. 연동 진행 상태는 연동 시작 시점의 회원 ID와 state이며 15분 동안 유효합니다. 만료된 상태는 일반 로그인이 아니라 `/mypage?error=google_failed`로 처리합니다. 연동 모드의 성공 처리는 SecurityContext를 콜백 전 인증으로 되돌리고, 세션 ID를 바꾸는 세션 전략을 건너뛰며, Google 클라이언트 저장소 항목을 지웁니다.
+구현 상태: PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. 연동 진행 상태는 연동 시작 시점의 회원 ID와 state이며 15분 동안 유효합니다. 만료된 상태는 일반 로그인이 아니라 `/mypage?error=google_failed`로 처리합니다. 연동 모드의 성공 처리는 SecurityContext를 콜백 전 인증으로 되돌리고, 세션 ID를 바꾸는 세션 전략을 건너뛰며, Google 클라이언트 저장소 항목을 지웁니다.
 
 1. OAuth2 `state`를 검증합니다. Spring Security의 기존 절차를 유지합니다. 실패하면 연동 임시 상태만 정리하고, 기존 로그인 상태와 JWT는 유지한 채 `/mypage?error=google_failed`로 이동합니다 (11번 원칙).
 2. 세션의 연동 진행 상태를 확인합니다. 없으면 계정 연동이 아니므로 2.5의 일반 로그인 처리로 분기합니다.
@@ -420,7 +420,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 ### 2.7 Google 계정 연동 해제 (화면, 세션 기반, T8 A안)
 
 - 메서드·URL: `POST /mypage/google/unlink`. 화면 경로이며 `/api/**`가 아닙니다. API 엔드포인트로 제공하지 않습니다.
-- 구현 상태: PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다.
+- 구현 상태: PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다.
 - 인증: 화면 세션 필요 (로그인된 회원). 세션이 없으면 `/login`으로 이동합니다.
 - 권한: 로그인된 회원 본인
 - CSRF: 필요
@@ -436,7 +436,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 ### 2.7.1 로컬 비밀번호 설정 (화면, Google 전용 회원, FR-01-22)
 
 - 메서드·URL: `GET /mypage/password` (화면 표시), `POST /mypage/password` (제출).
-- 구현 상태: PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다. 이미 비밀번호가 있는 회원이 `GET`으로 들어오면 `/mypage?error=password_already_set`로 이동합니다. 동시 제출은 회원 행 잠금으로 직렬화되며, 두 번째 요청은 `password_already_set`이 됩니다.
+- 구현 상태: PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. 이미 비밀번호가 있는 회원이 `GET`으로 들어오면 `/mypage?error=password_already_set`로 이동합니다. 동시 제출은 회원 행 잠금으로 직렬화되며, 두 번째 요청은 `password_already_set`이 됩니다.
 - 인증: 화면 세션 필요 (로그인된 회원)
 - 권한: 회원 본인. `password_hash`가 없는 회원만 설정할 수 있습니다.
 - CSRF: 제출(POST)에 필요
@@ -902,7 +902,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
-- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR B(`feat/stage2-4-google-account-linking`, 6.22)에서 구현했으며 `main` 병합 대기입니다. 나머지 화면 URL(`/restaurants` 이하, `/admin/**` 등)은 미구현이다.
+- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. 나머지 화면 URL(`/restaurants` 이하, `/admin/**` 등)은 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---
