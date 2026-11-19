@@ -343,7 +343,7 @@ Access Token 만료 시 자동 재발급 (T13 A안):
 - 요청 제한: 닉네임 제출은 `SignupRateLimitFilter`가 회원가입과 같은 IP 카운터(1시간 5회)로 집계한다. Google 로그인 시작과 콜백은 같은 IP의 15분 10회 카운터를 쓴다.
 - 환경 설정: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`은 함께 설정한다(`application.yml`의 `app.oauth2.google`). 한쪽만 설정되면 어떤 프로필에서도 기동하지 않는다. 둘 다 없으면 local에서는 Google 로그인이 꺼지고, prod에서는 기동하지 않는다.
 - 구현 완료 범위: Google 로그인 시작·콜백, 연결 회원 로그인, 같은 이메일 자동 연결 금지, 미검증 이메일 거부, 신규 가입 닉네임 설정과 가입 완료.
-- PR B 구현 범위(6.22, `main` 병합 대기): Google 계정 연동 시작·콜백(5.7.1, 2.6·2.6.1), Google 계정 연동 해제(5.7.5, 2.7), Google 전용 회원의 로컬 비밀번호 설정(5.7.5, 2.7.1), 연동 요청 제한 연결. 화면 보호 페이지는 `/mypage`만 구현했다.
+- PR B 구현 범위(6.22, PR #30으로 `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`): Google 계정 연동 시작·콜백(5.7.1, 2.6·2.6.1), Google 계정 연동 해제(5.7.5, 2.7), Google 전용 회원의 로컬 비밀번호 설정(5.7.5, 2.7.1), 연동 요청 제한 연결. 화면 보호 페이지는 `/mypage`만 구현했다.
 
 ### 5.7.4 Refresh Token 재사용 탐지 (T7 A안 확정)
 
@@ -421,7 +421,7 @@ A안의 한계 (반드시 유지할 설명):
 
 ### 5.7.5 Google 계정 연동 해제와 로컬 비밀번호 설정 (T8 A안 확정)
 
-구현 상태: PR B(6.22)에서 구현, `main` 병합 대기. 경로는 `POST /mypage/google/link`(5.7.1), `POST /mypage/google/unlink`, `GET·POST /mypage/password`이다.
+구현 상태: PR #30(6.22)으로 `main` 병합 완료(merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`). 경로는 `POST /mypage/google/link`(5.7.1), `POST /mypage/google/unlink`, `GET·POST /mypage/password`이다.
 
 Google 계정 연동 (확정):
 - 로그인된 본인의 Spring Security 세션으로 시작합니다 (5.7.1, API_SPEC 2.6).
