@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.oauth;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -49,6 +50,9 @@ import org.springframework.test.web.servlet.MvcResult;
         GoogleSignupController.class, ScreenAuthAdvice.class, HomeController.class,
         GoogleOAuth2DisabledHttpTest.ClientIpConfig.class})
 class GoogleOAuth2DisabledHttpTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     private static final String JWT_SECRET = randomBase64Key();
 

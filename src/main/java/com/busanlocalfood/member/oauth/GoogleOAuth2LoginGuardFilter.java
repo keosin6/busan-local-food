@@ -4,6 +4,7 @@ import com.busanlocalfood.global.exception.RateLimitExceededException;
 import com.busanlocalfood.member.ratelimit.AuthRateLimitService;
 import com.busanlocalfood.member.ratelimit.ClientIpResolver;
 import com.busanlocalfood.member.ratelimit.RateLimitDecision;
+import com.busanlocalfood.member.ratelimit.ScreenRateLimitPage;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -67,14 +68,25 @@ public final class GoogleOAuth2LoginGuardFilter extends OncePerRequestFilter {
                 throw new RateLimitExceededException(limited.retryAfterSeconds());
             }
         } catch (RuntimeException e) {
-            // 후속 OAuth2 처리를 진행시키지 않는다. 콜백이라면 이 요청의 임시 상태만 지운다. 기존 로그인 상태는 그대로다.
+            // 후속 OAuth2 처리를 진행시키지 않는다. 콜백이라면 이 요청의 임시 상태(인가 요청, 연동 진행 상태)만 지운다.
+            // 기존 로그인 상태, 세션 ID, JWT는 그대로다.
             if (callback) {
                 authorizationRequests.removeAuthorizationRequest(request, response);
+                GoogleAccountLinkPending.clear(request.getSession(false));
+            }
+            if (e instanceof RateLimitExceededException limited && ScreenRateLimitPage.isScreenRequest(request)) {
+                ScreenRateLimitPage.forward(request, response, limited.getRetryAfterSeconds());
+                return;
             }
             if (exceptionResolver.resolveException(request, response, null, e) == null) {
                 throw e;
             }
             return;
+        }
+        if (start) {
+            // 일반 로그인 시작은 남아 있던 연동 진행 상태를 지운다 (DEVELOPMENT_RULES 5.7.1 원칙 8).
+            // 그렇지 않으면 이후의 일반 콜백이 연동 흐름으로 잘못 분기된다.
+            GoogleAccountLinkPending.clear(request.getSession(false));
         }
         chain.doFilter(request, response);
     }

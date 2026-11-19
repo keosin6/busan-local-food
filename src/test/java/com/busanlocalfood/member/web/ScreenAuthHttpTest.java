@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.web;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -76,6 +77,9 @@ import org.springframework.http.HttpHeaders;
         ScreenAuthController.class, ScreenLogoutController.class, ScreenAuthAdvice.class, HomeController.class,
         ScreenAuthHttpTest.ClientIpConfig.class})
 class ScreenAuthHttpTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     private static final String JWT_SECRET = randomBase64Key();
     private static final Pattern CSRF_FIELD = Pattern.compile("\"_csrf\"[^>]*?value=\"([^\"]+)\"");

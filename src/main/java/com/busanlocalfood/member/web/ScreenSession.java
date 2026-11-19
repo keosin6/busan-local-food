@@ -4,6 +4,8 @@ import com.busanlocalfood.member.domain.Member;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -23,6 +25,20 @@ public final class ScreenSession {
             new HttpSessionSecurityContextRepository();
 
     private ScreenSession() {
+    }
+
+    /**
+     * 현재 화면 세션의 로그인 회원 ID. 로그인되지 않았거나 익명이면 빈 값이다.
+     * JWT 쿠키만으로는 로그인으로 보지 않는다 (ScreenAuthAdvice와 같은 기준).
+     */
+    public static Optional<Long> currentMemberId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return Optional.empty();
+        }
+        return authentication.getPrincipal() instanceof Long id ? Optional.of(id) : Optional.empty();
     }
 
     public static void establish(Member member, HttpServletRequest request, HttpServletResponse response) {

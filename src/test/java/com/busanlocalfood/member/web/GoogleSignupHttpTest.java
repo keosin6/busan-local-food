@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.web;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -67,6 +68,9 @@ import org.springframework.test.web.servlet.MvcResult;
         ScreenLogoutController.class, GoogleSignupController.class, ScreenAuthAdvice.class, HomeController.class,
         GoogleSignupHttpTest.ClientIpConfig.class})
 class GoogleSignupHttpTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     private static final String JWT_SECRET = randomBase64Key();
     private static final String PAGE = "/signup/google/nickname";

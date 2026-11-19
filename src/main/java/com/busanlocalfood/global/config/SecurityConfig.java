@@ -23,6 +23,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.context.NullSecurityContextRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -120,9 +121,12 @@ public class SecurityConfig {
                                                          HandlerExceptionResolver exceptionResolver,
                                                          ObjectProvider<GoogleOAuth2Wiring> googleWiring) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                // TODO(화면 보호 페이지 단계): 화면 보호 페이지(/mypage, /restaurants/new 등)가 생기면
-                //  세션 필요 규칙과 /login 리다이렉트를 추가한다 (API_SPEC 10). 지금은 공개 화면만 있어 모든 요청을 허용한다.
+                // 보호 화면: 마이페이지와 계정 관리(API_SPEC 10). 화면 세션이 없으면 /login으로 보낸다.
+                // TODO(화면 보호 페이지 단계): /restaurants/new 등 보호 화면이 생기면 이 규칙에 추가한다.
+                .requestMatchers("/mypage", "/mypage/**").authenticated()
                 .anyRequest().permitAll());
+        http.exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));
 
         // 회원가입 요청 집계 (API_SPEC 1.4). CSRF 검증 뒤, 본문 읽기 이전에 실행한다. CSRF 실패 요청은 집계되지 않는다.
         http.addFilterAfter(new SignupRateLimitFilter(rateLimitService, clientIpResolver, exceptionResolver),
@@ -140,6 +144,8 @@ public class SecurityConfig {
                     .successHandler(google.success())
                     .failureHandler(google.failure()));
             http.addFilterBefore(google.guard(), OAuth2AuthorizationRequestRedirectFilter.class);
+            // 계정 연동 콜백은 기존 세션의 세션 ID를 바꾸지 않는다. 일반 로그인 콜백은 기존 전략을 그대로 쓴다.
+            http.sessionManagement(session -> session.sessionAuthenticationStrategy(google.sessionStrategy()));
         }
 
         // 화면 로그아웃 POST /logout은 ScreenLogoutController가 처리한다 (API_SPEC 2.11, T12).

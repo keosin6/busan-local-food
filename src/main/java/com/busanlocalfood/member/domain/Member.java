@@ -100,6 +100,46 @@ public class Member {
         this.updatedAt = LocalDateTime.now();
     }
 
+    /**
+     * 기존 회원에게 Google 계정을 연결한다 (API_SPEC 2.6.1). 호출자가 sub와 email_verified를 검증한다.
+     * 이미 연결된 회원에게는 다른 sub를 연결할 수 없다. 같은 sub의 멱등 처리는 서비스가 한다.
+     */
+    public void attachGoogleSub(String googleSub) {
+        if (googleSub == null || googleSub.isBlank()) {
+            throw new IllegalArgumentException("google sub는 필수입니다.");
+        }
+        if (this.googleSub != null) {
+            throw new IllegalStateException("이미 Google 계정이 연결되어 있습니다.");
+        }
+        this.googleSub = googleSub;
+    }
+
+    /**
+     * Google 연결을 해제한다 (API_SPEC 2.7). 비밀번호 해시가 없으면 로그인 수단이 사라지므로 해제하지 않는다.
+     */
+    public void detachGoogleSub() {
+        if (passwordHash == null) {
+            throw new IllegalStateException("비밀번호가 없으면 Google 연결을 해제할 수 없습니다.");
+        }
+        this.googleSub = null;
+    }
+
+    /**
+     * Google 전용 회원에게 로컬 비밀번호 해시를 설정한다 (API_SPEC 2.7.1). 이미 있으면 바꾸지 않는다. 변경은 이번 범위가 아니다.
+     */
+    public void assignPasswordHash(String hashed) {
+        if (hashed == null || hashed.isBlank()) {
+            throw new IllegalArgumentException("비밀번호 해시는 필수입니다.");
+        }
+        if (this.passwordHash != null) {
+            throw new IllegalStateException("이미 비밀번호가 설정되어 있습니다.");
+        }
+        this.passwordHash = hashed;
+    }
+
+    public boolean hasPassword() { return passwordHash != null; }
+    public boolean isGoogleLinked() { return googleSub != null; }
+
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }

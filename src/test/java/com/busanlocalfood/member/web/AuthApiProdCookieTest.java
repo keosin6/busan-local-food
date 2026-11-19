@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.web;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,6 +57,9 @@ import org.springframework.test.web.servlet.MvcResult;
         RefreshTokenConfig.class, AuthApiService.class, AuthCookies.class, AuthController.class,
         AuthApiProdCookieTest.ClientIpConfig.class})
 class AuthApiProdCookieTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     private static final String JWT_SECRET = randomBase64Key();
 

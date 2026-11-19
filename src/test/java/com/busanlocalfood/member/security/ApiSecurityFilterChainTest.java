@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.security;
 
+import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -72,6 +73,9 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         ApiSecurityFilterChainTest.ClientIpConfig.class, ApiSecurityFilterChainTest.Probes.class})
 class ApiSecurityFilterChainTest {
+
+    @MockitoBean
+    private MemberAccountService memberAccountService;
 
     private static final String JWT_SECRET = randomBase64Key();
 

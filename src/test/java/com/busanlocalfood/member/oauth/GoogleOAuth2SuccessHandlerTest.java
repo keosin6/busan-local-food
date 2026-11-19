@@ -47,7 +47,10 @@ class GoogleOAuth2SuccessHandlerTest {
     private final GoogleLoginService login = mock(GoogleLoginService.class);
     private final AuthApiService authApi = mock(AuthApiService.class);
     private final AuthCookies cookies = cookies();
-    private final GoogleOAuth2SuccessHandler handler = new GoogleOAuth2SuccessHandler(login, authApi, cookies);
+    private final com.busanlocalfood.member.service.MemberAccountService accounts =
+            mock(com.busanlocalfood.member.service.MemberAccountService.class);
+    private final GoogleOAuth2SuccessHandler handler =
+            new GoogleOAuth2SuccessHandler(login, authApi, cookies, accounts);
 
     @Test
     void 연결된_회원은_화면_세션과_JWT_쿠키를_받고_홈으로_간다() throws Exception {
