@@ -79,21 +79,32 @@
             return UNMANAGED_PATHS.indexOf(url.pathname) !== -1;
         }
 
-        function isStreamBody(init) {
-            return !!(init && init.body && typeof ReadableStream !== 'undefined' && init.body instanceof ReadableStream);
+        function isStream(value) {
+            return !!(value && typeof ReadableStream !== 'undefined' && value instanceof ReadableStream);
+        }
+
+        // init.body 또는 Request 입력의 body가 스트림이면 한 번만 읽을 수 있으므로 재시도하지 않는다.
+        function isStreamBody(input, init) {
+            if (init && isStream(init.body)) {
+                return true;
+            }
+            return typeof Request !== 'undefined' && input instanceof Request && isStream(input.body);
         }
 
         // 원래 요청 객체를 바꾸지 않도록 매 시도마다 새 init을 만든다. Request 입력은 복제해서 쓴다.
+        // credentials 우선순위: init의 명시 값 > Request 입력 자체의 값 > 기본값 same-origin(문자열 입력만).
+        // 원본 Request와 init 객체는 바꾸지 않는다.
         function prepare(input, init) {
             var copy = Object.assign({}, init || {});
-            if (copy.credentials === undefined) {
+            var isRequest = typeof Request !== 'undefined' && input instanceof Request;
+            if (copy.credentials === undefined && !isRequest) {
                 copy.credentials = 'same-origin';
             }
             if (copy.headers !== undefined) {
                 copy.headers = new Headers(copy.headers);
             }
             var target = input;
-            if (typeof Request !== 'undefined' && input instanceof Request) {
+            if (isRequest) {
                 target = input.clone();
             }
             return { input: target, init: copy };
@@ -204,7 +215,7 @@
                 if (first.status !== 401) {
                     return first;
                 }
-                var replayable = !isStreamBody(init);
+                var replayable = !isStreamBody(input, init);
                 return recoverOnce(sentGeneration).then(function (outcome) {
                     if (outcome.kind === 'rate-limited') {
                         return outcome.response;

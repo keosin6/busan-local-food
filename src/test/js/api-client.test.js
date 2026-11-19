@@ -26,7 +26,10 @@ function recorder(route) {
         const url = new URL(href, ORIGIN);
         const method = (options.method || 'GET').toUpperCase();
         calls.push({ path: url.pathname, href, method, initRef: init, headers: options.headers,
-            body: options.body, credentials: options.credentials });
+            body: options.body, credentials: options.credentials,
+            inputCredentials: typeof input === 'string' ? undefined : input.credentials,
+            inputBodyIsStream: typeof input === 'string' ? false : input.body instanceof ReadableStream,
+            inputRef: typeof input === 'string' ? undefined : input });
         return route(url.pathname, method, options, calls);
     };
     return {
@@ -416,3 +419,126 @@ test('Web Locks가 없으면 같은 탭 공유만 적용되고 예외 없이 동
     assert.deepEqual(results.map((r) => r.status), [200, 200]);
     assert.equal(server.count('/api/auth/refresh', 'POST'), 1);
 });
+
+// ---- PR #32 보완: Request credentials 보존과 Request 본문 스트림 재시도 방지 ----
+
+function streamBody() {
+    return new ReadableStream({
+        start(controller) {
+            controller.enqueue(new TextEncoder().encode('payload'));
+            controller.close();
+        }
+    });
+}
+
+test('보완 1-a. Request 입력의 credentials include는 재시도에서도 유지된다', async () => {
+    const state = { accessValid: false, refreshResult: () => resp(200) };
+    const server = recorder(serverRoute(state));
+    const { doc } = fakeDocument();
+    const { client } = makeTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+    const request = new Request(ORIGIN + '/api/x', { credentials: 'include' });
+
+    const response = await client.request(request);
+
+    assert.equal(response.status, 200);
+    const attempts = server.calls.filter((c) => c.path === '/api/x');
+    assert.equal(attempts.length, 2);
+    for (const attempt of attempts) {
+        assert.equal(attempt.inputCredentials, 'include');
+        assert.equal(attempt.credentials, undefined, 'init에 기본값을 끼워 넣지 않는다');
+    }
+    assert.equal(request.credentials, 'include', '원본 Request는 바뀌지 않는다');
+});
+
+test('보완 1-b. init에 credentials를 명시하면 Request 입력보다 우선한다', async () => {
+    const state = { accessValid: false, refreshResult: () => resp(200) };
+    const server = recorder(serverRoute(state));
+    const { doc } = fakeDocument();
+    const { client } = makeTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+    const request = new Request(ORIGIN + '/api/x', { credentials: 'include' });
+    const init = { credentials: 'omit' };
+
+    await client.request(request, init);
+
+    const attempts = server.calls.filter((c) => c.path === '/api/x');
+    assert.equal(attempts.length, 2);
+    for (const attempt of attempts) {
+        assert.equal(attempt.credentials, 'omit');
+    }
+    assert.deepEqual(init, { credentials: 'omit' }, '원본 init 객체는 바뀌지 않는다');
+});
+
+test('보완 1-c. 문자열 입력에 init credentials가 없으면 same-origin 기본값이 재시도에서도 적용된다', async () => {
+    const state = { accessValid: false, refreshResult: () => resp(200) };
+    const server = recorder(serverRoute(state));
+    const { doc } = fakeDocument();
+    const { client } = makeTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    await client.request('/api/x', { method: 'GET' });
+
+    const attempts = server.calls.filter((c) => c.path === '/api/x');
+    assert.equal(attempts.length, 2);
+    for (const attempt of attempts) {
+        assert.equal(attempt.credentials, 'same-origin');
+    }
+});
+
+test('보완 2-c. Request 객체에 본문이 있으면 문자열이어도 재사용을 가정하지 않고 재시도하지 않는다', async () => {
+    const state = { accessValid: false, refreshResult: () => resp(200) };
+    const server = recorder(serverRoute(state));
+    const { doc } = fakeDocument();
+    const { client } = makeTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+    const request = new Request(ORIGIN + '/api/x', {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'hello'
+    });
+
+    const response = await client.request(request);
+
+    assert.equal(response.status, 401);
+    assert.equal(server.count('/api/x'), 1);
+});
+
+test('보완 1-d. 본문이 없는 Request 객체는 재시도에서도 method와 헤더가 보존된다', async () => {
+    const state = { accessValid: false, refreshResult: () => resp(200) };
+    const server = recorder(serverRoute(state));
+    const { doc } = fakeDocument();
+    const { client } = makeTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+    const request = new Request(ORIGIN + '/api/x', { method: 'PUT', headers: { 'X-Custom': 'keep' } });
+
+    const response = await client.request(request);
+
+    assert.equal(response.status, 200);
+    const attempts = server.calls.filter((c) => c.path === '/api/x');
+    assert.equal(attempts.length, 2);
+    for (const attempt of attempts) {
+        assert.equal(attempt.inputRef.method, 'PUT');
+        assert.equal(attempt.inputRef.headers.get('X-Custom'), 'keep');
+    }
+});
+
+for (const refreshStatus of [200, 401]) {
+    test(`보완 2-a. init.body가 스트림이면 재발급 ${refreshStatus}과 관계없이 원래 요청은 한 번만 나간다`, async () => {
+        const state = { accessValid: false, refreshResult: () => resp(refreshStatus) };
+        const server = recorder(serverRoute(state));
+        const { doc } = fakeDocument();
+        const { client } = makeTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+        const response = await client.request('/api/x', { method: 'POST', body: streamBody() });
+
+        assert.equal(response.status, 401);
+        assert.equal(server.count('/api/x'), 1);
+    });
+
+    test(`보완 2-b. Request 입력의 body가 스트림이면 재발급 ${refreshStatus}과 관계없이 원래 요청은 한 번만 나간다`, async () => {
+        const state = { accessValid: false, refreshResult: () => resp(refreshStatus) };
+        const server = recorder(serverRoute(state));
+        const { doc } = fakeDocument();
+        const { client } = makeTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+        const request = new Request(ORIGIN + '/api/x', { method: 'POST', body: streamBody(), duplex: 'half' });
+
+        const response = await client.request(request);
+
+        assert.equal(response.status, 401);
+        assert.equal(server.count('/api/x'), 1);
+    });
+}
