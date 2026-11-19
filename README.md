@@ -3,7 +3,7 @@
 
 사용자가 부산의 맛집을 등록·검색하고, 리뷰와 평점을 남기며, AI가 요약한 리뷰와 AI 맛집 추천을 받을 수 있는 웹 서비스입니다.
 
-> **현재 상태 (`main` 기준, 기준 커밋 `d4bf023`):** 프로젝트 기본 골격과 F1-01 회원·인증의 기반이 `main`에 구현되었습니다. 구현된 기반: 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 인증 요청 제한 서비스 R1~R10, 회원가입 요청 제한 HTTP 필터와 공통 HTTP 429 응답(PR #17), API 전용 JWT 인증 필터, API용 STATELESS SecurityFilterChain과 화면용 세션 SecurityFilterChain 분리, Bearer 및 `access_token` 쿠키 인증, API CSRF 정책(PR #19), API 인증 HTTP 5종과 JWT 쿠키 발급·갱신·만료, 로그인·재발급의 요청 제한 HTTP 연결(PR #23), 화면 회원가입·로그인·로그아웃과 화면 세션, T12 서버 측 로그아웃 승인(PR #25, PR #26). **Google 로그인과 Google 신규 가입은 구현 완료, `main` 병합 대기 (`feat/stage2-4-google-oauth2-login`, 6.21):** Google 로그인 시작과 콜백, Google 계정으로 가입한 회원의 로그인, 이메일이 같은 기존 회원은 자동 연결하지 않고 안내, 미검증 이메일 거부, 신규 가입 닉네임 설정 화면(`/signup/google/nickname`), Google 로그인 요청 제한(IP별 15분 10회)과 닉네임 제출 요청 제한. **아직 미구현:** Google 계정 연동·해제(마이페이지에서 기존 계정에 Google 연결)와 로컬 비밀번호 설정, 프런트엔드 Access Token 자동 갱신과 T20, 화면 보호 페이지(`/mypage` 등)와 화면용 429 안내 페이지, F1-02 ~ F1-09(맛집 관리·이미지·리뷰·AI 요약·찜·AI 추천·메인 페이지·관리자 기능)는 미착수.
+> **현재 상태 (`main` 기준, 기준 커밋 `37df8e0`):** 프로젝트 기본 골격과 F1-01 회원·인증의 기반이 `main`에 구현되었습니다. 구현된 기반: 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기 서비스, 인증 요청 제한 서비스 R1~R10, 회원가입 요청 제한 HTTP 필터와 공통 HTTP 429 응답(PR #17), API 전용 JWT 인증 필터, API용 STATELESS SecurityFilterChain과 화면용 세션 SecurityFilterChain 분리, Bearer 및 `access_token` 쿠키 인증, API CSRF 정책(PR #19), API 인증 HTTP 5종과 JWT 쿠키 발급·갱신·만료, 로그인·재발급의 요청 제한 HTTP 연결(PR #23), 화면 회원가입·로그인·로그아웃과 화면 세션, T12 서버 측 로그아웃 승인(PR #25, PR #26). **Google 로그인과 Google 신규 가입은 `main` 병합 완료 (PR #28, merge commit `37df8e0`):** Google 로그인 시작(`/oauth2/authorization/google`)과 콜백(`/login/oauth2/code/google`), Google 연결 회원의 로그인, 같은 이메일의 기존 회원은 자동 연결하지 않고 안내, 미검증 이메일 거부, 신규 Google 회원의 닉네임 설정 화면(`/signup/google/nickname`)과 가입 완료 뒤 세션·JWT 발급, Google 로그인 요청 제한(IP별 15분 10회)과 닉네임 제출 요청 제한(IP별 1시간 5회). **아직 미구현:** Google 계정 연동·해제(기존 계정에 Google 연결과 해제)와 Google 전용 회원의 로컬 비밀번호 설정(PR B), 프런트엔드 Access Token 자동 갱신과 T20, 화면 보호 페이지(`/mypage` 등)와 화면용 429 안내 페이지, F1-02 ~ F1-09(맛집 관리·이미지·리뷰·AI 요약·찜·AI 추천·메인 페이지·관리자 기능)는 미착수.
 
 ## 필수 기능
 
@@ -52,16 +52,16 @@
 
 ## 환경 변수
 
-보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 애플리케이션이 실제로 읽는 변수는 DB 3개, JWT 3개, `AUTH_RATE_LIMIT_HMAC_SECRET`입니다. `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`이 없으면 기동하지 않습니다.
+보안 정보는 코드나 저장소에 넣지 않고 환경 변수로 주입합니다. 전체 목록은 [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md#5-보안-규칙)에 있습니다. 현재 애플리케이션이 실제로 읽는 변수는 DB 3개, JWT 3개(`JWT_SECRET`과 만료 시간 2개), `AUTH_RATE_LIMIT_HMAC_SECRET`, Google 2개(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`)입니다. `DB_PASSWORD`, `JWT_SECRET`, `AUTH_RATE_LIMIT_HMAC_SECRET`이 없으면 기동하지 않습니다. Google 두 값은 함께 설정해야 하며, 한쪽만 있으면 기동하지 않고, 둘 다 없으면 local에서 Google 로그인만 꺼집니다.
 
 ```
 DB_URL, DB_USERNAME, DB_PASSWORD
 JWT_SECRET, JWT_ACCESS_TOKEN_EXPIRY_SECONDS, JWT_REFRESH_TOKEN_EXPIRY_SECONDS
 AUTH_RATE_LIMIT_HMAC_SECRET
 GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-AWS_REGION, AWS_S3_BUCKET
-OPENROUTER_API_KEY, OPENROUTER_MODEL
 ```
+
+`AWS_REGION`, `AWS_S3_BUCKET`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`은 계획된 변수이며 아직 애플리케이션이 읽지 않습니다.
 
 ## 실행 방법
 
