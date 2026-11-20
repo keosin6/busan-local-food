@@ -14,6 +14,11 @@
  *
  * 자동 갱신 대상에서 제외하는 경로: 가입, 로그인, Refresh, 로그아웃.
  * 이벤트에는 토큰이나 개인정보를 싣지 않는다.
+ *
+ * 429 (T20): 429는 인증 만료가 아니다. 쿠키와 세션을 건드리지 않고, 자동 재요청도 하지 않는다.
+ * 같은 /api 응답이 호출자에게 돌아갈 때 한 번만 onRateLimited({ retryAfterSeconds })를 부른다.
+ * retryAfterSeconds는 Retry-After가 0 이상의 정수 초일 때만 숫자이고, 그 밖이면 null이다.
+ * 응답 객체는 바꾸지 않고 그대로 돌려준다. 브라우저에서는 api:rate-limited 문서 이벤트로 전달된다.
  */
 (function (root) {
     'use strict';
@@ -27,6 +32,20 @@
     var UNMANAGED_PATHS = ['/api/auth/signup', '/api/auth/login', '/api/auth/refresh', '/api/auth/logout'];
     var CSRF_COOKIE = 'XSRF-TOKEN';
     var CSRF_HEADER = 'X-XSRF-TOKEN';
+    var RATE_LIMITED_EVENT = 'api:rate-limited';
+    var RETRY_AFTER_PATTERN = /^\d{1,9}$/;
+
+    // Retry-After는 정수 초(delta-seconds)만 해석한다. 날짜 형식과 잘못된 값은 null로 본다.
+    function parseRetryAfter(value) {
+        if (typeof value !== 'string') {
+            return null;
+        }
+        var text = value.trim();
+        if (!RETRY_AFTER_PATTERN.test(text)) {
+            return null;
+        }
+        return parseInt(text, 10);
+    }
 
     function createApiClient(options) {
         var opts = options || {};
@@ -35,6 +54,9 @@
         var eventTarget = opts.eventTarget || null;
         var locks = opts.locks || null;
         var origin = opts.origin;
+        var onRateLimited = typeof opts.onRateLimited === 'function' ? opts.onRateLimited : null;
+        // 같은 응답 객체는 한 번만 알린다. 같은 탭의 동시 요청이 복구 결과를 공유해도 알림이 겹치지 않는다.
+        var notifiedResponses = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
 
         // 갱신이 성공할 때마다 증가한다. 요청은 보낼 때의 값을 기억해, 그 뒤에 끝난 갱신을 알아본다.
         var generation = 0;
@@ -200,12 +222,27 @@
             return inflight;
         }
 
-        function request(input, init) {
-            var url = toUrl(input);
-            if (!isSameOriginApi(url)) {
-                // 외부 출처와 /api 밖의 요청은 처리하지 않는다. 입력과 옵션을 그대로 넘긴다.
-                return rawFetch(input, init);
+        // 호출자에게 돌아갈 429를 한 번만 알린다. 응답은 바꾸지 않는다. 핸들러 오류는 요청 결과에 영향을 주지 않는다.
+        function notifyRateLimited(response) {
+            if (!onRateLimited || !response || response.status !== 429) {
+                return response;
             }
+            if (notifiedResponses) {
+                if (notifiedResponses.has(response)) {
+                    return response;
+                }
+                notifiedResponses.add(response);
+            }
+            try {
+                onRateLimited({ retryAfterSeconds: parseRetryAfter(response.headers.get('Retry-After')) });
+            } catch (error) {
+                // 알림 실패는 무시한다. 인증 상태와 호출자의 응답에는 영향을 주지 않는다.
+            }
+            return response;
+        }
+
+        function dispatch(input, init) {
+            var url = toUrl(input);
             if (isUnmanaged(url)) {
                 return send(input, init);
             }
@@ -242,16 +279,26 @@
             });
         }
 
+        function request(input, init) {
+            if (!isSameOriginApi(toUrl(input))) {
+                // 외부 출처와 /api 밖의 요청은 처리하지 않는다. 입력과 옵션을 그대로 넘긴다.
+                return rawFetch(input, init);
+            }
+            return dispatch(input, init).then(notifyRateLimited);
+        }
+
         return {
             request: request,
             fetch: request,
             REAUTH_EVENT: EVENT_REAUTH,
             REFRESH_FAILED_EVENT: EVENT_REFRESH_FAILED,
-            LOCK_NAME: LOCK_NAME
+            RATE_LIMITED_EVENT: RATE_LIMITED_EVENT,
+            LOCK_NAME: LOCK_NAME,
+            parseRetryAfter: parseRetryAfter
         };
     }
 
-    var api = { createApiClient: createApiClient };
+    var api = { createApiClient: createApiClient, parseRetryAfter: parseRetryAfter };
 
     if (typeof module === 'object' && module.exports) {
         module.exports = api;
@@ -261,7 +308,10 @@
             document: root.document,
             eventTarget: root.document,
             locks: root.navigator && root.navigator.locks ? root.navigator.locks : null,
-            origin: root.location.origin
+            origin: root.location.origin,
+            onRateLimited: function (info) {
+                root.document.dispatchEvent(new CustomEvent(RATE_LIMITED_EVENT, { detail: info }));
+            }
         });
     }
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
