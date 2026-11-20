@@ -904,7 +904,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
-- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. 나머지 화면 URL(`/restaurants` 이하, `/admin/**` 등)은 미구현이다.
+- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/restaurants/new`와 `/restaurants/{id}/edit`는 화면 세션 인증 필수로 설정되어 있다(F1-01, 맛집 컨트롤러 미구현. 작성자 본인 확인은 F1-02에서 서버 측으로 구현한다). 나머지 화면 URL(`/restaurants` 이하, `/admin/**` 등)은 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---

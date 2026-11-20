@@ -121,9 +121,10 @@ public class SecurityConfig {
                                                          HandlerExceptionResolver exceptionResolver,
                                                          ObjectProvider<GoogleOAuth2Wiring> googleWiring) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                // 보호 화면: 마이페이지와 계정 관리(API_SPEC 10). 화면 세션이 없으면 /login으로 보낸다.
-                // TODO(화면 보호 페이지 단계): /restaurants/new 등 보호 화면이 생기면 이 규칙에 추가한다.
-                .requestMatchers("/mypage", "/mypage/**").authenticated()
+                // 보호 화면(API_SPEC 10): 마이페이지와 계정 관리, 맛집 등록·수정 화면.
+                // 화면 세션이 없으면 /login으로 보낸다. JWT 쿠키만으로는 화면 인증되지 않는다.
+                // 맛집 수정의 작성자 본인 확인은 F1-02에서 서버 측 서비스가 맡는다. 여기서는 로그인 여부만 본다.
+                .requestMatchers("/mypage", "/mypage/**", "/restaurants/new", "/restaurants/*/edit").authenticated()
                 .anyRequest().permitAll());
         http.exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));
