@@ -542,3 +542,190 @@ for (const refreshStatus of [200, 401]) {
         assert.equal(server.count('/api/x'), 1);
     });
 }
+
+// ---- T20: 프런트엔드 429 처리 ----
+// 429는 인증 만료가 아니다. 쿠키, 세션, 이벤트에 영향을 주지 않고, 자동 재요청도 하지 않는다.
+// 안내는 onRateLimited 콜백으로 받는다. 기존 테스트의 이벤트 목록과 분리하기 위해서다.
+
+function makeNotifyingTab({ fetchFn, locks, doc, onRateLimitedThrows }) {
+    const events = [];
+    const notices = [];
+    const eventTarget = {
+        dispatchEvent(event) {
+            events.push({ type: event.type, detail: event.detail });
+            return true;
+        }
+    };
+    const client = createApiClient({
+        fetch: fetchFn,
+        document: doc,
+        eventTarget,
+        locks,
+        origin: ORIGIN,
+        onRateLimited(info) {
+            notices.push(info);
+            if (onRateLimitedThrows) {
+                throw new Error('handler failure');
+            }
+        }
+    });
+    return { client, events, notices };
+}
+
+const AUTH_EVENTS = ['auth:reauth-required', 'auth:refresh-failed'];
+
+test('T20-1. 일반 API 429는 안내 콜백 한 번과 Retry-After 초 값을 준다. 응답은 그대로 돌려주고 재요청하지 않는다', async () => {
+    const server = recorder((path) => (path === '/api/x' ? resp(429, { 'Retry-After': '42' }) : resp(404)));
+    const { doc, writes } = fakeDocument();
+    const { client, events, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    const response = await client.request('/api/x');
+
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get('Retry-After'), '42');
+    assert.deepEqual(notices, [{ retryAfterSeconds: 42 }]);
+    assert.equal(server.count('/api/x'), 1, '자동 재요청이 없어야 한다');
+    assert.equal(server.count('/api/auth/refresh'), 0, '429는 재발급 대상이 아니다');
+    assert.deepEqual(events, [], '인증 이벤트가 없어야 한다');
+    assert.deepEqual(writes, [], '쿠키를 쓰지 않는다');
+});
+
+test('T20-2. 제외 경로인 로그인의 429도 안내하고 재발급하지 않는다', async () => {
+    const server = recorder((path) => (path === '/api/auth/login' ? resp(429, { 'Retry-After': '900' }) : resp(404)));
+    const { doc } = fakeDocument();
+    const { client, events, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    const response = await client.request('/api/auth/login', { method: 'POST', body: '{}' });
+
+    assert.equal(response.status, 429);
+    assert.deepEqual(notices, [{ retryAfterSeconds: 900 }]);
+    assert.equal(server.count('/api/auth/login', 'POST'), 1);
+    assert.equal(server.count('/api/auth/refresh'), 0);
+    assert.deepEqual(events, []);
+});
+
+test('T20-3. Retry-After 누락과 잘못된 값은 null로 보고 날짜 형식도 해석하지 않는다', async () => {
+    const cases = [
+        [undefined, null],
+        ['', null],
+        ['abc', null],
+        ['-5', null],
+        ['1.5', null],
+        ['Wed, 21 Oct 2015 07:28:00 GMT', null],
+        ['0', 0],
+        ['  60 ', 60]
+    ];
+    for (const [header, expected] of cases) {
+        const headers = header === undefined ? {} : { 'Retry-After': header };
+        const server = recorder(() => resp(429, headers));
+        const { doc } = fakeDocument();
+        const { client, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+        const response = await client.request('/api/x');
+
+        assert.equal(response.status, 429, String(header));
+        assert.deepEqual(notices, [{ retryAfterSeconds: expected }], String(header));
+    }
+});
+
+test('T20-4. 재발급 429도 한 번 알리고, 쿠키와 인증 이벤트를 바꾸지 않는다', async () => {
+    const state = { accessValid: false, refreshResult: () => resp(429, { 'Retry-After': '42' }) };
+    const server = recorder(serverRoute(state));
+    const { doc, writes } = fakeDocument();
+    const { client, events, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    const response = await client.request('/api/x');
+
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get('Retry-After'), '42');
+    assert.deepEqual(notices, [{ retryAfterSeconds: 42 }]);
+    assert.equal(server.count('/api/auth/refresh', 'POST'), 1);
+    assert.equal(server.count('/api/x'), 1);
+    assert.deepEqual(events.filter((e) => AUTH_EVENTS.includes(e.type)), []);
+    assert.deepEqual(writes, []);
+});
+
+test('T20-5. 같은 재발급 429 응답을 공유하는 동시 요청 다섯 개는 안내를 한 번만 보낸다', async () => {
+    const state = { accessValid: false, refreshResult: () => resp(429, { 'Retry-After': '30' }) };
+    const server = recorder(serverRoute(state));
+    const { doc } = fakeDocument();
+    const { client, events, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    const responses = await Promise.all([1, 2, 3, 4, 5].map(() => client.request('/api/x')));
+
+    assert.deepEqual(responses.map((r) => r.status), [429, 429, 429, 429, 429]);
+    assert.deepEqual(notices, [{ retryAfterSeconds: 30 }]);
+    assert.equal(server.count('/api/auth/refresh', 'POST'), 1);
+    assert.deepEqual(events.filter((e) => AUTH_EVENTS.includes(e.type)), []);
+});
+
+test('T20-6. 재발급 성공 뒤 재시도가 429면 안내하고, 재로그인 이벤트 없이 재시도는 한 번만 한다', async () => {
+    let attempts = 0;
+    const state = {
+        accessValid: false,
+        refreshResult: () => resp(200),
+        apiStatus: () => {
+            attempts += 1;
+            return attempts === 1 ? resp(401) : resp(429, { 'Retry-After': '12' });
+        }
+    };
+    const server = recorder(serverRoute(state));
+    const { doc } = fakeDocument();
+    const { client, events, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    const response = await client.request('/api/x');
+
+    assert.equal(response.status, 429);
+    assert.deepEqual(notices, [{ retryAfterSeconds: 12 }]);
+    assert.equal(server.count('/api/auth/refresh', 'POST'), 1);
+    assert.equal(server.count('/api/x'), 2);
+    assert.deepEqual(events.filter((e) => AUTH_EVENTS.includes(e.type)), []);
+});
+
+test('T20-7. 외부 출처의 429는 이 클라이언트가 알리지 않는다', async () => {
+    const server = recorder(() => resp(429, { 'Retry-After': '5' }));
+    const { doc } = fakeDocument();
+    const { client, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    const response = await client.request('https://other.example.com/api/x');
+
+    assert.equal(response.status, 429);
+    assert.deepEqual(notices, []);
+});
+
+test('T20-8. 안내 콜백이 실패해도 429 응답은 호출자에게 그대로 돌아간다', async () => {
+    const server = recorder(() => resp(429, { 'Retry-After': '7' }));
+    const { doc } = fakeDocument();
+    const { client, notices } = makeNotifyingTab({
+        fetchFn: server.fetchFn, locks: fakeLocks(), doc, onRateLimitedThrows: true
+    });
+
+    const response = await client.request('/api/x');
+
+    assert.equal(response.status, 429);
+    assert.equal(notices.length, 1);
+});
+
+test('T20-9. 429 뒤에도 시간이 지나 자동으로 다시 보내지 않는다', async () => {
+    const server = recorder(() => resp(429, { 'Retry-After': '1' }));
+    const { doc } = fakeDocument();
+    const { client, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    await client.request('/api/x');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    assert.equal(server.count('/api/x'), 1);
+    assert.equal(notices.length, 1);
+});
+
+test('T20-10. 서로 다른 429 응답은 요청마다 한 번씩 알린다. 화면 쪽에서 한 줄로 합친다', async () => {
+    const server = recorder(() => resp(429, { 'Retry-After': '9' }));
+    const { doc } = fakeDocument();
+    const { client, notices } = makeNotifyingTab({ fetchFn: server.fetchFn, locks: fakeLocks(), doc });
+
+    await client.request('/api/x');
+    await client.request('/api/x');
+
+    assert.equal(notices.length, 2);
+    assert.deepEqual(notices[0], { retryAfterSeconds: 9 });
+});

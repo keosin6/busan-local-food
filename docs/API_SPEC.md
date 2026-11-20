@@ -164,12 +164,12 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
   - 제한을 초과하면 시작 요청(POST와 GET)은 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태를 만들지 않습니다. 콜백은 HTTP 429와 `Retry-After`를 반환하고 OAuth2 임시 상태만 정리합니다. 기존 화면 세션과 API JWT는 어느 경우에도 유지합니다. 초과 요청은 이벤트를 만들지 않습니다.
   - `state` 검증 등 기존 절차는 그대로 둡니다.
 - 제한된 요청은 새 제한 이벤트를 만들지 않습니다.
-- 429 응답의 화면과 클라이언트 처리 (T20 확정):
+- 429 응답의 화면과 클라이언트 처리 (T20 확정, 구현 완료: 브랜치 `feat/stage2-4-rate-limit-frontend`, `main` 병합 대기, 6.25):
   - 429 응답에서는 `access_token`, `refresh_token` 쿠키를 만료시키거나 새로 설정하지 않습니다. 화면 세션과 JWT는 유지합니다.
   - `Retry-After` 값을 초 단위로 전달하며, 클라이언트는 그 값에 따라서만 재시도합니다. 무한 재시도하지 않습니다.
   - Refresh API가 429를 반환해도 자동 로그아웃이나 재로그인을 수행하지 않습니다.
   - 응답별 처리: 401 `TOKEN_INVALID`는 기존 인증 실패와 재로그인 정책을 따릅니다. 403 CSRF 실패는 CSRF 오류 처리를 따릅니다. 429 `RATE_LIMITED`는 인증 상태와 JWT 쿠키를 유지하고 재시도 안내를 합니다. 200은 기존 처리를 유지합니다. Refresh 재사용 탐지로 전체 토큰이 폐기된 경우에는 T7에 따라 401을 반환하고 JWT 쿠키를 만료시킵니다.
-  - 화면 경로도 같은 상태 코드(`429`)와 `Retry-After`를 사용합니다. 화면 표시 문구는 구현 단계에서 작성합니다.
+  - 화면 경로도 같은 상태 코드(`429`)와 `Retry-After`를 사용합니다. 화면 표시 문구는 `app.js`가 만든 안내 한 줄입니다. "요청이 너무 많습니다. 약 N분 후에 다시 시도해 주세요."(60초 이상은 올림 분), 초 단위는 "약 N초 후에 다시 시도해 주세요.", `Retry-After`가 없거나 잘못되면 "잠시 후 다시 시도해 주세요."입니다. 안내는 닫을 수 있고, 자동 재요청은 하지 않습니다.
 - 이 표에 없는 엔드포인트(예: 로그아웃)는 이번 정책의 제한 대상이 아닙니다.
 
 개인정보와 저장 (R2, T16 확정):
@@ -267,7 +267,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 ### 2.3 Access Token 재발급 (Refresh Token 로테이션)
 
 - 구현 상태: `main` 병합 완료 (PR #23, merge commit `56faff2`, 6.18).
-- 프런트엔드 자동 갱신: 구현 완료 (T13, 6.24, 브랜치 `feat/stage2-4-access-token-auto-refresh`, `main` 병합 대기). 화면 스크립트 `/js/api-client.js`가 보호된 API의 401에서 이 API를 한 번 호출하고, 성공하면 원래 요청을 한 번만 재시도합니다. 재발급 401은 `auth:reauth-required`, 네트워크·5xx·403은 `auth:refresh-failed` 이벤트로 알리며, 429는 인증 상태를 바꾸지 않고 `Retry-After`와 함께 호출자에게 돌려줍니다.
+- 프런트엔드 자동 갱신: `main` 병합 완료 (T13, PR #32, merge commit `31525ba`, 6.24). 화면 스크립트 `/js/api-client.js`가 보호된 API의 401에서 이 API를 한 번 호출하고, 성공하면 원래 요청을 한 번만 재시도합니다. 재발급 401은 `auth:reauth-required`, 네트워크·5xx·403은 `auth:refresh-failed` 이벤트로 알리며, 429는 인증 상태를 바꾸지 않고 `Retry-After`와 함께 호출자에게 돌려줍니다.
 
 - 메서드·URL: `POST /api/auth/refresh`
 - 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
