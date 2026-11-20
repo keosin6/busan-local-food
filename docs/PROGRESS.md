@@ -807,6 +807,15 @@
   - 안내에는 재시도 버튼이 없다. 재요청 호출부가 없어서다. 사용자는 닫은 뒤 같은 동작을 다시 실행할 수 있다.
 - F1-01은 여전히 진행 중이다. 남은 작업: `/mypage` 외 보호 대상 화면, F1-02~F1-09.
 
+### 6.26 맛집 등록·수정 화면 세션 인증 보호 (2026-11-20)
+
+- 브랜치: `feat/stage2-4-protected-restaurant-screens` (기준: `main` `6bf56f7`). `main` 병합 대기.
+- 구현: 화면 체인의 인증 필수 경로에 `/restaurants/new`와 `/restaurants/*/edit`를 추가했다. 기존 `/mypage` 규칙, `anyRequest().permitAll()`, 공개 경로, API 체인, JWT, CSRF, 세션 정책은 바꾸지 않았다.
+- 테스트: `ProtectedScreenHttpTest` 15개(MockMvc, 실제 SecurityConfig). 비로그인 GET과 POST는 유효한 CSRF가 있어도 `/login`으로 보낸다. 로그인 세션의 GET은 인증을 통과한다(맛집 핸들러가 없어 404). 로그인 세션의 POST는 CSRF 토큰이 없으면 403이다. JWT 쿠키만으로는 화면 인증되지 않는다. `/mypage` 보호와 공개 홈, API 인증 회귀도 확인했다. 보호 규칙을 빼면 비로그인 리다이렉트 테스트 5개가 실패함을 확인했다.
+- 실행 결과(이번 실행): DB 미설정 `./gradlew clean test` 551개 중 83 건너뜀, 실패 0. 테스트 DB 설정(MySQL 8.0.46, SQL 001~003) 551개 모두 실행, 실패 0. `./gradlew bootJar` 성공.
+- 작성자 소유권 검사는 이번 범위에서 제외했다. 맛집 도메인과 서비스가 만들어지는 F1-02에서 서버 측으로 구현한다.
+- F1-01은 진행 중으로 유지한다. 남은 작업: F1-02 맛집 등록·수정 기능과 작성자 확인.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
