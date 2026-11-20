@@ -12,8 +12,8 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR #30(`main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지 `/rate-limited`. **남은 작업**: `/mypage` 외 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 나머지는 아래 7절 |
-| **다음 개발 단계** | `/mypage` 외 보호 대상 화면(F1-01 잔여), F1-02~F1-09. 상세는 7절 |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR #30(`main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지 `/rate-limited`. **PR #35(`main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호(JWT 쿠키 단독 인증 불가, CSRF 유지). **남은 작업**: F1-02 맛집 등록·수정 기능과 서버 측 작성자 소유권 검사, 그 밖의 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 나머지는 아래 7절 |
+| **다음 개발 단계** | F1-02 맛집 등록·수정·삭제와 서버 측 작성자 소유권 검사, 그 밖의 보호 대상 화면(F1-01 잔여), F1-03~F1-09. 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -21,7 +21,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **남은 작업**: `/mypage` 외 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **PR #35(6.26, `main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호. **남은 작업**: F1-02 맛집 등록·수정과 서버 측 작성자 소유권 검사, 그 밖의 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 미착수 | 의존: F1-02. T6 확인 |
 | 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
@@ -36,7 +36,7 @@
 
 | ID | 기능 | 상태 | 테스트 | 관련 문서 상태 |
 |----|------|------|--------|----------------|
-| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 이번 문서 작업으로 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) PR #26 보완 HEAD (`8e3df87`): DB 연결 429/429, DB 미설정 362 통과·67 건너뜀. (4) PR #28 (병합 커밋 `37df8e0`): DB 연결 484/484 통과, DB 미설정 408 통과·76 건너뜀, 실패 0, bootJar 성공. (5) PR #30 (`feat/stage2-4-google-account-linking`, `main` 병합 커밋 `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22, **PR #30 최종 HEAD 기준 보고값. 이번 문서 PR에서 재실행하지 않음**): `./gradlew clean test` 테스트 DB 연결 시 536개 실행, 건너뜀 0, 실패 0. 테스트 DB 미설정 시 536개 중 453 통과·83 건너뜀·실패 0. `bootJar` 성공. `git diff --check` 통과. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증과 Google OAuth2 엔드포인트 포함 | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종, 화면 인증, T12 승인, Google 로그인 시작·콜백과 신규 가입·닉네임 설정은 `main` 병합 완료(PR #23, #25, #26, #28). Google 계정 연동·해제와 로컬 비밀번호 설정은 PR #30(6.22, `main` 병합 완료)로 구현. 프런트엔드 Access Token 자동 갱신(T13)은 PR #32로 `main` 병합 완료, 프런트엔드 429 처리(T20)는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25) |
+| F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 이번 문서 작업으로 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) PR #26 보완 HEAD (`8e3df87`): DB 연결 429/429, DB 미설정 362 통과·67 건너뜀. (4) PR #28 (병합 커밋 `37df8e0`): DB 연결 484/484 통과, DB 미설정 408 통과·76 건너뜀, 실패 0, bootJar 성공. (5) PR #30 (`feat/stage2-4-google-account-linking`, `main` 병합 커밋 `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22, **PR #30 최종 HEAD 기준 보고값. 이번 문서 PR에서 재실행하지 않음**): `./gradlew clean test` 테스트 DB 연결 시 536개 실행, 건너뜀 0, 실패 0. 테스트 DB 미설정 시 536개 중 453 통과·83 건너뜀·실패 0. `bootJar` 성공. `git diff --check` 통과. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증과 Google OAuth2 엔드포인트 포함. (6) PR #35 (`feat/stage2-4-protected-restaurant-screens`, `main` 병합 커밋 `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26, **PR #35 당시 보고값. 이번 문서 PR에서 재실행하지 않음**): DB 미설정 `./gradlew clean test` 551개 중 83 건너뜀, 실패 0. 테스트 DB 설정(MySQL 8.0.46) 551개 실행, 실패 0. `bootJar` 성공. | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종, 화면 인증, T12 승인, Google 로그인 시작·콜백과 신규 가입·닉네임 설정은 `main` 병합 완료(PR #23, #25, #26, #28). Google 계정 연동·해제와 로컬 비밀번호 설정은 PR #30(6.22, `main` 병합 완료)로 구현. 프런트엔드 Access Token 자동 갱신(T13)은 PR #32로 `main` 병합 완료, 프런트엔드 429 처리(T20)는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 맛집 등록·수정 화면 세션 인증 보호는 PR #35로 `main` 병합 완료(merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26). 작성자 소유권 검사는 F1-02 예정 |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 미착수 | - | 명세 반영 완료 (Q2, Q5) |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 미착수 | - | 명세 반영 완료 (Q2) |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
@@ -809,12 +809,13 @@
 
 ### 6.26 맛집 등록·수정 화면 세션 인증 보호 (2026-11-20)
 
-- 브랜치: `feat/stage2-4-protected-restaurant-screens` (기준: `main` `6bf56f7`). `main` 병합 대기.
+- 브랜치: `feat/stage2-4-protected-restaurant-screens` (기준: `main` `6bf56f7`). PR #35로 `main` 병합 완료. 병합 커밋 `57a1bcef6c33779a351f053a0bce9d19c67aa00c`.
 - 구현: 화면 체인의 인증 필수 경로에 `/restaurants/new`와 `/restaurants/*/edit`를 추가했다. 기존 `/mypage` 규칙, `anyRequest().permitAll()`, 공개 경로, API 체인, JWT, CSRF, 세션 정책은 바꾸지 않았다.
 - 테스트: `ProtectedScreenHttpTest` 15개(MockMvc, 실제 SecurityConfig). 비로그인 GET과 POST는 유효한 CSRF가 있어도 `/login`으로 보낸다. 로그인 세션의 GET은 인증을 통과한다(맛집 핸들러가 없어 404). 로그인 세션의 POST는 CSRF 토큰이 없으면 403이다. JWT 쿠키만으로는 화면 인증되지 않는다. `/mypage` 보호와 공개 홈, API 인증 회귀도 확인했다. 보호 규칙을 빼면 비로그인 리다이렉트 테스트 5개가 실패함을 확인했다.
-- 실행 결과(이번 실행): DB 미설정 `./gradlew clean test` 551개 중 83 건너뜀, 실패 0. 테스트 DB 설정(MySQL 8.0.46, SQL 001~003) 551개 모두 실행, 실패 0. `./gradlew bootJar` 성공.
+- 실행 결과(PR #35 당시 보고값, 이번 문서 PR에서 재실행하지 않음): DB 미설정 `./gradlew clean test` 551개 중 83 건너뜀, 실패 0. 테스트 DB 설정(MySQL 8.0.46, SQL 001~003) 551개 모두 실행, 실패 0. `./gradlew bootJar` 성공.
 - 작성자 소유권 검사는 이번 범위에서 제외했다. 맛집 도메인과 서비스가 만들어지는 F1-02에서 서버 측으로 구현한다.
-- F1-01은 진행 중으로 유지한다. 남은 작업: F1-02 맛집 등록·수정 기능과 작성자 확인.
+- 보호 경로 `/restaurants/new`와 `/restaurants/*/edit`는 화면 세션이 없으면 `/login`으로 보낸다. JWT 쿠키만으로는 화면 인증되지 않는다. 화면 POST의 CSRF 보호는 유지된다.
+- F1-01은 진행 중으로 유지한다. 남은 작업: F1-02 맛집 등록·수정 기능과 서버 측 작성자 소유권 검사.
 
 ## 7. 다음 작업
 
@@ -832,8 +833,9 @@
    - PR #30 (`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22): Google 계정 연결 시작·콜백, 연결 해제, 로컬 비밀번호 설정, `/mypage`, 화면 429 안내 `/rate-limited`(POST forward 보완 포함), Google 연결 요청 제한 공유
    - PR #32 (`feat/stage2-4-access-token-auto-refresh`, merge commit `31525ba`, 6.24): T13 프런트엔드 Access Token 자동 갱신, 같은 탭 single-flight, Web Locks 여러 탭 조정, 재발급 1회
    - PR #33 (`feat/stage2-4-rate-limit-frontend`, merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25): T20 프런트엔드 429 처리. 429와 401 구분, `Retry-After` 기준 재시도 시점 안내, 자동 재요청 없음, 쿠키와 화면 세션 유지
-3. 다음 작업 (`main` 기준 미구현, F1-01 잔여): `/mypage` 외 보호 대상 화면이 다음 작업이다.
-   - `/mypage` 외 화면 보호 페이지(`/restaurants/new` 등)의 세션 필요 규칙과 `/login` 리다이렉트 (미구현). `/mypage`와 화면용 429 안내는 PR #30에서 구현·`main` 병합 완료
+   - PR #35 (`feat/stage2-4-protected-restaurant-screens`, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26): `/restaurants/new`, `/restaurants/*/edit` 화면 세션 인증 보호. JWT 쿠키 단독 인증 불가, CSRF 유지
+3. 다음 작업 (`main` 기준 미구현, F1-01 잔여): F1-02 맛집 등록·수정 기능과 서버 측 작성자 소유권 검사가 다음 작업이다.
+   - F1-02 맛집 등록·수정·삭제 기능과 서버 측 작성자 소유권 검사 (미구현). 화면 세션 인증 보호(`/restaurants/new`, `/restaurants/*/edit`)는 PR #35로 완료
    - 공개 조회 API 경로 (구현 시 명시적으로 추가, 미구현)
    - F1-02~F1-09 기능 (미착수)
    - Google 액세스 토큰의 HttpSession 저장 정책 검토 (6.21 위험 항목)
