@@ -267,6 +267,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 ### 2.3 Access Token 재발급 (Refresh Token 로테이션)
 
 - 구현 상태: `main` 병합 완료 (PR #23, merge commit `56faff2`, 6.18).
+- 프런트엔드 자동 갱신: 구현 완료 (T13, 6.24, 브랜치 `feat/stage2-4-access-token-auto-refresh`, `main` 병합 대기). 화면 스크립트 `/js/api-client.js`가 보호된 API의 401에서 이 API를 한 번 호출하고, 성공하면 원래 요청을 한 번만 재시도합니다. 재발급 401은 `auth:reauth-required`, 네트워크·5xx·403은 `auth:refresh-failed` 이벤트로 알리며, 429는 인증 상태를 바꾸지 않고 `Retry-After`와 함께 호출자에게 돌려줍니다.
 
 - 메서드·URL: `POST /api/auth/refresh`
 - 인증: `refresh_token` 쿠키 필요 (Access Token은 불필요)
