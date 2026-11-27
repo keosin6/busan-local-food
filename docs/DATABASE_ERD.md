@@ -277,7 +277,7 @@ erDiagram
 
 - FK: `fk_summary_restaurant (restaurant_id) → restaurant(id) ON DELETE CASCADE`
 - UNIQUE: `uk_summary_restaurant (restaurant_id)`
-- 무효화: 리뷰 작성·삭제(회원 삭제, 관리자 삭제 포함) 시 해당 행 DELETE (FUNCTION_SPEC F1-05)
+- 무효화: 리뷰 작성·삭제 시 해당 행 DELETE (FUNCTION_SPEC F1-05). 회원 탈퇴(T1)와 관리자 삭제(F1-09)의 무효화는 그 기능을 구현할 때 추가한다.
 
 > 구현 메모 (SQL 007): 명세 컬럼, FK, UNIQUE를 그대로 구현했습니다. 추가로 `ck_summary_review_count` (`source_review_count >= 3`)를 두었습니다. 3개 미만 맛집은 캐시하지 않습니다. 무효화는 리뷰 작성·삭제 트랜잭션이 맛집 행을 잠근 뒤 같은 트랜잭션에서 행을 지우는 방식입니다.
 
