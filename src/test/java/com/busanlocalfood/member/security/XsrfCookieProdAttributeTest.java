@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.security;
 
+import com.busanlocalfood.restaurant.service.RestaurantService;
 import com.busanlocalfood.member.service.MemberAccountService;
 import com.busanlocalfood.member.service.AuthApiService;
 import com.busanlocalfood.member.service.GoogleSignupService;
@@ -34,6 +35,9 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         ApiSecurityFilterChainTest.ClientIpConfig.class, ApiSecurityFilterChainTest.Probes.class})
 class XsrfCookieProdAttributeTest {
+
+    @MockitoBean
+    private RestaurantService restaurantService;
 
     @MockitoBean
     private MemberAccountService memberAccountService;

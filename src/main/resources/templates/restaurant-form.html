@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${mode == 'edit'} ? '맛집 수정' : '맛집 등록')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-4 flex-grow-1" style="max-width: 720px;">
+    <h1 class="h3 mb-3" th:text="${mode == 'edit'} ? '맛집 수정' : '맛집 등록'">맛집 등록</h1>
+
+    <div th:if="${formError != null}" class="alert alert-danger" role="alert" th:text="${formError}">입력값 오류</div>
+
+    <form method="post"
+          th:action="${mode == 'edit'} ? @{/restaurants/{id}/edit(id=${restaurantId})} : @{/restaurants/new}"
+          novalidate>
+        <div class="mb-3">
+            <label for="name" class="form-label">이름 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="name" name="name" maxlength="50" required
+                   th:value="${form['name']}">
+        </div>
+        <div class="mb-3">
+            <label for="categoryId" class="form-label">카테고리 <span class="text-danger">*</span></label>
+            <select class="form-select" id="categoryId" name="categoryId" required>
+                <option value="">선택하세요</option>
+                <option th:each="c : ${categories}" th:value="${c.id()}" th:text="${c.name()}"
+                        th:selected="${form['categoryId'] == c.id().toString()}">카테고리</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="address" class="form-label">주소 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="address" name="address" maxlength="200" required
+                   th:value="${form['address']}">
+        </div>
+        <div class="mb-3">
+            <label for="phone" class="form-label">전화번호</label>
+            <input type="text" class="form-control" id="phone" name="phone" maxlength="20"
+                   placeholder="051-000-0000" th:value="${form['phone']}">
+        </div>
+        <div class="mb-3">
+            <label for="description" class="form-label">설명 <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="description" name="description" rows="5" maxlength="2000" required
+                      th:text="${form['description']}"></textarea>
+        </div>
+        <div class="row g-2 mb-4">
+            <div class="col-6">
+                <label for="latitude" class="form-label">위도</label>
+                <input type="text" class="form-control" id="latitude" name="latitude" th:value="${form['latitude']}">
+            </div>
+            <div class="col-6">
+                <label for="longitude" class="form-label">경도</label>
+                <input type="text" class="form-control" id="longitude" name="longitude" th:value="${form['longitude']}">
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" th:text="${mode == 'edit'} ? '저장' : '등록'">등록</button>
+            <a class="btn btn-outline-secondary" th:href="${mode == 'edit'} ? @{/restaurants/{id}(id=${restaurantId})} : @{/restaurants}">취소</a>
+        </div>
+    </form>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

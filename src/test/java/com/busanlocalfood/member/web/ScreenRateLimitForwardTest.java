@@ -19,6 +19,7 @@ import com.busanlocalfood.member.service.AuthApiService;
 import com.busanlocalfood.member.service.GoogleLoginService;
 import com.busanlocalfood.member.service.GoogleSignupService;
 import com.busanlocalfood.member.service.MemberAccountService;
+import com.busanlocalfood.restaurant.web.RestaurantScreenController;
 import com.busanlocalfood.web.HomeController;
 import java.io.IOException;
 import java.net.CookieManager;
@@ -91,6 +92,9 @@ class ScreenRateLimitForwardTest {
 
     @MockitoBean
     private AuthApiService authApi;
+
+    @MockitoBean
+    private com.busanlocalfood.restaurant.service.RestaurantService restaurantService;
 
     @MockitoBean
     private MemberAccountService accounts;
@@ -238,7 +242,7 @@ class ScreenRateLimitForwardTest {
             AuthController.class, ScreenAuthController.class, ScreenLogoutController.class,
             GoogleSignupController.class, MyPageController.class, GoogleAccountLinkController.class,
             ScreenRateLimitAdvice.class, RateLimitedPageController.class, ScreenAuthAdvice.class,
-            HomeController.class, ClientIpConfig.class})
+            HomeController.class, RestaurantScreenController.class, ClientIpConfig.class})
     static class ForwardTestApp {
     }
 }

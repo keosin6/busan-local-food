@@ -27,6 +27,11 @@ public enum ErrorCode {
     // 인증 (API_SPEC 1.3). 토큰이 없거나 만료, 폐기, 위조된 경우 모두 같은 메시지를 쓴다. 원인은 노출하지 않는다.
     TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "로그인이 필요하거나 인증 정보가 올바르지 않습니다. 다시 로그인해 주세요."),
 
+    // 맛집 (API_SPEC 1.3, 3.1, 4.x). 권한과 존재 여부 오류는 작성자 확인 뒤 서비스 계층에서 낸다.
+    CATEGORY_NOT_FOUND(HttpStatus.BAD_REQUEST, "존재하지 않는 카테고리입니다."),
+    RESTAURANT_NOT_FOUND(HttpStatus.NOT_FOUND, "맛집을 찾을 수 없습니다."),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "이 작업을 할 권한이 없습니다."),
+
     // 요청 제한 (API_SPEC 1.3, 1.4). 메시지에 제한 기준이나 식별 정보를 넣지 않는다.
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
 

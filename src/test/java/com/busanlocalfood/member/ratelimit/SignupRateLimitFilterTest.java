@@ -1,5 +1,6 @@
 package com.busanlocalfood.member.ratelimit;
 
+import com.busanlocalfood.restaurant.service.RestaurantService;
 import com.busanlocalfood.member.service.MemberAccountService;
 import com.busanlocalfood.member.service.AuthApiService;
 import com.busanlocalfood.member.web.AuthCookies;
@@ -55,6 +56,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class,
         SignupRateLimitFilterTest.ClientIpConfig.class, SignupRateLimitFilterTest.SignupProbe.class})
 class SignupRateLimitFilterTest {
+
+    @MockitoBean
+    private RestaurantService restaurantService;
 
     @MockitoBean
     private MemberAccountService memberAccountService;

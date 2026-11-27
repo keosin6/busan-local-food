@@ -1,7 +1,19 @@
 package com.busanlocalfood.member.web;
 
+import com.busanlocalfood.restaurant.service.RestaurantService;
+import com.busanlocalfood.restaurant.web.RestaurantScreenController;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+import com.busanlocalfood.restaurant.dto.RestaurantDtos;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
@@ -49,7 +61,7 @@ import org.springframework.test.web.servlet.MvcResult;
 /**
  * 화면 체인의 보호 경로 (API_SPEC 10, 맛집 등록·수정 화면 F1-01 보호).
  * 실제 SecurityConfig와 CSRF, 세션을 쓴다. 회원·인증·요청 제한 서비스는 목이다.
- * 맛집 컨트롤러는 아직 없으므로 인증을 통과한 요청은 404가 된다. 이 404는 보안 필터를 통과했다는 뜻으로 본다.
+ * 맛집 화면이 생겼으므로 인증을 통과한 요청은 실제 화면이나 리다이렉트를 받는다. 맛집 서비스는 목으로 응답을 정한다.
  */
 @WebMvcTest(properties = {
         "spring.datasource.url=jdbc:mysql://localhost:3306/busan_local_food_test",
@@ -59,8 +71,11 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         RefreshTokenConfig.class, AuthCookies.class, MyPageController.class,
         ScreenAuthController.class, ScreenLogoutController.class, ScreenAuthAdvice.class,
-        HomeController.class, ProtectedScreenHttpTest.ClientIpConfig.class})
+        HomeController.class, RestaurantScreenController.class, ProtectedScreenHttpTest.ClientIpConfig.class})
 class ProtectedScreenHttpTest {
+
+    @MockitoBean
+    private RestaurantService restaurantService;
 
     private static final String SESSION_CONTEXT = HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY;
     private static final Pattern CSRF_FIELD = Pattern.compile("\"_csrf\"[^>]*?value=\"([^\"]+)\"");
@@ -123,11 +138,23 @@ class ProtectedScreenHttpTest {
         return matcher.group(1);
     }
 
-    /** 보안 필터를 통과했는지 확인한다. 맛집 핸들러가 없으므로 404가 정상 통과 결과다. */
+    /** 보안 필터를 통과했는지 확인한다. 401, 403이 아니고 로그인 화면으로 가지 않으면 통과다. */
     private static void assertPassedSecurity(MvcResult result) {
         int code = result.getResponse().getStatus();
-        assertThat(code).as("보안 필터 통과 후 핸들러 부재 404").isEqualTo(404);
-        assertThat(result.getResponse().getRedirectedUrl()).isNull();
+        assertThat(code).as("보안 필터가 거부하지 않아야 한다").isNotIn(401, 403);
+        assertThat(result.getResponse().getRedirectedUrl()).isNotEqualTo(LOGIN_LOCATION);
+    }
+
+    private static RestaurantDtos.RestaurantDetail detail(long id) {
+        return new RestaurantDtos.RestaurantDetail(id, "보호맛집", new RestaurantDtos.CategoryRef(1L, "한식"), "부산 해운대구",
+                null, "설명", null, null, BigDecimal.ZERO, 0, new RestaurantDtos.OwnerRef(7L, "보호회원"),
+                List.of(), 0, false, true, LocalDateTime.now(), LocalDateTime.now());
+    }
+
+    @BeforeEach
+    void emptyRestaurantList() {
+        when(restaurantService.list(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new RestaurantDtos.PageResponse<>(List.of(), 0, 12, 0, 0));
     }
 
     // ---- 1~2. 비로그인 GET은 /login으로 보낸다 ----
@@ -150,16 +177,18 @@ class ProtectedScreenHttpTest {
 
     @Test
     void 로그인_세션_GET_맛집_등록_화면은_인증을_통과한다() throws Exception {
-        MvcResult result = mockMvc.perform(get("/restaurants/new").session(loggedInSession(7L))).andReturn();
-
-        assertPassedSecurity(result);
+        mockMvc.perform(get("/restaurants/new").session(loggedInSession(7L)))
+                .andExpect(status().isOk())
+                .andExpect(view().name("restaurant-form"));
     }
 
     @Test
     void 로그인_세션_GET_맛집_수정_화면은_인증을_통과한다() throws Exception {
-        MvcResult result = mockMvc.perform(get("/restaurants/1/edit").session(loggedInSession(7L))).andReturn();
+        when(restaurantService.loadForEdit(1L, 7L)).thenReturn(detail(1L));
 
-        assertPassedSecurity(result);
+        mockMvc.perform(get("/restaurants/1/edit").session(loggedInSession(7L)))
+                .andExpect(status().isOk())
+                .andExpect(view().name("restaurant-form"));
     }
 
     // ---- 5~6. 비로그인 POST는 유효한 CSRF가 있어도 /login으로 보낸다 ----
@@ -202,10 +231,10 @@ class ProtectedScreenHttpTest {
     void 로그인_세션_POST_맛집_등록은_CSRF_토큰이_있으면_인증을_통과한다() throws Exception {
         MockHttpSession session = loggedInSession(7L);
         String token = csrf(session);
+        when(restaurantService.create(eq(7L), any())).thenReturn(detail(1L));
 
-        MvcResult result = mockMvc.perform(post("/restaurants/new").session(session).param("_csrf", token)).andReturn();
-
-        assertPassedSecurity(result);
+        mockMvc.perform(post("/restaurants/new").session(session).param("_csrf", token))
+                .andExpect(redirectedUrl("/restaurants/1"));
     }
 
     // ---- JWT 쿠키만으로는 화면 인증되지 않는다 ----

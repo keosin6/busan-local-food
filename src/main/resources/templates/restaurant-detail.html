@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${restaurant.name()})}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-4 flex-grow-1" style="max-width: 760px;">
+    <p class="mb-2"><a th:href="@{/restaurants}">← 맛집 목록</a></p>
+
+    <div th:if="${error == 'forbidden'}" class="alert alert-danger" role="alert">
+        작성자만 수정하거나 삭제할 수 있습니다.
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+            <span class="badge text-bg-light mb-2" th:text="${restaurant.category().name()}">카테고리</span>
+            <h1 class="h3 mb-1" th:text="${restaurant.name()}">맛집 이름</h1>
+            <p class="text-muted small mb-0">
+                작성자 <span th:text="${restaurant.owner().nickname()}">작성자</span>
+                · 평점 <span th:text="${restaurant.averageRating()}">0.0</span>
+                · 리뷰 <span th:text="${restaurant.reviewCount()}">0</span>
+            </p>
+        </div>
+        <div th:if="${restaurant.isOwner()}" class="d-flex gap-2">
+            <a class="btn btn-outline-dark btn-sm" th:href="@{/restaurants/{id}/edit(id=${restaurant.id()})}">수정</a>
+            <form method="post" th:action="@{/restaurants/{id}/delete(id=${restaurant.id()})}"
+                  data-confirm="이 맛집을 삭제할까요? 삭제한 정보는 되돌릴 수 없습니다.">
+                <button type="submit" class="btn btn-outline-danger btn-sm">삭제</button>
+            </form>
+        </div>
+    </div>
+
+    <dl class="row mb-0">
+        <dt class="col-sm-3">주소</dt>
+        <dd class="col-sm-9" th:text="${restaurant.address()}">주소</dd>
+        <dt class="col-sm-3" th:if="${restaurant.phone() != null}">전화번호</dt>
+        <dd class="col-sm-9" th:if="${restaurant.phone() != null}" th:text="${restaurant.phone()}">051-000-0000</dd>
+        <dt class="col-sm-3" th:if="${restaurant.latitude() != null}">위치</dt>
+        <dd class="col-sm-9" th:if="${restaurant.latitude() != null}"
+            th:text="${restaurant.latitude()} + ', ' + ${restaurant.longitude()}">35.1587, 129.1604</dd>
+    </dl>
+
+    <h2 class="h5 mt-4">소개</h2>
+    <p style="white-space: pre-line;" th:text="${restaurant.description()}">설명</p>
+
+    <section class="mt-4 text-muted small">
+        <p class="mb-1">이미지, 리뷰, 찜, AI 요약은 해당 기능이 구현되면 여기에 표시됩니다.</p>
+    </section>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

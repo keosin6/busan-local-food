@@ -1,5 +1,7 @@
 package com.busanlocalfood.member.web;
 
+import com.busanlocalfood.restaurant.service.RestaurantService;
+import com.busanlocalfood.restaurant.web.RestaurantScreenController;
 import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -74,9 +76,20 @@ import org.springframework.http.HttpHeaders;
 })
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         RefreshTokenConfig.class, AuthApiService.class, AuthCookies.class, AuthController.class,
-        ScreenAuthController.class, ScreenLogoutController.class, ScreenAuthAdvice.class, HomeController.class,
+        ScreenAuthController.class, ScreenLogoutController.class, ScreenAuthAdvice.class, HomeController.class, RestaurantScreenController.class,
         ScreenAuthHttpTest.ClientIpConfig.class})
 class ScreenAuthHttpTest {
+
+    @MockitoBean
+    private RestaurantService restaurantService;
+
+    /** 홈은 맛집 목록 화면이 되었다. 이 테스트는 인증 흐름만 보므로 목록은 빈 결과로 둔다. */
+    @org.junit.jupiter.api.BeforeEach
+    void emptyRestaurantList() {
+        org.mockito.Mockito.when(restaurantService.list(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new com.busanlocalfood.restaurant.dto.RestaurantDtos.PageResponse<>(java.util.List.of(), 0, 12, 0, 0));
+    }
 
     @MockitoBean
     private MemberAccountService memberAccountService;

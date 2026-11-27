@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('맛집 목록')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-4 flex-grow-1">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0">맛집 목록</h1>
+        <a th:if="${loggedIn}" class="btn btn-primary btn-sm" th:href="@{/restaurants/new}">맛집 등록</a>
+    </div>
+
+    <div th:if="${error == 'not_found'}" class="alert alert-danger" role="alert">맛집을 찾을 수 없습니다.</div>
+    <div th:if="${deleted}" class="alert alert-success" role="status">맛집을 삭제했습니다.</div>
+    <div th:if="${storageDelayed}" class="alert alert-warning" role="status">일부 이미지 삭제가 지연되고 있습니다.</div>
+
+    <form method="get" th:action="@{/restaurants}" class="row g-2 align-items-end mb-4">
+        <div class="col-12 col-md-4">
+            <label for="keyword" class="form-label">검색어</label>
+            <input type="search" class="form-control" id="keyword" name="keyword" maxlength="50"
+                   th:value="${keyword}" placeholder="이름 또는 주소">
+        </div>
+        <div class="col-6 col-md-3">
+            <label for="category" class="form-label">카테고리</label>
+            <select class="form-select" id="category" name="category">
+                <option value="">전체</option>
+                <option th:each="c : ${categories}" th:value="${c.id()}" th:text="${c.name()}"
+                        th:selected="${category != null and category == c.id()}">카테고리</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label for="sort" class="form-label">정렬</label>
+            <select class="form-select" id="sort" name="sort">
+                <option value="latest" th:selected="${sort == 'latest'}">최신순</option>
+                <option value="rating" th:selected="${sort == 'rating'}">평점순</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-grid">
+            <button type="submit" class="btn btn-outline-dark">검색</button>
+        </div>
+    </form>
+
+    <p class="text-muted small mb-2" th:text="'총 ' + ${totalElements} + '개'">총 0개</p>
+
+    <div th:if="${#lists.isEmpty(restaurants)}" class="alert alert-secondary" role="status">
+        조건에 맞는 맛집이 없습니다.
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+        <div class="col" th:each="r : ${restaurants}">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <span class="badge text-bg-light align-self-start mb-2" th:text="${r.category().name()}">카테고리</span>
+                    <h2 class="h5 card-title">
+                        <a class="link-dark text-decoration-none" th:href="@{/restaurants/{id}(id=${r.id()})}"
+                           th:text="${r.name()}">맛집 이름</a>
+                    </h2>
+                    <p class="card-text small text-muted mb-2" th:text="${r.address()}">주소</p>
+                    <p class="card-text mt-auto mb-0 small">
+                        평점 <span th:text="${r.averageRating()}">0.0</span>
+                        · 리뷰 <span th:text="${r.reviewCount()}">0</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="mt-4" aria-label="페이지" th:if="${totalPages > 1}">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${!hasPrev} ? 'disabled'">
+                <a class="page-link" th:href="@{${'/restaurants?' + baseQuery + '&page=' + prevPage}}" th:unless="${!hasPrev}">이전</a>
+                <span class="page-link" th:if="${!hasPrev}">이전</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link" th:text="${page + 1} + ' / ' + ${totalPages}">1 / 1</span>
+            </li>
+            <li class="page-item" th:classappend="${!hasNext} ? 'disabled'">
+                <a class="page-link" th:href="@{${'/restaurants?' + baseQuery + '&page=' + nextPage}}" th:unless="${!hasNext}">다음</a>
+                <span class="page-link" th:if="${!hasNext}">다음</span>
+            </li>
+        </ul>
+    </nav>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>
