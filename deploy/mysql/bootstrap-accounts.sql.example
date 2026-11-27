@@ -13,8 +13,13 @@ GRANT ALL PRIVILEGES ON busan_local_food.* TO 'busan_admin'@'localhost';
 CREATE USER IF NOT EXISTS 'busan_app'@'127.0.0.1' IDENTIFIED BY 'CHANGE_ME_APP_DB_PASSWORD';
 GRANT SELECT, INSERT, UPDATE, DELETE ON busan_local_food.* TO 'busan_app'@'127.0.0.1';
 
--- 백업 계정: mysqldump에 필요한 읽기 권한만. 쓰기·DDL 없음.
+-- 백업 계정: mysqldump에 필요한 읽기 권한만. 쓰기·DDL 없음 (SHOW_ROUTINE만 전역 범위).
 CREATE USER IF NOT EXISTS 'busan_backup'@'127.0.0.1' IDENTIFIED BY 'CHANGE_ME_BACKUP_DB_PASSWORD';
 GRANT SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES ON busan_local_food.* TO 'busan_backup'@'127.0.0.1';
+-- 루틴(프로시저·함수) 정의를 덤프하려면 SHOW_ROUTINE이 필요하다 (MySQL 8.0.22 이상).
+-- 이 권한은 전역(*.*)에만 줄 수 있다. DB 단위 GRANT는 오류 3619가 난다.
+-- 없으면 mysqldump --routines가 루틴을 조용히 빼고도 종료 코드 0을 낸다 (실제 검증으로 확인).
+-- 이 권한은 메타데이터 조회만 허용한다. 루틴 실행, 생성, 변경 권한은 아니다.
+GRANT SHOW_ROUTINE ON *.* TO 'busan_backup'@'127.0.0.1';
 
 FLUSH PRIVILEGES;

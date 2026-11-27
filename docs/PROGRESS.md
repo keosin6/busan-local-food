@@ -1110,6 +1110,14 @@
 - T22 (배포 아티팩트 버킷): 전용 버킷을 쓰는 설계를 확정했다. 이미지·백업 버킷과 분리하고, 비공개와 SSE-S3, GitHub Actions는 `releases/`에만 쓰고 EC2는 `releases/`에서만 읽는다. 사용자가 AWS에서 직접 만든다. 실제 이름과 ARN은 문서에 쓰지 않는다.
 - 미검증: 실제 EC2, EBS 장치 마운트와 재부팅, 실제 systemd 롤백, GitHub Actions 러너 실행, SSM 배포, S3, IAM, OIDC, 백업·복구, 이미지 표시.
 
+### 6.44 백업 계정 SHOW_ROUTINE 권한 보완 (PR #49, 2026-11-28)
+
+- 발견: `busan_backup` 계정에 SHOW_ROUTINE이 없으면 `mysqldump --routines`가 프로시저와 함수를 조용히 빼고 종료 코드 0을 낸다. 백업 스크립트도 성공으로 보고한다. 로컬 MySQL 8.0.46에서 재현했다.
+- 조치: `deploy/mysql/bootstrap-accounts.sql.example`에 `GRANT SHOW_ROUTINE ON *.* TO 'busan_backup'@'127.0.0.1';`을 추가했다. 이 권한은 전역 범위만 가능하며 메타데이터 조회만 허용한다. `docs/DEPLOYMENT.md` 6.2.1절에 설명과 확인 방법을 적었다.
+- 검증: 테스트 DB에 프로시저·함수·트리거·이벤트를 하나씩 만들고 백업 스크립트를 실제로 실행했다. 권한이 있으면 모두 덤프에 포함, 없으면 프로시저·함수가 빠짐.
+- 범위 밖 (권고): 백업 스크립트가 덤프 뒤 루틴 개수를 `information_schema`와 비교하도록 하면 이런 조용한 누락을 실패로 잡을 수 있다. 이번 PR에서는 구현하지 않았다.
+- 미검증: 실제 AWS RDS·EC2 환경, 실제 S3 업로드, 실제 복구.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):

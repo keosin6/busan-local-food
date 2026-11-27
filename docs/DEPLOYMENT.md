@@ -156,7 +156,7 @@ sudo systemctl enable mysql
 |---|---|---|---|
 | `busan_admin`@`localhost` | 소켓 | 전체 (DB 한정) | 수동 SQL 001~008 적용. 끝나면 비활성화 |
 | `busan_app`@`127.0.0.1` | TCP | SELECT, INSERT, UPDATE, DELETE | 애플리케이션. DDL 없음 |
-| `busan_backup`@`127.0.0.1` | TCP | SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES | 백업 전용 |
+| `busan_backup`@`127.0.0.1` | TCP | DB 범위: SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES. 전역 범위: SHOW_ROUTINE | 백업 전용 (읽기만) |
 
 - 문자셋: `utf8mb4`, 콜레이션 `utf8mb4_0900_ai_ci`. DB 이름은 `busan_local_food`.
 - `CREATE DATABASE IF NOT EXISTS`를 쓰므로 기존 DB를 지우지 않는다. 이 저장소에는 DB를 포맷하거나 초기화하는 명령이 없다.
@@ -239,6 +239,23 @@ sudo /opt/busan-local-food/bin/backup-mysql.sh
 sudo systemctl start busan-mysql-backup.timer
 systemctl list-timers busan-mysql-backup.timer
 ```
+
+### 6.2.1 백업 계정 권한 확인 (필수)
+
+백업 계정 `busan_backup`은 두 범위의 권한이 필요하다.
+
+- DB 범위(`busan_local_food.*`): SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES. 테이블, 트리거, 이벤트를 덤프한다.
+- 전역 범위(`*.*`): **SHOW_ROUTINE**. 프로시저와 함수 정의를 덤프한다. MySQL 8.0.22 이상의 동적 권한이며, DB 단위로는 줄 수 없다 (`GRANT SHOW_ROUTINE ON db.*`는 오류 3619). 이 권한은 메타데이터 조회만 허용하고 루틴 실행이나 변경은 허용하지 않는다.
+
+SHOW_ROUTINE이 없으면 `mysqldump --routines`는 루틴을 **조용히 빼고 종료 코드 0으로 끝난다.** 백업 스크립트는 성공으로 보고하므로, 권한 누락은 복구 때에만 드러난다. 그래서 권한을 설정한 뒤 확인한다.
+
+```sql
+SHOW GRANTS FOR 'busan_backup'@'127.0.0.1';   -- SHOW_ROUTINE ON *.* 줄이 있어야 한다
+```
+
+권한 누락을 검증한 방법 (PR #49 후속, 로컬 MySQL 8.0.46): 테스트 DB에 프로시저, 함수, 트리거, 이벤트를 하나씩 만들고 백업 계정으로 `mysqldump`를 실행했다. SHOW_ROUTINE이 있으면 프로시저와 함수가 모두 덤프에 들어갔다. 없으면 트리거와 이벤트만 들어가고 프로시저와 함수는 빠졌으며 종료 코드는 0이었다.
+
+운영 DB에 루틴이 있으면, 백업 뒤 덤프에 `CREATE ... PROCEDURE` 또는 `FUNCTION`이 있는지 확인한다. 현재 앱은 저장 프로시저를 쓰지 않으므로 이 확인은 권한 점검용이다.
 
 ### 6.3 스크립트 동작
 
@@ -513,6 +530,11 @@ sudo nginx -t && sudo systemctl reload nginx
 이 절은 PR #49 후속 수정(배포 롤백 수정, T21·T22 문서화, DB 테스트 CI 보완, EBS 파일 시스템 검사)의 검증이다.
 
 - `./gradlew clean test` (`TEST_DB_URL` 설정, 로컬 격리 MySQL 8.0, 테스트 전용 계정, `db/manual/001`~`008` 적용): 913개 실행, 건너뜀 0, 실패 0, 오류 0. DB 테스트 케이스 191개 실행. 워크플로와 같은 JDBC 설정(`sslMode=DISABLED&allowPublicKeyRetrieval=true`)을 썼다.
+- MySQL 백업 계정 권한 (로컬 격리 MySQL 8.0.46, 테스트 전용 DB `busan_local_food`, 프로시저·함수·트리거·이벤트 각 하나):
+  - `GRANT SHOW_ROUTINE ON busan_local_food.*`는 오류 3619로 거부됨 (전역 권한).
+  - SHOW_ROUTINE 없이 `mysqldump --routines --triggers --events` 실행: 종료 코드 0, 트리거·이벤트는 포함, 프로시저·함수는 빠짐 (백업 스크립트도 종료 코드 0으로 성공 보고).
+  - SHOW_ROUTINE ON `*.*` 부여 후 `backup-mysql.sh`를 실제 실행: 업로드 확인 성공, 덤프에 프로시저·함수·트리거·이벤트·테이블 모두 포함.
+  - `deploy/mysql/bootstrap-accounts.sql.example`를 플레이스홀더 값만 바꿔 테스트 서버에 적용: 세 계정 생성과 권한 부여 성공, `SHOW GRANTS`에 SHOW_ROUTINE 확인.
 - `./gradlew clean test` (DB 미설정): 913개 중 191개 건너뜀, 실패 0. 워크플로의 결과 검사는 이 경우를 실패로 처리한다 (건너뜀이 있으면 실패).
 - `./gradlew bootJar`: 성공.
 - `bash -n`: `deploy/scripts/*.sh`, `deploy/tests/*.sh` 전부 통과.
