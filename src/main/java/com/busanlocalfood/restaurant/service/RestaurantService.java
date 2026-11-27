@@ -132,7 +132,9 @@ public class RestaurantService {
      */
     public DeleteResult delete(long restaurantId, long memberId) {
         List<String> s3Keys = tx.execute(status -> {
-            Restaurant restaurant = find(restaurantId);
+            // 맛집 행을 먼저 잠근다. 같은 맛집에 대한 이미지 업로드·개별 삭제는 이 잠금이 풀릴 때까지 기다린다.
+            // 잠금을 잡은 뒤에 이미지 목록을 읽어야, 커밋되지 않은 업로드가 목록에서 빠지지 않는다.
+            Restaurant restaurant = findForUpdate(restaurantId);
             requireOwner(restaurant, memberId);
             List<RestaurantImage> owned = images.findByRestaurantIdOrderBySortOrderAscIdAsc(restaurantId);
             List<String> keys = new ArrayList<>();
@@ -164,6 +166,12 @@ public class RestaurantService {
 
     private Restaurant find(long restaurantId) {
         return restaurants.findById(restaurantId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESTAURANT_NOT_FOUND));
+    }
+
+    /** 맛집 행을 잠그고 읽는다. 쓰기 트랜잭션(삭제)에서만 쓴다. */
+    private Restaurant findForUpdate(long restaurantId) {
+        return restaurants.findByIdForUpdate(restaurantId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESTAURANT_NOT_FOUND));
     }
 

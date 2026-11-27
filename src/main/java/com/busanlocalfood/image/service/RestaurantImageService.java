@@ -73,7 +73,9 @@ public class RestaurantImageService {
 
     public ImageDeleteResult delete(long restaurantId, long imageId, long memberId) {
         String s3Key = tx.execute(status -> {
-            Restaurant restaurant = findRestaurant(restaurantId);
+            // 맛집 행을 잠가 맛집 전체 삭제와 직렬화한다. 맛집이 먼저 지워졌으면 여기서 RESTAURANT_NOT_FOUND가 된다.
+            Restaurant restaurant = restaurants.findByIdForUpdate(restaurantId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESTAURANT_NOT_FOUND));
             requireOwner(restaurant, memberId);
             RestaurantImage image = images.findByIdAndRestaurantId(imageId, restaurantId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESTAURANT_NOT_FOUND));

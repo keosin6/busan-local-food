@@ -66,6 +66,8 @@ class RestaurantServiceTest {
         ReflectionTestUtils.setField(stored, "id", RESTAURANT_ID);
 
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(stored));
+        // 삭제는 맛집 행을 잠근 뒤 권한을 본다 (findByIdForUpdate).
+        when(restaurants.findByIdForUpdate(RESTAURANT_ID)).thenReturn(Optional.of(stored));
         when(categories.findById(CATEGORY_ID)).thenReturn(Optional.of(category));
     }
 
