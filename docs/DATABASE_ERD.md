@@ -279,6 +279,8 @@ erDiagram
 - UNIQUE: `uk_summary_restaurant (restaurant_id)`
 - 무효화: 리뷰 작성·삭제(회원 삭제, 관리자 삭제 포함) 시 해당 행 DELETE (FUNCTION_SPEC F1-05)
 
+> 구현 메모 (SQL 007): 명세 컬럼, FK, UNIQUE를 그대로 구현했습니다. 추가로 `ck_summary_review_count` (`source_review_count >= 3`)를 두었습니다. 3개 미만 맛집은 캐시하지 않습니다. 무효화는 리뷰 작성·삭제 트랜잭션이 맛집 행을 잠근 뒤 같은 트랜잭션에서 행을 지우는 방식입니다.
+
 ### 2.8 refresh_token (리프레시 토큰)
 
 | 컬럼 | 타입 | NULL | 기본값 | 설명 |
@@ -420,7 +422,7 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 - 한 번 적용된 SQL 파일은 수정하지 않습니다. 새 변경은 다음 번호의 파일로 추가합니다. `ddl-auto`는 `none`을 유지합니다.
 - 이번 변경(`member` 컬럼 교체, `storage_delete_task` 추가)은 아직 배포된 DB가 없으므로 초기 스키마에 직접 반영합니다.
 
-### 6.1 수동 SQL 적용 순서 (001~006)
+### 6.1 수동 SQL 적용 순서 (001~007)
 
 | 순서 | 파일 | 내용 | 재실행 |
 |------|------|------|--------|
@@ -430,6 +432,7 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 | 4 | `db/manual/004_create_category_and_restaurant.sql` | `category`(시드 10개), `restaurant` 생성 (F1-02) | 금지 (이미 테이블이 있으면 실패) |
 | 5 | `db/manual/005_create_restaurant_image_and_storage_delete_task.sql` | `restaurant_image`, `storage_delete_task` 생성 (F1-03) | 금지 (이미 테이블이 있으면 실패) |
 | 6 | `db/manual/006_create_review.sql` | `review` 생성 (F1-04) | 금지 (이미 테이블이 있으면 실패) |
+| 7 | `db/manual/007_create_ai_review_summary.sql` | `ai_review_summary` 생성 (F1-05) | 금지 (이미 테이블이 있으면 실패) |
 
 - 적용 전에는 대상 DB를 백업하고 현재 스키마를 확인합니다. 운영 DB는 점검 시간에 적용합니다.
 - 002의 `UUID()`는 버전 1 형식입니다. 시각 정보와 서버 노드 식별 값을 담으므로, 마이그레이션 시점의 한 번 채우는 값으로만 씁니다. 애플리케이션의 신규 `family_id`는 버전 4(난수 기반) UUID를 사용합니다 (2026-11-12 확정, PROGRESS 6.8). 백필 값은 일회성이며 외부 노출 금지 대상입니다.
