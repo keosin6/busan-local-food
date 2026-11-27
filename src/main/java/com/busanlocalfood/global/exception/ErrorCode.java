@@ -32,6 +32,10 @@ public enum ErrorCode {
     RESTAURANT_NOT_FOUND(HttpStatus.NOT_FOUND, "맛집을 찾을 수 없습니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "이 작업을 할 권한이 없습니다."),
 
+    // 리뷰 (API_SPEC 1.3, 6.x, FUNCTION_SPEC F1-04). 한 회원은 한 맛집에 리뷰를 하나만 쓴다.
+    REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 이 맛집에 리뷰를 작성했습니다."),
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
+
     // 맛집 이미지 (API_SPEC 1.3, 5.1, FUNCTION_SPEC F1-03). 메시지에 저장소 자격 증명이나 서명 정보를 넣지 않는다.
     IMAGE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "JPEG, PNG, WEBP 형식의 이미지만 올릴 수 있습니다."),
     IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "이미지는 5MB 이하만 올릴 수 있습니다."),

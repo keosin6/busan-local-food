@@ -20,6 +20,7 @@ import com.busanlocalfood.restaurant.dto.RestaurantDtos.RestaurantSummary;
 import com.busanlocalfood.restaurant.repository.CategoryRepository;
 import com.busanlocalfood.restaurant.repository.RestaurantRepository;
 import com.busanlocalfood.restaurant.repository.RestaurantSearch;
+import com.busanlocalfood.review.repository.ReviewRepository;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,17 +51,19 @@ public class RestaurantService {
     private final CategoryRepository categories;
     private final MemberRepository members;
     private final RestaurantImageRepository images;
+    private final ReviewRepository reviews;
     private final StorageCleanup storageCleanup;
     private final ImageUrls imageUrls;
     private final TransactionTemplate tx;
 
     public RestaurantService(RestaurantRepository restaurants, CategoryRepository categories, MemberRepository members,
-                             RestaurantImageRepository images, StorageCleanup storageCleanup, ImageUrls imageUrls,
-                             PlatformTransactionManager transactionManager) {
+                             RestaurantImageRepository images, ReviewRepository reviews, StorageCleanup storageCleanup,
+                             ImageUrls imageUrls, PlatformTransactionManager transactionManager) {
         this.restaurants = restaurants;
         this.categories = categories;
         this.members = members;
         this.images = images;
+        this.reviews = reviews;
         this.storageCleanup = storageCleanup;
         this.imageUrls = imageUrls;
         this.tx = new TransactionTemplate(transactionManager);
@@ -143,6 +146,8 @@ public class RestaurantService {
                 keys.add(image.getS3Key());
             }
             images.deleteAll(owned);
+            // 리뷰는 같은 트랜잭션에서 지운다. 맛집 행이 사라지면 ON DELETE CASCADE가 남은 리뷰도 지우지만, 순서를 명시한다.
+            reviews.deleteAll(reviews.findByRestaurantId(restaurantId));
             restaurants.delete(restaurant);
             return keys;
         });

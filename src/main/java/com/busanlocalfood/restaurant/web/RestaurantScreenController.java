@@ -6,6 +6,9 @@ import com.busanlocalfood.member.web.ScreenSession;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.CategoryResponse;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.DeleteResult;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.PageResponse;
+import com.busanlocalfood.review.dto.ReviewDtos.ReviewItem;
+import com.busanlocalfood.review.service.ReviewService;
+import com.busanlocalfood.review.web.ReviewNotices;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.RestaurantDetail;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.RestaurantRequest;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.RestaurantSummary;
@@ -32,13 +35,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class RestaurantScreenController {
 
     static final String LIST_VIEW = "restaurant-list";
+    static final int REVIEW_PAGE_SIZE = 10;
     static final String DETAIL_VIEW = "restaurant-detail";
     static final String FORM_VIEW = "restaurant-form";
 
     private final RestaurantService restaurantService;
+    private final ReviewService reviewService;
 
-    public RestaurantScreenController(RestaurantService restaurantService) {
+    public RestaurantScreenController(RestaurantService restaurantService, ReviewService reviewService) {
         this.restaurantService = restaurantService;
+        this.reviewService = reviewService;
     }
 
     /** `/`와 `/restaurants`의 목록 화면. HomeController도 이 메서드를 쓴다. */
@@ -87,14 +93,27 @@ public class RestaurantScreenController {
     @GetMapping("/restaurants/{id}")
     public String detail(@PathVariable("id") long id,
                          @RequestParam(name = "error", required = false) String error,
+                         @RequestParam(name = "review", required = false) String review,
+                         @RequestParam(name = "reviewError", required = false) String reviewError,
+                         @RequestParam(name = "reviewPage", defaultValue = "0") int reviewPage,
                          Model model) {
+        Long viewerId = ScreenSession.currentMemberId().orElse(null);
         try {
-            RestaurantDetail restaurant = restaurantService.detail(id, ScreenSession.currentMemberId().orElse(null));
+            RestaurantDetail restaurant = restaurantService.detail(id, viewerId);
             model.addAttribute("restaurant", restaurant);
+            PageResponse<ReviewItem> reviewList = reviewService.list(id, viewerId, Math.max(reviewPage, 0), REVIEW_PAGE_SIZE);
+            model.addAttribute("reviews", reviewList.content());
+            model.addAttribute("reviewPage", reviewList.page());
+            model.addAttribute("reviewTotalPages", reviewList.totalPages());
+            model.addAttribute("reviewTotalElements", reviewList.totalElements());
+            model.addAttribute("hasPrevReview", reviewList.page() > 0);
+            model.addAttribute("hasNextReview", reviewList.page() + 1 < reviewList.totalPages());
         } catch (BusinessException e) {
             return "redirect:/restaurants?error=not_found";
         }
+        model.addAttribute("loggedIn", viewerId != null);
         model.addAttribute("error", error);
+        model.addAttribute("reviewNotice", ReviewNotices.notice(review, reviewError));
         return DETAIL_VIEW;
     }
 

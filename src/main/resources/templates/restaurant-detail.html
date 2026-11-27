@@ -56,8 +56,82 @@
         </div>
     </section>
 
+    <section class="mt-4" id="reviews" aria-labelledby="reviews-title">
+        <h2 class="h5" id="reviews-title">리뷰 <span class="text-muted small" th:text="'(' + ${reviewTotalElements} + ')'">(0)</span></h2>
+
+        <div th:if="${reviewNotice != null}" class="alert alert-info py-2" role="status" th:text="${reviewNotice}">안내</div>
+
+        <div th:if="${loggedIn}" class="card mb-3">
+            <div class="card-body">
+                <form method="post" th:action="@{/restaurants/{id}/reviews(id=${restaurant.id()})}" novalidate>
+                    <div class="row g-2 align-items-start">
+                        <div class="col-12 col-sm-3">
+                            <label for="review-rating" class="form-label small mb-1">평점 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="review-rating" name="rating" required>
+                                <option value="5" selected>5점 (매우 좋음)</option>
+                                <option value="4">4점</option>
+                                <option value="3">3점</option>
+                                <option value="2">2점</option>
+                                <option value="1">1점 (별로)</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-9">
+                            <label for="review-content" class="form-label small mb-1">내용 <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="review-content" name="content" rows="3" maxlength="500" required></textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end mt-2">
+                        <button type="submit" class="btn btn-primary btn-sm">리뷰 등록</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <p th:unless="${loggedIn}" class="text-muted small">
+            리뷰를 작성하려면 <a th:href="@{/login}">로그인</a>하세요.
+        </p>
+
+        <p th:if="${#lists.isEmpty(reviews)}" class="text-muted small">아직 리뷰가 없습니다.</p>
+
+        <ul class="list-unstyled mb-0" th:unless="${#lists.isEmpty(reviews)}">
+            <li class="border-bottom py-3" th:each="r : ${reviews}">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                        <span class="fw-semibold" th:text="${r.author().nickname()}">작성자</span>
+                        <span class="badge text-bg-light ms-1" th:text="'평점 ' + ${r.rating()}">평점 5</span>
+                    </div>
+                    <small class="text-muted text-nowrap"
+                           th:text="${#temporals.format(r.createdAt(), 'yyyy-MM-dd HH:mm')}">2026-11-01 12:00</small>
+                </div>
+                <p class="mb-1 mt-1" style="white-space: pre-line;" th:text="${r.content()}">리뷰 내용</p>
+                <form th:if="${r.isMine()}" method="post" th:action="@{/reviews/{rid}/delete(rid=${r.id()})}"
+                      data-confirm="이 리뷰를 삭제할까요? 삭제한 리뷰는 되돌릴 수 없습니다.">
+                    <input type="hidden" name="restaurantId" th:value="${restaurant.id()}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">삭제</button>
+                </form>
+            </li>
+        </ul>
+
+        <nav class="mt-2" aria-label="리뷰 페이지" th:if="${reviewTotalPages > 1}">
+            <ul class="pagination pagination-sm justify-content-center mb-0">
+                <li class="page-item" th:classappend="${!hasPrevReview} ? 'disabled'">
+                    <a class="page-link" th:href="@{/restaurants/{id}(id=${restaurant.id()},reviewPage=${reviewPage - 1})}"
+                       th:unless="${!hasPrevReview}">이전</a>
+                    <span class="page-link" th:if="${!hasPrevReview}">이전</span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link" th:text="${reviewPage + 1} + ' / ' + ${reviewTotalPages}">1 / 1</span>
+                </li>
+                <li class="page-item" th:classappend="${!hasNextReview} ? 'disabled'">
+                    <a class="page-link" th:href="@{/restaurants/{id}(id=${restaurant.id()},reviewPage=${reviewPage + 1})}"
+                       th:unless="${!hasNextReview}">다음</a>
+                    <span class="page-link" th:if="${!hasNextReview}">다음</span>
+                </li>
+            </ul>
+        </nav>
+    </section>
+
     <section class="mt-4 text-muted small">
-        <p class="mb-1">리뷰, 찜, AI 요약은 해당 기능이 구현되면 여기에 표시됩니다.</p>
+        <p class="mb-1">찜, AI 요약은 해당 기능이 구현되면 여기에 표시됩니다.</p>
     </section>
 </main>
 
