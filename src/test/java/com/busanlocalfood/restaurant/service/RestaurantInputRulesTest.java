@@ -97,15 +97,31 @@ class RestaurantInputRulesTest {
     void 위도는_플러스마이너스_90도_안에서만_받는다() {
         assertInvalid(with("이름", 1L, "주소", null, "설명", new BigDecimal("91"), null));
         assertInvalid(with("이름", 1L, "주소", null, "설명", new BigDecimal("-90.0000001"), null));
-        assertThat(RestaurantInputRules.validate(with("이름", 1L, "주소", null, "설명", new BigDecimal("90"), null))
+        assertThat(RestaurantInputRules.validate(with("이름", 1L, "주소", null, "설명", new BigDecimal("90"), new BigDecimal("0")))
                 .fields().latitude()).isEqualByComparingTo("90");
     }
 
     @Test
     void 경도는_플러스마이너스_180도_안에서만_받는다() {
         assertInvalid(with("이름", 1L, "주소", null, "설명", null, new BigDecimal("181")));
-        assertThat(RestaurantInputRules.validate(with("이름", 1L, "주소", null, "설명", null, new BigDecimal("-180")))
+        assertThat(RestaurantInputRules.validate(with("이름", 1L, "주소", null, "설명", new BigDecimal("0"), new BigDecimal("-180")))
                 .fields().longitude()).isEqualByComparingTo("-180");
+    }
+
+    @Test
+    void 위도만_있거나_경도만_있으면_VALIDATION_FAILED다() {
+        assertInvalid(with("이름", 1L, "주소", null, "설명", new BigDecimal("35.1587"), null));
+        assertInvalid(with("이름", 1L, "주소", null, "설명", null, new BigDecimal("129.1604")));
+    }
+
+    @Test
+    void 위도와_경도를_둘_다_비우거나_둘_다_입력하면_통과한다() {
+        assertThat(RestaurantInputRules.validate(with("이름", 1L, "주소", null, "설명", null, null))
+                .fields().latitude()).isNull();
+        RestaurantInputRules.Validated both = RestaurantInputRules.validate(
+                with("이름", 1L, "주소", null, "설명", new BigDecimal("35.1587"), new BigDecimal("129.1604")));
+        assertThat(both.fields().latitude()).isEqualByComparingTo("35.1587");
+        assertThat(both.fields().longitude()).isEqualByComparingTo("129.1604");
     }
 
     @Test

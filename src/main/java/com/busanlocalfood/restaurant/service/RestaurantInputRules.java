@@ -44,6 +44,10 @@ final class RestaurantInputRules {
         String address = requireText(request.address(), ADDRESS_MAX);
         String description = requireText(request.description(), DESCRIPTION_MAX);
         String phone = optionalPhone(request.phone());
+        // 위도와 경도는 둘 다 입력하거나 둘 다 비워야 한다. 한쪽만 있으면 좌표를 알 수 없다.
+        if ((request.latitude() == null) != (request.longitude() == null)) {
+            throw invalid();
+        }
         BigDecimal latitude = optionalCoordinate(request.latitude(), 90);
         BigDecimal longitude = optionalCoordinate(request.longitude(), 180);
         return new Validated(request.categoryId(),

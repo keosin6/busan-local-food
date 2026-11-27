@@ -68,14 +68,14 @@
     <nav class="mt-4" aria-label="페이지" th:if="${totalPages > 1}">
         <ul class="pagination justify-content-center">
             <li class="page-item" th:classappend="${!hasPrev} ? 'disabled'">
-                <a class="page-link" th:href="@{/restaurants(page=${prevPage})}" th:unless="${!hasPrev}">이전</a>
+                <a class="page-link" th:href="@{${'/restaurants?' + baseQuery + '&page=' + prevPage}}" th:unless="${!hasPrev}">이전</a>
                 <span class="page-link" th:if="${!hasPrev}">이전</span>
             </li>
             <li class="page-item disabled">
                 <span class="page-link" th:text="${page + 1} + ' / ' + ${totalPages}">1 / 1</span>
             </li>
             <li class="page-item" th:classappend="${!hasNext} ? 'disabled'">
-                <a class="page-link" th:href="@{/restaurants(page=${nextPage})}" th:unless="${!hasNext}">다음</a>
+                <a class="page-link" th:href="@{${'/restaurants?' + baseQuery + '&page=' + nextPage}}" th:unless="${!hasNext}">다음</a>
                 <span class="page-link" th:if="${!hasNext}">다음</span>
             </li>
         </ul>
