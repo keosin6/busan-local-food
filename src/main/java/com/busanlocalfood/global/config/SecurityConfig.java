@@ -131,7 +131,8 @@ public class SecurityConfig {
                 // 맛집 수정의 작성자 본인 확인은 F1-02에서 서버 측 서비스가 맡는다. 여기서는 로그인 여부만 본다.
                 .requestMatchers("/mypage", "/mypage/**", "/restaurants/new", "/restaurants/*/edit",
                         "/restaurants/*/delete", "/restaurants/*/images", "/restaurants/*/images/**",
-                        "/restaurants/*/reviews", "/reviews/*/delete").authenticated()
+                        "/restaurants/*/reviews", "/reviews/*/delete",
+                        "/favorites", "/restaurants/*/favorite", "/restaurants/*/favorite/delete").authenticated()
                 .anyRequest().permitAll());
         http.exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));

@@ -59,6 +59,9 @@ import org.springframework.test.web.servlet.MvcResult;
         AuthApiProdCookieTest.ClientIpConfig.class})
 class AuthApiProdCookieTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     @MockitoBean
     private RestaurantService restaurantService;
 

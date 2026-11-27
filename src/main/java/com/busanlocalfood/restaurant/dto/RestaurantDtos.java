@@ -9,8 +9,8 @@ import java.util.List;
 /**
  * 맛집 API 요청과 응답 형식 (API_SPEC 3.1, 4.1~4.5). 화면 폼과 API 본문이 같은 입력 형식을 쓴다.
  *
- * 이미지는 F1-03에서 연결했다. 찜(F1-06), 리뷰(F1-04), AI 요약(F1-05)은 아직 없다. 그래서 상세 응답의 favoriteCount는 0,
- * isFavorited는 false로 준다. 이 값들은 실제 데이터가 아니라 기능이 없다는 뜻의 기본값이다.
+ * 이미지는 F1-03, 리뷰는 F1-04, AI 요약은 F1-05, 찜은 F1-06에서 연결했다. 상세 응답의 favoriteCount와 isFavorited는
+ * 실제 찜 데이터다. 등록 직후의 맛집에는 찜이 없으므로 of(...)의 3인자 형태는 0과 false를 준다.
  */
 public final class RestaurantDtos {
 
@@ -66,13 +66,20 @@ public final class RestaurantDtos {
                                    BigDecimal averageRating, int reviewCount, OwnerRef owner,
                                    List<ImageSummary> images, int favoriteCount, boolean isFavorited,
                                    boolean isOwner, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        /** 찜이 없는 맛집(등록 직후)의 상세. 찜 값은 0과 false다. */
         public static RestaurantDetail of(Restaurant restaurant, boolean isOwner, List<ImageSummary> images) {
+            return of(restaurant, isOwner, images, 0, false);
+        }
+
+        /** 찜 수와 현재 회원의 찜 여부를 받는다. 비회원이면 isFavorited는 false다. */
+        public static RestaurantDetail of(Restaurant restaurant, boolean isOwner, List<ImageSummary> images,
+                                          int favoriteCount, boolean isFavorited) {
             return new RestaurantDetail(restaurant.getId(), restaurant.getName(),
                     CategoryRef.from(restaurant.getCategory()), restaurant.getAddress(), restaurant.getPhone(),
                     restaurant.getDescription(), restaurant.getLatitude(), restaurant.getLongitude(),
                     restaurant.getAverageRating(), restaurant.getReviewCount(),
                     new OwnerRef(restaurant.getMember().getId(), restaurant.getMember().getNickname()),
-                    images, 0, false, isOwner, restaurant.getCreatedAt(), restaurant.getUpdatedAt());
+                    images, favoriteCount, isFavorited, isOwner, restaurant.getCreatedAt(), restaurant.getUpdatedAt());
         }
     }
 

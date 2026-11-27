@@ -13,6 +13,7 @@
     <div th:if="${error == 'not_found'}" class="alert alert-danger" role="alert">맛집을 찾을 수 없습니다.</div>
     <div th:if="${deleted}" class="alert alert-success" role="status">맛집을 삭제했습니다.</div>
     <div th:if="${storageDelayed}" class="alert alert-warning" role="status">일부 이미지 삭제가 지연되고 있습니다.</div>
+    <div th:if="${favoriteNotice != null}" class="alert alert-info py-2" role="status" th:text="${favoriteNotice}">안내</div>
 
     <form method="get" th:action="@{/restaurants}" class="row g-2 align-items-end mb-4">
         <div class="col-12 col-md-4">
@@ -48,7 +49,7 @@
 
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
         <div class="col" th:each="r : ${restaurants}">
-            <div class="card h-100">
+            <div class="card h-100" th:id="'restaurant-' + ${r.id()}">
                 <img th:if="${r.thumbnailUrl() != null}" th:src="${r.thumbnailUrl()}" class="card-img-top"
                      alt="맛집 사진" style="height: 160px; object-fit: cover;">
                 <div th:unless="${r.thumbnailUrl() != null}"
@@ -65,6 +66,30 @@
                         평점 <span th:text="${r.averageRating()}">0.0</span>
                         · 리뷰 <span th:text="${r.reviewCount()}">0</span>
                     </p>
+                    <div class="mt-2">
+                        <form th:if="${loggedIn and !favoritedIds.contains(r.id())}" method="post"
+                              th:action="@{/restaurants/{id}/favorite(id=${r.id()})}">
+                            <input type="hidden" name="from" th:value="${listFrom}">
+                            <input type="hidden" name="category" th:if="${category != null}" th:value="${category}">
+                            <input type="hidden" name="keyword" th:value="${keyword}">
+                            <input type="hidden" name="sort" th:value="${sort}">
+                            <input type="hidden" name="page" th:value="${page}">
+                            <input type="hidden" name="size" th:value="${pageSize}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" aria-pressed="false">♡ 찜하기</button>
+                        </form>
+                        <form th:if="${loggedIn and favoritedIds.contains(r.id())}" method="post"
+                              th:action="@{/restaurants/{id}/favorite/delete(id=${r.id()})}">
+                            <input type="hidden" name="from" th:value="${listFrom}">
+                            <input type="hidden" name="category" th:if="${category != null}" th:value="${category}">
+                            <input type="hidden" name="keyword" th:value="${keyword}">
+                            <input type="hidden" name="sort" th:value="${sort}">
+                            <input type="hidden" name="page" th:value="${page}">
+                            <input type="hidden" name="size" th:value="${pageSize}">
+                            <button type="submit" class="btn btn-danger btn-sm" aria-pressed="true">♥ 찜 취소</button>
+                        </form>
+                        <a th:unless="${loggedIn}" class="btn btn-outline-secondary btn-sm"
+                           th:href="@{/login}">로그인하고 찜하기</a>
+                    </div>
                 </div>
             </div>
         </div>

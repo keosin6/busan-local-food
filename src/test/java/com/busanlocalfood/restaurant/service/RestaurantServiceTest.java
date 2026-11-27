@@ -58,7 +58,8 @@ class RestaurantServiceTest {
         imageUrls = mock(ImageUrls.class);
         service = new RestaurantService(restaurants, categories, members, images,
                 mock(com.busanlocalfood.review.repository.ReviewRepository.class),
-                mock(com.busanlocalfood.review.repository.ReviewSummaryRepository.class), storageCleanup, imageUrls,
+                mock(com.busanlocalfood.review.repository.ReviewSummaryRepository.class),
+                mock(com.busanlocalfood.favorite.repository.FavoriteRepository.class), storageCleanup, imageUrls,
                 mock(PlatformTransactionManager.class));
 
         category = mock(Category.class);

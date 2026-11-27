@@ -71,6 +71,9 @@ import org.springframework.test.web.servlet.MvcResult;
         GoogleSignupHttpTest.ClientIpConfig.class})
 class GoogleSignupHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     @MockitoBean
     private RestaurantService restaurantService;
 

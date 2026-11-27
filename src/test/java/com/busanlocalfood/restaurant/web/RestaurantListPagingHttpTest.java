@@ -39,6 +39,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import(SecurityConfig.class)
 class RestaurantListPagingHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     @MockitoBean
     private RestaurantService restaurantService;
 
