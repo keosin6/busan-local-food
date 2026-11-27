@@ -87,6 +87,9 @@ class RestaurantImageScreenHttpTest {
     private RestaurantService restaurantService;
 
     @MockitoBean
+    private com.busanlocalfood.review.service.ReviewService reviewService;
+
+    @MockitoBean
     private RestaurantImageService imageService;
 
     @MockitoBean
@@ -117,6 +120,8 @@ class RestaurantImageScreenHttpTest {
     @BeforeEach
     void stubs() {
         when(restaurantService.categories()).thenReturn(List.of());
+        when(reviewService.list(anyLong(), any(), anyInt(), anyInt()))
+                .thenReturn(new com.busanlocalfood.restaurant.dto.RestaurantDtos.PageResponse<>(List.of(), 0, 10, 0, 0));
     }
 
     @Test

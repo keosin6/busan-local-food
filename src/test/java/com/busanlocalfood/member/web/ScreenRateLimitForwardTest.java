@@ -97,6 +97,9 @@ class ScreenRateLimitForwardTest {
     private com.busanlocalfood.restaurant.service.RestaurantService restaurantService;
 
     @MockitoBean
+    private com.busanlocalfood.review.service.ReviewService reviewService;
+
+    @MockitoBean
     private MemberAccountService accounts;
 
     @MockitoBean

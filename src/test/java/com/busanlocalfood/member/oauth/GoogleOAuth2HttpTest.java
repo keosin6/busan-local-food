@@ -75,6 +75,9 @@ class GoogleOAuth2HttpTest {
     private RestaurantService restaurantService;
 
     @MockitoBean
+    private com.busanlocalfood.review.service.ReviewService reviewService;
+
+    @MockitoBean
     private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
 
     @MockitoBean
