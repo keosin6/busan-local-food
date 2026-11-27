@@ -566,6 +566,12 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ## 4. 맛집 API (F1-02, F1-03)
 
+> 구현 상태 (PR #37 병합, merge commit `1f885dd`): 3.1과 4.1~4.5는 구현되었습니다. 아래는 명세와 구현이 다르거나 아직 없는 부분입니다. 명세 본문은 설계 기준으로 두고, 구현에 맞춰 바꾸지 않았습니다.
+> - 4.1 목록 항목의 `thumbnailUrl`은 아직 없습니다 (F1-03).
+> - 4.2 상세의 `images`는 항상 빈 배열, `favoriteCount`는 0, `isFavorited`는 `false`입니다 (F1-03, F1-06 전 자리표시).
+> - 4.5 삭제 응답은 `deletedImageCount`, `storageDeleteFailedCount` 두 필드만 있습니다. 본문 설명의 `storageDeleted` 필드는 없습니다. 이미지 S3 삭제와 `storage_delete_task` 기록은 F1-03에서 구현합니다. 리뷰·찜·AI 요약 행 삭제는 해당 기능 구현 후 추가합니다.
+> - 1.2 공통 응답 형식의 오류 `details` 배열은 아직 응답에 없습니다.
+
 ### 4.1 맛집 목록·검색
 
 - 메서드·URL: `GET /api/restaurants`
@@ -644,7 +650,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
   "longitude": 129.1604
 }
 ```
-- `phone`, `latitude`, `longitude`는 선택 항목입니다.
+- `phone`, `latitude`, `longitude`는 선택 항목입니다. 위도와 경도는 둘 다 입력하거나 둘 다 비워야 합니다. 한쪽만 있으면 400 VALIDATION_FAILED입니다 (구현 규칙, PR #37).
 - 응답 `201`: 상세 DTO (4.2 구조). 등록한 회원이 `owner`가 됩니다.
 - 주요 오류: 400 VALIDATION_FAILED, 400 CATEGORY_NOT_FOUND, 401 TOKEN_INVALID
 
