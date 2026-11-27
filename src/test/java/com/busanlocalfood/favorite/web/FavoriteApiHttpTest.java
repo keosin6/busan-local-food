@@ -55,6 +55,12 @@ import org.springframework.test.web.servlet.MockMvc;
 class FavoriteApiHttpTest {
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminQueryService adminQueries;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminStorageRetryService adminStorageRetry;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.busanlocalfood.recommendation.service.RestaurantRecommendationService recommendations;
 
     private static final String JWT_SECRET = randomBase64Key();

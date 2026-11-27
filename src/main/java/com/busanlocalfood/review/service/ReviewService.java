@@ -2,6 +2,8 @@ package com.busanlocalfood.review.service;
 
 import com.busanlocalfood.global.exception.BusinessException;
 import com.busanlocalfood.global.exception.ErrorCode;
+import com.busanlocalfood.global.security.AdminAccess;
+import org.springframework.security.core.Authentication;
 import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.repository.MemberRepository;
 import com.busanlocalfood.restaurant.domain.Restaurant;
@@ -98,6 +100,16 @@ public class ReviewService {
      * 리뷰가 속한 맛집을 먼저 알아내고, 그 맛집 행을 잠근 뒤 리뷰를 다시 읽는다. 잠금 전에 읽은 값은 쓰지 않는다.
      */
     public DeletedReview delete(long reviewId, long memberId) {
+        return deleteReview(reviewId, memberId);
+    }
+
+    /** 관리자 리뷰 삭제 (FUNCTION_SPEC F1-09). 작성자 확인만 생략하고, 잠금·재조회·집계 갱신·캐시 삭제는 같다. */
+    public DeletedReview deleteAsAdmin(long reviewId, Authentication actor) {
+        AdminAccess.requireAdmin(actor);
+        return deleteReview(reviewId, null);
+    }
+
+    private DeletedReview deleteReview(long reviewId, Long ownerOrNull) {
         Long restaurantId = reviews.findRestaurantIdById(reviewId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.REVIEW_NOT_FOUND));
         return tx.execute(status -> {
@@ -105,7 +117,7 @@ public class ReviewService {
                     .orElseThrow(() -> new BusinessException(ErrorCode.REVIEW_NOT_FOUND));
             Review review = reviews.findById(reviewId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.REVIEW_NOT_FOUND));
-            if (!review.isWrittenBy(memberId)) {
+            if (ownerOrNull != null && !review.isWrittenBy(ownerOrNull)) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             reviews.delete(review);

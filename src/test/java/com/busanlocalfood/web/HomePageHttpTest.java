@@ -58,6 +58,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class})
 class HomePageHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminQueryService adminQueries;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminStorageRetryService adminStorageRetry;
+
     private static final String SESSION_CONTEXT = HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY;
     private static final long MEMBER_ID = 7L;
     private static final String JWT_SECRET = randomBase64Key();

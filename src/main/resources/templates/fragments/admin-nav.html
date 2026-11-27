@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<nav th:fragment="nav(active)" class="nav nav-pills flex-wrap gap-1 mb-3" aria-label="관리자 메뉴">
+    <a class="nav-link" th:classappend="${active == 'dashboard'} ? 'active'" th:href="@{/admin}">대시보드</a>
+    <a class="nav-link" th:classappend="${active == 'restaurants'} ? 'active'" th:href="@{/admin/restaurants}">맛집 관리</a>
+    <a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">리뷰 관리</a>
+    <a class="nav-link" th:classappend="${active == 'members'} ? 'active'" th:href="@{/admin/members}">회원 조회</a>
+    <a class="nav-link" th:classappend="${active == 'storage'} ? 'active'" th:href="@{/admin/storage-deletions}">S3 삭제 재시도</a>
+</nav>
+</body>
+</html>

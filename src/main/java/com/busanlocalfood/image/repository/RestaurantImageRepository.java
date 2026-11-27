@@ -24,4 +24,8 @@ public interface RestaurantImageRepository extends JpaRepository<RestaurantImage
     /** 현재 가장 큰 sort_order. 이미지가 없으면 -1이다. 새 이미지는 이 값 + 1을 받는다. */
     @Query("select coalesce(max(i.sortOrder), -1) from RestaurantImage i where i.restaurant.id = :restaurantId")
     int maxSortOrder(@Param("restaurantId") Long restaurantId);
+
+    /** 여러 맛집의 이미지 개수를 한 번에 센다. 행은 [맛집 ID, 개수]다. 관리자 목록에 쓴다. */
+    @Query("select i.restaurant.id, count(i) from RestaurantImage i where i.restaurant.id in :restaurantIds group by i.restaurant.id")
+    List<Object[]> countByRestaurantIds(@Param("restaurantIds") Collection<Long> restaurantIds);
 }

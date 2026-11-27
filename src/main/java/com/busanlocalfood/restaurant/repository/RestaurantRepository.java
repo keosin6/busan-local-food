@@ -3,8 +3,12 @@ package com.busanlocalfood.restaurant.repository;
 import com.busanlocalfood.restaurant.domain.Restaurant;
 import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -35,4 +39,19 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, J
      */
     @EntityGraph(attributePaths = "category")
     List<Restaurant> findByOrderByCreatedAtDescIdDesc(Pageable pageable);
+
+    /**
+     * 관리자 맛집 목록 (FUNCTION_SPEC F1-09). 일반 목록과 같은 검색 조건을 쓰되, 작성자와 카테고리를 같은 쿼리에서 읽는다.
+     */
+    @EntityGraph(attributePaths = {"member", "category"})
+    @Override
+    Page<Restaurant> findAll(Specification<Restaurant> spec, Pageable pageable);
+
+    long countByMemberId(Long memberId);
+
+    long countByCreatedAtGreaterThanEqual(LocalDateTime since);
+
+    /** 여러 회원의 맛집 수를 한 번에 센다. 행은 [회원 ID, 개수]다. */
+    @Query("select r.member.id, count(r) from Restaurant r where r.member.id in :memberIds group by r.member.id")
+    List<Object[]> countByMemberIds(@Param("memberIds") Collection<Long> memberIds);
 }

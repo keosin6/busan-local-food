@@ -2,6 +2,8 @@ package com.busanlocalfood.restaurant.service;
 
 import com.busanlocalfood.global.exception.BusinessException;
 import com.busanlocalfood.global.exception.ErrorCode;
+import com.busanlocalfood.global.security.AdminAccess;
+import org.springframework.security.core.Authentication;
 import com.busanlocalfood.favorite.repository.FavoriteRepository;
 import com.busanlocalfood.image.domain.RestaurantImage;
 import com.busanlocalfood.image.repository.RestaurantImageRepository;
@@ -145,12 +147,28 @@ public class RestaurantService {
     /** 수정 (API_SPEC 4.4). 작성자 본인만 할 수 있다. 이미지는 이 요청으로 바뀌지 않는다. */
     @Transactional
     public RestaurantDetail update(long restaurantId, long memberId, RestaurantRequest request) {
+        return updateRestaurant(restaurantId, memberId, request);
+    }
+
+    /**
+     * 관리자 맛집 수정 (FUNCTION_SPEC F1-09). 작성자 확인만 생략하고, 입력 검증과 갱신은 일반 수정과 같다.
+     * 작성자(member)는 바뀌지 않는다. 요청 형식에 작성자 필드가 없고, 알 수 없는 필드는 400이다.
+     */
+    @Transactional
+    public RestaurantDetail updateAsAdmin(long restaurantId, Authentication actor, RestaurantRequest request) {
+        AdminAccess.requireAdmin(actor);
+        return updateRestaurant(restaurantId, null, request);
+    }
+
+    private RestaurantDetail updateRestaurant(long restaurantId, Long ownerOrNull, RestaurantRequest request) {
         Restaurant restaurant = find(restaurantId);
-        requireOwner(restaurant, memberId);
+        if (ownerOrNull != null) {
+            requireOwner(restaurant, ownerOrNull);
+        }
         RestaurantInputRules.Validated input = RestaurantInputRules.validate(request);
         Category category = findCategory(input.categoryId());
         restaurant.update(category, input.fields());
-        return detailFor(restaurant, memberId);
+        return detailFor(restaurant, ownerOrNull);
     }
 
     /**
@@ -164,11 +182,23 @@ public class RestaurantService {
      * 찜, 리뷰, AI 요약 행은 같은 트랜잭션에서 지운다 (DATABASE_ERD 삭제 흐름). FK CASCADE는 안전장치다.
      */
     public DeleteResult delete(long restaurantId, long memberId) {
+        return deleteRestaurant(restaurantId, memberId);
+    }
+
+    /** 관리자 맛집 삭제 (FUNCTION_SPEC F1-09). 작성자 확인만 생략하고 나머지 흐름은 delete와 같다. */
+    public DeleteResult deleteAsAdmin(long restaurantId, Authentication actor) {
+        AdminAccess.requireAdmin(actor);
+        return deleteRestaurant(restaurantId, null);
+    }
+
+    private DeleteResult deleteRestaurant(long restaurantId, Long ownerOrNull) {
         List<String> s3Keys = tx.execute(status -> {
             // 맛집 행을 먼저 잠근다. 같은 맛집에 대한 이미지 업로드·개별 삭제는 이 잠금이 풀릴 때까지 기다린다.
             // 잠금을 잡은 뒤에 이미지 목록을 읽어야, 커밋되지 않은 업로드가 목록에서 빠지지 않는다.
             Restaurant restaurant = findForUpdate(restaurantId);
-            requireOwner(restaurant, memberId);
+            if (ownerOrNull != null) {
+                requireOwner(restaurant, ownerOrNull);
+            }
             List<RestaurantImage> owned = images.findByRestaurantIdOrderBySortOrderAscIdAsc(restaurantId);
             List<String> keys = new ArrayList<>();
             for (RestaurantImage image : owned) {
@@ -193,6 +223,13 @@ public class RestaurantService {
             }
         }
         return new DeleteResult(restaurantId, s3Keys.size(), storageFailed);
+    }
+
+    /** 관리자 수정 화면에 채울 값. 작성자 확인은 하지 않는다. 관리자만 쓴다. */
+    @Transactional(readOnly = true)
+    public RestaurantDetail loadForEditAsAdmin(long restaurantId, Authentication actor) {
+        AdminAccess.requireAdmin(actor);
+        return detailFor(find(restaurantId), null);
     }
 
     /** 수정 화면에 채울 값. 작성자가 아니면 FORBIDDEN이다. */
@@ -252,7 +289,8 @@ public class RestaurantService {
         }
     }
 
-    private static Sort parseSort(String sort) {
+    /** 목록 정렬 규칙. latest(기본)와 rating만 허용한다. 관리자 목록도 같은 규칙을 쓴다. */
+    public static Sort parseSort(String sort) {
         if (sort == null || sort.isBlank() || "latest".equals(sort)) {
             return LATEST;
         }

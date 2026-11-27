@@ -54,6 +54,12 @@ import org.springframework.test.web.servlet.MvcResult;
 class GoogleOAuth2DisabledHttpTest {
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminQueryService adminQueries;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminStorageRetryService adminStorageRetry;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.busanlocalfood.recommendation.service.RestaurantRecommendationService recommendations;
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean

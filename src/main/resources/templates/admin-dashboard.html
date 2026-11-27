@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('관리자 대시보드')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-4 flex-grow-1">
+    <h1 class="h3 mb-3">관리자 대시보드</h1>
+    <div th:replace="~{fragments/admin-nav :: nav('dashboard')}"></div>
+
+    <div class="row row-cols-2 row-cols-md-3 g-3 mb-4">
+        <div class="col"><div class="card h-100"><div class="card-body">
+            <p class="small text-muted mb-1">회원 수</p>
+            <p class="h4 mb-0" th:text="${dashboard.memberCount()}">0</p>
+        </div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body">
+            <p class="small text-muted mb-1">맛집 수</p>
+            <p class="h4 mb-0" th:text="${dashboard.restaurantCount()}">0</p>
+        </div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body">
+            <p class="small text-muted mb-1">리뷰 수</p>
+            <p class="h4 mb-0" th:text="${dashboard.reviewCount()}">0</p>
+        </div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body">
+            <p class="small text-muted mb-1">최근 7일 신규 맛집</p>
+            <p class="h4 mb-0" th:text="${dashboard.newRestaurantsLast7Days()}">0</p>
+        </div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body">
+            <p class="small text-muted mb-1">최근 7일 신규 리뷰</p>
+            <p class="h4 mb-0" th:text="${dashboard.newReviewsLast7Days()}">0</p>
+        </div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body">
+            <p class="small text-muted mb-1">S3 삭제 대기</p>
+            <p class="h4 mb-0" th:text="${dashboard.pendingStorageDeletionCount()}">0</p>
+        </div></div></div>
+    </div>
+    <p class="small text-muted">최근 7일은 서비스 시간대(Asia/Seoul) 기준으로 오늘을 포함한 7일입니다.</p>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

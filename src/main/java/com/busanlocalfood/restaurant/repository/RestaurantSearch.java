@@ -13,7 +13,7 @@ import org.springframework.data.jpa.domain.Specification;
 public final class RestaurantSearch {
 
     /** LIKE 이스케이프 문자. 백슬래시는 MySQL 문자열 리터럴과 얽히므로 쓰지 않는다. */
-    static final char ESCAPE = '!';
+    public static final char ESCAPE = '!';
 
     private RestaurantSearch() {
     }
@@ -35,7 +35,7 @@ public final class RestaurantSearch {
     }
 
     /** %, _, 이스케이프 문자 앞에 이스케이프 문자를 붙인다. */
-    static String escapeLike(String raw) {
+    public static String escapeLike(String raw) {
         StringBuilder out = new StringBuilder(raw.length() + 8);
         for (char c : raw.toCharArray()) {
             if (c == ESCAPE || c == '%' || c == '_') {

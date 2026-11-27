@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('리뷰 관리')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container-fluid px-3 px-md-4 py-4 flex-grow-1">
+    <h1 class="h3 mb-3">리뷰 관리</h1>
+    <div th:replace="~{fragments/admin-nav :: nav('reviews')}"></div>
+
+    <div th:if="${notice != null}" class="alert alert-success" role="status" th:text="${notice}">알림</div>
+    <div th:if="${error != null}" class="alert alert-danger" role="alert" th:text="${error}">오류</div>
+
+    <form method="get" th:action="@{/admin/reviews}" class="row g-2 align-items-end mb-3">
+        <div class="col-6 col-md-3">
+            <label for="restaurantId" class="form-label">맛집 ID</label>
+            <input type="number" class="form-control" id="restaurantId" name="restaurantId" min="1" th:value="${restaurantId}">
+        </div>
+        <div class="col-6 col-md-3">
+            <label for="memberId" class="form-label">회원 ID</label>
+            <input type="number" class="form-control" id="memberId" name="memberId" min="1" th:value="${memberId}">
+        </div>
+        <div class="col-12 col-md-3 d-grid">
+            <button type="submit" class="btn btn-outline-dark">검색</button>
+        </div>
+    </form>
+
+    <p class="small text-muted mb-2" th:text="'총 ' + ${result.totalElements()} + '개'">총 0개</p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">맛집</th>
+                <th scope="col">작성자</th>
+                <th scope="col">평점</th>
+                <th scope="col" style="min-width: 260px;">내용</th>
+                <th scope="col">작성일</th>
+                <th scope="col">관리</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${result.content()}">
+                <td th:text="${r.id()}">1</td>
+                <td><a th:href="@{/restaurants/{id}(id=${r.restaurant().id()})}" th:text="${r.restaurant().name()}">맛집</a>
+                    <br><small class="text-muted" th:text="'ID ' + ${r.restaurant().id()}">ID 1</small></td>
+                <td>
+                    <span th:text="${r.author().nickname()}">작성자</span><br>
+                    <small class="text-muted" th:text="${r.author().email()}">email</small>
+                </td>
+                <td th:text="${r.rating()}">5</td>
+                <td style="white-space: pre-line;" th:text="${r.content()}">리뷰 내용</td>
+                <td class="small" th:text="${#temporals.format(r.createdAt(), 'yyyy-MM-dd HH:mm')}">2026-11-01 12:00</td>
+                <td>
+                    <form method="post" th:action="@{/admin/reviews/{id}/delete(id=${r.id()})}"
+                          data-confirm="이 리뷰를 삭제할까요? 맛집 평점과 리뷰 수가 다시 계산됩니다.">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">삭제</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <p th:if="${#lists.isEmpty(result.content())}" class="alert alert-secondary" role="status">조건에 맞는 리뷰가 없습니다.</p>
+
+    <nav aria-label="페이지" th:if="${result.totalPages() > 1}">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${result.page() == 0} ? 'disabled'">
+                <a class="page-link" th:href="@{${'/admin/reviews?' + baseQuery + '&page=' + (result.page() - 1)}}"
+                   th:unless="${result.page() == 0}">이전</a>
+                <span class="page-link" th:if="${result.page() == 0}">이전</span>
+            </li>
+            <li class="page-item disabled"><span class="page-link" th:text="${result.page() + 1} + ' / ' + ${result.totalPages()}">1 / 1</span></li>
+            <li class="page-item" th:classappend="${result.page() + 1 >= result.totalPages()} ? 'disabled'">
+                <a class="page-link" th:href="@{${'/admin/reviews?' + baseQuery + '&page=' + (result.page() + 1)}}"
+                   th:unless="${result.page() + 1 >= result.totalPages()}">다음</a>
+                <span class="page-link" th:if="${result.page() + 1 >= result.totalPages()}">다음</span>
+            </li>
+        </ul>
+    </nav>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

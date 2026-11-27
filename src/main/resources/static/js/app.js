@@ -78,6 +78,14 @@
             if (form && form.hasAttribute && form.hasAttribute('data-confirm')) {
                 if (!root.confirm(form.getAttribute('data-confirm'))) {
                     event.preventDefault();
+                    return;
+                }
+            }
+            // data-once 폼은 제출 중 버튼을 막아 중복 제출을 줄인다 (관리자 S3 재시도 등).
+            if (form && form.hasAttribute && form.hasAttribute('data-once') && !event.defaultPrevented) {
+                var buttons = form.querySelectorAll('button[type=submit], input[type=submit]');
+                for (var i = 0; i < buttons.length; i++) {
+                    buttons[i].disabled = true;
                 }
             }
         });
