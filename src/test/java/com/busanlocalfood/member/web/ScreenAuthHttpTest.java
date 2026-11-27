@@ -87,6 +87,9 @@ class ScreenAuthHttpTest {
     private com.busanlocalfood.review.service.ReviewService reviewService;
 
     @MockitoBean
+    private com.busanlocalfood.review.service.ReviewSummaryService reviewSummaryService;
+
+    @MockitoBean
     private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
 
     /** 홈은 맛집 목록 화면이 되었다. 이 테스트는 인증 흐름만 보므로 목록은 빈 결과로 둔다. */

@@ -90,6 +90,9 @@ class RestaurantImageScreenHttpTest {
     private com.busanlocalfood.review.service.ReviewService reviewService;
 
     @MockitoBean
+    private com.busanlocalfood.review.service.ReviewSummaryService reviewSummaryService;
+
+    @MockitoBean
     private RestaurantImageService imageService;
 
     @MockitoBean
@@ -120,6 +123,7 @@ class RestaurantImageScreenHttpTest {
     @BeforeEach
     void stubs() {
         when(restaurantService.categories()).thenReturn(List.of());
+        when(reviewSummaryService.summaryFor(anyLong())).thenReturn(new com.busanlocalfood.review.dto.ReviewDtos.SummaryResponse("NOT_ENOUGH_REVIEWS", null, 0, null, null, "리뷰 3개 이상이 되면 AI 요약을 볼 수 있습니다."));
         when(reviewService.list(anyLong(), any(), anyInt(), anyInt()))
                 .thenReturn(new com.busanlocalfood.restaurant.dto.RestaurantDtos.PageResponse<>(List.of(), 0, 10, 0, 0));
     }

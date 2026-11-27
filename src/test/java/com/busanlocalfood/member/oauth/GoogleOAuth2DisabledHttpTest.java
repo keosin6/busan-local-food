@@ -60,6 +60,9 @@ class GoogleOAuth2DisabledHttpTest {
     private com.busanlocalfood.review.service.ReviewService reviewService;
 
     @MockitoBean
+    private com.busanlocalfood.review.service.ReviewSummaryService reviewSummaryService;
+
+    @MockitoBean
     private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
 
     @MockitoBean
