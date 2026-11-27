@@ -817,6 +817,31 @@
 - 보호 경로 `/restaurants/new`와 `/restaurants/*/edit`는 화면 세션이 없으면 `/login`으로 보낸다. JWT 쿠키만으로는 화면 인증되지 않는다. 화면 POST의 CSRF 보호는 유지된다.
 - F1-01은 진행 중으로 유지한다. 남은 작업: F1-02 맛집 등록·수정 기능과 서버 측 작성자 소유권 검사.
 
+### 6.27 F1-02 맛집 관리 구현 (2026-11-27)
+
+- 브랜치: `feat/f1-02-restaurant-management` (기준: `main` `db60e4313971e6bbb8def9e7bcf90815c7ed29e5`).
+- SQL: `db/manual/004_create_category_and_restaurant.sql` 추가. `category`(시드 10개, `sort_order` 1~10), `restaurant`(DATABASE_ERD 2.3, `member_id`·`category_id` FK는 RESTRICT, CHECK 두 개, 인덱스 세 개). 001~003은 바꾸지 않았다. 적용 순서는 001 → 002 → 003 → 004.
+- API: `GET /api/categories`(공개), `GET /api/restaurants`(공개, 카테고리·검색어 50자·`latest`/`rating`·페이지 기본 12, 최대 50), `GET /api/restaurants/{id}`(공개, 로그인하면 `isOwner` 계산), `POST /api/restaurants`(JWT 필수, 201), `PUT`·`DELETE /api/restaurants/{id}`(JWT 필수, 작성자 본인만, 관리자 우회 없음). 작성자 검사는 서비스 계층에서 한다. 없는 맛집은 404 `RESTAURANT_NOT_FOUND`, 작성자가 아니면 403 `FORBIDDEN`, 없는 카테고리는 400 `CATEGORY_NOT_FOUND`.
+- 화면: `/`(맛집 목록), `/restaurants`(목록·검색·정렬·페이지), `/restaurants/{id}`(상세, 작성자에게만 수정·삭제 버튼), `/restaurants/new`·`/restaurants/{id}/edit`(등록·수정 폼, 화면 세션과 CSRF). 삭제 폼은 `data-confirm`으로 한 번 확인한다.
+- 삭제는 DB 행을 완전히 지운다. 이미지 테이블이 아직 없으므로 삭제 결과의 이미지 수와 S3 실패 수는 0이다. S3 삭제 실제 수행과 `storage_delete_task` 기록은 F1-03에서 `RestaurantService.delete`에 넣는다. 가짜 성공 응답은 만들지 않았다.
+- 보안 설정: API 체인에 GET 공개 경로(`/api/categories`, `/api/restaurants`, `/api/restaurants/*`)를 추가했다. 화면 체인에서 `/restaurants/new`, `/restaurants/*/edit`, `/restaurants/*/delete`는 인증 필수다.
+- 설계 판단: `/`는 맛집 목록을 보여 준다(기존 홈 화면은 템플릿만 남겼다). 상세의 이미지는 빈 목록, 찜 수는 0, 찜 여부는 false다. 목록과 상세에는 썸네일 URL 필드를 넣지 않았다(F1-03). LIKE 검색은 `!`를 이스케이프 문자로 쓴다.
+- 테스트 (신규 55개 + 기존 회귀):
+  - 단위·슬라이스(DB 없이): `RestaurantInputRulesTest` 13개, `RestaurantSearchTest` 3개, `RestaurantServiceTest` 10개(작성자·없음·카테고리 분기), `RestaurantApiHttpTest` 19개(공개 조회, JWT 401, CSRF 403, 작성자 아님 403, 없음 404, 검증 400, 카테고리 없음 400, 잘못된 토큰).
+  - DB(MySQL 8.0.46, SQL 001~004 적용): `RestaurantDbTest` 10개(시드 순서, 등록 기본값, 작성자 수정·삭제, 퍼센트·밑줄 검색, 카테고리 필터, 페이지, 평점 정렬, RESTRICT 외래키). 각 테스트 뒤 맛집과 테스트 회원 행을 지운다.
+- 실행 결과 (환경별로 구분):
+  - DB 미설정 `./gradlew --offline clean test`: 606개 실행, 건너뜀 93개(모두 DB 테스트), 실패 0개. DB 테스트는 통과로 세지 않았다.
+  - 테스트 DB 설정(`TEST_DB_URL`에 `characterEncoding=UTF-8` 포함, MySQL 8.0.46 로컬, SQL 001~004 적용) `./gradlew --offline clean test`: 606개 실행, 건너뜀 0개, 실패 0개.
+  - `./gradlew --offline bootJar`: 성공.
+  - `git diff --check`: 통과.
+- 발견과 조치: 004 시드를 클라이언트 문자셋 기본값(latin1)으로 넣으면 한글이 이중 인코딩되어 저장된다. 004 파일에 `SET NAMES utf8mb4;`를 넣고 README에 `--default-character-set=utf8mb4`를 적었다. `TEST_DB_URL`에는 `characterEncoding=UTF-8`을 넣어야 한다. 빠지면 DB 테스트가 한글을 잘못 읽어 실패한다.
+- 알려진 차이와 남은 항목:
+  - API_SPEC 예시의 오류 응답 `details` 배열은 아직 없다. 기존 `ApiErrorResponse` 형식을 유지했다.
+  - 좌표는 위도·경도 중 하나만 보내도 저장된다. 명세의 짝 검증은 F1-02 범위에서 빠졌다.
+  - 목록과 상세의 작성자 닉네임은 상세에서만 쓰므로 목록의 지연 로딩 추가 조회는 아직 줄이지 않았다.
+  - 화면의 작성자 전용 버튼과 삭제 확인 흐름은 브라우저로 직접 확인하지 않았다(자동화 테스트 없음).
+  - 미구현(범위 밖): F1-03 이미지와 S3 삭제, F1-04 리뷰, F1-05 AI 요약, F1-06 찜, F1-09 관리자.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):

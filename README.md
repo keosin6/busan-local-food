@@ -118,6 +118,12 @@ mysql -u busan -p busan_local_food < db/manual/002_add_refresh_token_family_id.s
 mysql -u busan -p busan_local_food < db/manual/003_create_auth_rate_limit_tables.sql
 ```
 
+```bash
+mysql --default-character-set=utf8mb4 -u busan -p busan_local_food < db/manual/004_create_category_and_restaurant.sql
+```
+
+004는 카테고리 시드(한글)를 넣으므로 반드시 `--default-character-set=utf8mb4`로 실행합니다. 파일 안의 `SET NAMES utf8mb4;`는 이 옵션을 대신하지 않습니다. 빠뜨리면 한글 시드가 깨진 채 저장됩니다.
+
 ### 3. 실행
 
 ```bash
@@ -136,7 +142,7 @@ mysql -u busan -p busan_local_food < db/manual/003_create_auth_rate_limit_tables
 DB 연동 테스트는 기본으로 건너뜁니다. 실행하려면 개발 DB와 분리된 테스트 전용 데이터베이스에 SQL 001, 002, 003을 순서대로 적용하고 아래 변수를 지정합니다.
 
 ```bash
-export TEST_DB_URL='jdbc:mysql://localhost:3306/<테스트 DB 이름>'
+export TEST_DB_URL='jdbc:mysql://localhost:3306/<테스트 DB 이름>?characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true'
 ```
 
 ```bash
