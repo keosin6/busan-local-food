@@ -75,6 +75,9 @@ import org.springframework.test.web.servlet.MvcResult;
 class ProtectedScreenHttpTest {
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.recommendation.service.RestaurantRecommendationService recommendations;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
 
     @MockitoBean

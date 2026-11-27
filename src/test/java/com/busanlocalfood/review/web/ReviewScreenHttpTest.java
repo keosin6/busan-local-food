@@ -71,6 +71,9 @@ import org.springframework.test.web.servlet.MvcResult;
 class ReviewScreenHttpTest {
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.recommendation.service.RestaurantRecommendationService recommendations;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
 
     private static final String SESSION_CONTEXT = HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY;

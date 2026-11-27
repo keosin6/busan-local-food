@@ -132,7 +132,8 @@ public class SecurityConfig {
                 .requestMatchers("/mypage", "/mypage/**", "/restaurants/new", "/restaurants/*/edit",
                         "/restaurants/*/delete", "/restaurants/*/images", "/restaurants/*/images/**",
                         "/restaurants/*/reviews", "/reviews/*/delete",
-                        "/favorites", "/restaurants/*/favorite", "/restaurants/*/favorite/delete").authenticated()
+                        "/favorites", "/restaurants/*/favorite", "/restaurants/*/favorite/delete",
+                        "/recommend").authenticated()
                 .anyRequest().permitAll());
         http.exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));

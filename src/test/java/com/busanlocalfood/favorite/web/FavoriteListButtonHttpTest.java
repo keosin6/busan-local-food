@@ -73,6 +73,9 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class})
 class FavoriteListButtonHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.recommendation.service.RestaurantRecommendationService recommendations;
+
     private static final String SESSION_CONTEXT = HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY;
     private static final Pattern CSRF_FIELD = Pattern.compile("\"_csrf\"[^>]*?value=\"([^\"]+)\"");
     private static final String JWT_SECRET = randomBase64Key();

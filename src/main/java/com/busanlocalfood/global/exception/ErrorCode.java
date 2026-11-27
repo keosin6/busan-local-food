@@ -40,6 +40,10 @@ public enum ErrorCode {
     FAVORITE_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 찜한 맛집입니다."),
     FAVORITE_NOT_FOUND(HttpStatus.NOT_FOUND, "찜한 맛집이 아닙니다."),
 
+    // AI 맛집 추천 (API_SPEC 9.1, FUNCTION_SPEC F1-07). 메시지에 키, 모델 ID, 취향 원문, AI 응답 원문을 넣지 않는다.
+    AI_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "AI 추천을 지금 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."),
+    AI_RESPONSE_INVALID(HttpStatus.BAD_GATEWAY, "AI 추천 결과를 처리하지 못했습니다. 다시 시도해 주세요."),
+
     // 맛집 이미지 (API_SPEC 1.3, 5.1, FUNCTION_SPEC F1-03). 메시지에 저장소 자격 증명이나 서명 정보를 넣지 않는다.
     IMAGE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "JPEG, PNG, WEBP 형식의 이미지만 올릴 수 있습니다."),
     IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "이미지는 5MB 이하만 올릴 수 있습니다."),

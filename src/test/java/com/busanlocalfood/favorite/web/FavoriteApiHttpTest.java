@@ -54,6 +54,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class})
 class FavoriteApiHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.recommendation.service.RestaurantRecommendationService recommendations;
+
     private static final String JWT_SECRET = randomBase64Key();
     private static final long MEMBER_ID = 7L;
     private static final long OTHER_MEMBER_ID = 8L;
