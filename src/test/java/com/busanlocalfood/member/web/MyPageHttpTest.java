@@ -1,5 +1,7 @@
 package com.busanlocalfood.member.web;
 
+import com.busanlocalfood.restaurant.service.RestaurantService;
+import com.busanlocalfood.restaurant.web.RestaurantScreenController;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -68,9 +70,12 @@ import org.springframework.test.web.servlet.MvcResult;
         RefreshTokenConfig.class, AuthCookies.class, GoogleOAuth2Config.class,
         MyPageController.class, GoogleAccountLinkController.class, ScreenRateLimitAdvice.class,
         RateLimitedPageController.class, ScreenAuthAdvice.class, ScreenAuthController.class,
-        ScreenLogoutController.class, GoogleSignupController.class, HomeController.class,
+        ScreenLogoutController.class, GoogleSignupController.class, HomeController.class, RestaurantScreenController.class,
         MyPageHttpTest.ClientIpConfig.class})
 class MyPageHttpTest {
+
+    @MockitoBean
+    private RestaurantService restaurantService;
 
     private static final String CLIENT_ID = "test-client-mypage";
     private static final String CLIENT_SECRET = "test-secret-mypage";

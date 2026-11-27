@@ -1,5 +1,7 @@
 package com.busanlocalfood.member.oauth;
 
+import com.busanlocalfood.restaurant.service.RestaurantService;
+import com.busanlocalfood.restaurant.web.RestaurantScreenController;
 import com.busanlocalfood.member.service.MemberAccountService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -65,9 +67,12 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class,
         RefreshTokenConfig.class, AuthCookies.class, GoogleOAuth2Config.class,
         AuthController.class, ScreenAuthController.class, ScreenLogoutController.class,
-        GoogleSignupController.class, ScreenAuthAdvice.class, HomeController.class,
+        GoogleSignupController.class, ScreenAuthAdvice.class, HomeController.class, RestaurantScreenController.class,
         GoogleOAuth2HttpTest.ClientIpConfig.class})
 class GoogleOAuth2HttpTest {
+
+    @MockitoBean
+    private RestaurantService restaurantService;
 
     @MockitoBean
     private MemberAccountService memberAccountService;
