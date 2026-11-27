@@ -864,6 +864,8 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ## 9. AI 맛집 추천 API (F1-07)
 
+> 구현 상태 (F1-07, 구현 완료, `main` 병합 전): 9.1을 구현했습니다. 응답 필드는 명세 예시와 같습니다. 후보는 최근 등록 순 최대 100곳입니다. 응답의 `candidateCount`는 AI에 보낸 후보 수입니다. 카드의 이름, 카테고리, 평점은 DB 후보 값입니다. AI가 준 ID 중 후보에 없는 것은 버리고, 같은 ID는 한 번만 쓰며, 최대 5개만 돌려줍니다. 추천 이유는 300자까지 남깁니다. AI 응답은 순수 JSON 배열이어야 하며 마크다운 코드 블록으로 감싼 응답은 `AI_RESPONSE_INVALID`입니다. 결과가 없으면 `recommendations`는 빈 배열이고 `message`가 있습니다. 추천 결과는 저장하지 않습니다. 실제 OpenRouter 호출은 아직 검증하지 않았습니다. 화면 `/recommend`는 10절을 봅니다.
+
 ### 9.1 추천 요청
 
 - 메서드·URL: `POST /api/recommendations`
@@ -916,7 +918,8 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/favorites` | GET | 세션 필요 | 회원 본인 | 내 찜 목록 (페이지, 최신 찜 순) | F1-06 |
 | `/restaurants/{id}/favorite` | POST | 세션 필요 (CSRF) | 회원 | 맛집 상세의 찜하기 제출 | F1-06 |
 | `/restaurants/{id}/favorite/delete` | POST | 세션 필요 (CSRF) | 회원 본인 | 맛집 상세 또는 찜 목록의 찜 취소 제출 (`from=favorites`면 찜 목록으로 돌아감) | F1-06 |
-| `/recommend` | GET | 세션 필요 | 회원 | AI 추천 입력 및 결과 | F1-07 |
+| `/recommend` | GET | 세션 필요 | 회원 | AI 추천 입력 화면 | F1-07 |
+| `/recommend` | POST | 세션 필요 (CSRF) | 회원 | 추천 받기 제출. 같은 화면에 결과 또는 오류 안내를 표시 | F1-07 |
 | `/admin` | GET | 세션 필요 | ADMIN | 관리자 대시보드 | F1-09 |
 | `/admin/restaurants` | GET | 세션 필요 | ADMIN | 전체 맛집 목록, 수정·삭제 | F1-09 |
 | `/admin/reviews` | GET | 세션 필요 | ADMIN | 전체 리뷰 목록, 삭제 | F1-09 |
