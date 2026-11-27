@@ -14,7 +14,7 @@
 
 ## 2. 기술 스택 (고정)
 
-Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI 기능 구현 단계에서 도입) · OpenRouter 무료 모델 · Thymeleaf · Bootstrap 5 · MySQL 8 · AWS EC2(Ubuntu) · AWS S3 · GitHub Actions · Gradle
+Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI 1.1.8(OpenAI 스타터, OpenRouter 호출, F1-05 도입) · OpenRouter 무료 모델 · Thymeleaf · Bootstrap 5 · MySQL 8 · AWS EC2(Ubuntu) · AWS S3 · GitHub Actions · Gradle
 
 인증: 화면은 Spring Security 세션 로그인, API는 JWT, 소셜 로그인은 Google 로그인 (5.7절)
 
@@ -129,6 +129,9 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI(AI
   OPENROUTER_MODEL=${OPENROUTER_MODEL}
   ```
 
+- Spring AI는 `spring-ai-starter-model-openai`를 쓰고, 버전은 `spring-ai-bom`이 정합니다(현재 1.1.x, Spring Boot 3.5와 맞춤). OpenRouter의 OpenAI 호환 주소는 `app.ai.openrouter.base-url`이며, `OpenAiApi`에 제한 시간을 걸어 만듭니다. `ChatModel`은 스타터 자동 구성을 씁니다.
+- 채팅 모델만 켭니다(`spring.ai.model.chat=openai`). 임베딩·이미지·음성·모더레이션은 `none`으로 끕니다. 켜 두면 키가 없을 때 기동이 실패합니다.
+- AI 호출은 자동 재시도하지 않습니다(`spring.ai.retry.max-attempts=1`). 실패하면 한 번만 부르고 UNAVAILABLE로 응답합니다. 재시도로 호출량이 늘지 않게 합니다.
 - **모델 ID를 Java 코드에 고정하지 않습니다.** 모델을 바꿀 때 코드 수정 없이 환경 변수만 바꿀 수 있어야 합니다 (NFR-18).
 - 개발(`local`)과 운영(`prod`) 프로필은 서로 다른 `OPENROUTER_MODEL` 값을 쓸 수 있습니다.
 - 특정 무료 모델 ID는 이 문서에서 확정하지 않습니다 (T10).

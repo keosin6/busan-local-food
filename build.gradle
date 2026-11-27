@@ -21,6 +21,8 @@ dependencyManagement {
     imports {
         // AWS SDK v2 버전은 BOM으로 한 곳에서 고정한다 (F1-03 S3 이미지 저장).
         mavenBom 'software.amazon.awssdk:bom:2.31.78'
+        // Spring AI는 Spring Boot 3.5와 맞는 1.1.x 라인을 쓴다 (AI 리뷰 요약, F1-05). 버전은 이 BOM이 정한다.
+        mavenBom 'org.springframework.ai:spring-ai-bom:1.1.8'
     }
 }
 
@@ -34,6 +36,8 @@ dependencies {
     runtimeOnly 'com.mysql:mysql-connector-j'
     // S3 객체 업로드·삭제 (F1-03). 버전은 위 BOM이 정한다.
     implementation 'software.amazon.awssdk:s3'
+    // OpenRouter 호출 (AI 리뷰 요약, F1-05). OpenRouter는 OpenAI 호환 API이므로 OpenAI 스타터를 쓴다.
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }

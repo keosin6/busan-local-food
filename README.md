@@ -28,8 +28,8 @@
 | 구분 | 기술 |
 |------|------|
 | Language | Java 21 |
-| Framework | Spring Boot 3.x, Spring Security, Spring Data JPA, Spring AI (도입 예정) |
-| AI | Spring AI + OpenRouter 무료 모델 (Spring AI의 OpenAI 호환 클라이언트 사용). Spring AI는 AI 기능 구현 단계(F1-05, F1-07)에서 도입하며, 현재 `build.gradle`에는 없습니다 |
+| Framework | Spring Boot 3.x, Spring Security, Spring Data JPA, Spring AI 1.1.x |
+| AI | Spring AI OpenAI 스타터 + OpenRouter 무료 모델 (OpenAI 호환 API). AI 리뷰 요약(F1-05)에 적용했습니다. 채팅만 쓰고 자동 재시도는 하지 않습니다 |
 | 인증 | 화면: Spring Security 세션 / API: JWT (Refresh Token 로테이션) / Google 로그인 (OAuth2) |
 | View | Thymeleaf, Bootstrap 5 |
 | Database | MySQL 8 (개발은 개발 PC에 직접 설치, 운영은 AWS EC2 내부 설치, RDS 미사용) |

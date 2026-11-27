@@ -973,6 +973,21 @@
   - 테스트 DB 설정(MySQL 8.0.46 로컬, SQL 001~007 적용) `./gradlew clean test`: 760개 실행, 건너뜀 0개, 실패 0개, 오류 0개.
   - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
 - 미검증: 실제 OpenRouter 호출, 운영 키와 모델 설정, 브라우저 화면, 요약 API 요청 제한(현재 없음), 여러 인스턴스 사이의 중복 생성 방지.
+
+### 6.35 F1-05 OpenRouter 호출을 Spring AI로 전환 (PR #43 보완, 2026-11-27)
+
+- 브랜치: `feat/f1-05-ai-review-summary` (PR #43에 추가 커밋). 6.34의 설계 쟁점(Spring AI 미사용)은 이 항목에서 해결했다.
+- 의존성: `build.gradle`에 `spring-ai-bom:1.1.8`(Spring Boot 3.5와 맞는 1.1.x 라인)과 `spring-ai-starter-model-openai`를 넣었다. 버전은 BOM이 정한다.
+- 구조: `OpenAiApi` 빈(`AiConfig`)이 OpenRouter 주소(`app.ai.openrouter.base-url`), 키, 제한 시간 10초를 쓴다. `ChatModel`은 스타터 자동 구성이 만든다. `ChatCompletionClient`는 유지하고 구현을 `OpenRouterChatModelClient`(Spring AI `ChatModel` 호출)로 바꿨다. 직접 `RestClient`로 OpenRouter를 부르던 `OpenRouterChatClient`와 그 테스트는 삭제했다.
+- 설정 (`application.yml`): `spring.ai.model.chat=openai`, 임베딩·이미지·음성(생성·전사)·모더레이션은 `none`. 켜 두면 키가 없을 때 기동이 실패한다. `spring.ai.retry.max-attempts=1`로 자동 재시도를 끈다. 모델 ID는 `OPENROUTER_MODEL`에서 읽어 호출 옵션으로 넘긴다. 코드에 없다.
+- 기존 동작 유지: 3개 미만 안내, 최신 리뷰 30개, 글자 수 제한, 개인정보 미전달, 리뷰 내용과 시스템 지시 분리, 응답 검증, MySQL 캐싱, 캐시 재사용, 리뷰 작성·삭제 시 무효화, 동시 생성 공유, 생성 중 변경 시 저장 금지, 실패 시 UNAVAILABLE, 제한 시간 10초. 서비스의 캐시 정책과 트랜잭션 경계는 바꾸지 않았다.
+- 발견: 스타터의 OpenAI 자동 구성 전부(음성, 이미지, 임베딩, 모더레이션)가 키가 없으면 기동을 막았다. 채팅만 끄거나 켜서는 해결되지 않아서, 나머지를 `none`으로 껐다. `@EnableAutoConfiguration`을 쓰고 `AiConfig`를 가져오지 않는 `ScreenRateLimitForwardTest`에는 `spring.ai.model.chat=none`을 넣었다(AI가 필요 없는 테스트).
+- 테스트: `OpenRouterChatModelClientTest` 10개(요청 형식, 모델과 옵션 전달, Bearer 헤더, 서버 오류, 연결 실패, 빈 응답·본문 null, 예상 못한 예외, 키 없음·모델 없음 시 ChatModel 미호출, 제한 시간, HTTP 오류 시 재시도 없음 1회). `AiConfigWiringTest` 3개(키와 모델 없이 기동, 스타터 자동 구성 포함 기동, 자동 구성 ChatModel의 재시도 없음). 외부 OpenRouter에는 접속하지 않았다. 재시도 설정 변형 검증: `max-attempts`를 3으로 바꾸면 `AiConfigWiringTest`의 재시도 테스트가 실패했고, 원복 후 통과했다.
+- 실행 결과 (이 브랜치, 이 세션에서 실제 실행):
+  - DB 미설정 `./gradlew clean test`: 767개 실행, 건너뜀 145개(모두 DB 테스트), 실패 0개, 오류 0개.
+  - 격리 MySQL 8.0.46 (SQL 001~007 적용, 테스트 전용 계정), `./gradlew clean test`: 767개 실행, 건너뜀 0개, 실패 0개, 오류 0개.
+  - `./gradlew bootJar`와 `git diff --check`는 아래 PR 본문 기록을 따른다.
+- 미검증: 실제 OpenRouter 호출, 운영 키와 모델 설정, 브라우저 화면, 요약 API 요청 제한(현재 없음), 여러 인스턴스 사이의 중복 생성 방지. 사용하는 Spring AI 1.1.8 API 세부 동작은 모킹과 로컬 서버 테스트로만 확인했다.
 - 남은 문제: 상세 화면의 캐시 미스는 요약 생성을 기다리므로 최대 10초까지 늦어질 수 있다. 요약 API에는 요청 제한이 없어 캐시 미스가 반복되면 AI 비용이 늘 수 있다. 회원 탈퇴 절차(T1)는 아직 없다.
 
 ## 7. 다음 작업
