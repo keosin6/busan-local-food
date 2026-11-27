@@ -1,5 +1,6 @@
 package com.busanlocalfood.review.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -27,6 +28,18 @@ public final class ReviewDtos {
     /** 작성 응답 (API_SPEC 6.2). 맛집 평균과 리뷰 수는 DB에서 다시 계산한 값이다. */
     public record ReviewCreated(Long id, int rating, String content, BigDecimal restaurantAverageRating,
                                 int restaurantReviewCount) {
+    }
+
+    /**
+     * AI 리뷰 요약 응답 (API_SPEC 7.1). status는 READY, NOT_ENOUGH_REVIEWS, UNAVAILABLE 중 하나다.
+     * cached와 createdAt은 READY일 때만, message는 NOT_ENOUGH_REVIEWS와 UNAVAILABLE일 때만 값을 가진다.
+     */
+    public record SummaryResponse(String status,
+                                  String summary,
+                                  int reviewCount,
+                                  @JsonInclude(JsonInclude.Include.NON_NULL) Boolean cached,
+                                  @JsonInclude(JsonInclude.Include.NON_NULL) LocalDateTime createdAt,
+                                  @JsonInclude(JsonInclude.Include.NON_NULL) String message) {
     }
 
     /** 삭제 응답 (API_SPEC 6.3). */

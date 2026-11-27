@@ -56,6 +56,18 @@
         </div>
     </section>
 
+    <section class="mt-4" aria-labelledby="summary-title">
+        <h2 class="h5" id="summary-title">AI 리뷰 요약</h2>
+        <div th:if="${summary.status() == 'READY'}">
+            <p class="mb-1" style="white-space: pre-line;" th:text="${summary.summary()}">요약 내용</p>
+            <p class="text-muted small mb-0">
+                리뷰 <span th:text="${summary.reviewCount()}">0</span>개 기준
+                · 생성 <span th:text="${#temporals.format(summary.createdAt(), 'yyyy-MM-dd HH:mm')}">2026-11-01 12:00</span>
+            </p>
+        </div>
+        <p th:unless="${summary.status() == 'READY'}" class="text-muted small mb-0" th:text="${summary.message()}">안내 문구</p>
+    </section>
+
     <section class="mt-4" id="reviews" aria-labelledby="reviews-title">
         <h2 class="h5" id="reviews-title">리뷰 <span class="text-muted small" th:text="'(' + ${reviewTotalElements} + ')'">(0)</span></h2>
 

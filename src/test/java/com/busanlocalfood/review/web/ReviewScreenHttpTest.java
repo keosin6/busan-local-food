@@ -95,6 +95,9 @@ class ReviewScreenHttpTest {
     private ReviewService reviewService;
 
     @MockitoBean
+    private com.busanlocalfood.review.service.ReviewSummaryService reviewSummaryService;
+
+    @MockitoBean
     private MemberAccountService memberAccountService;
 
     @MockitoBean
@@ -127,6 +130,7 @@ class ReviewScreenHttpTest {
     @BeforeEach
     void stubs() {
         when(restaurantService.categories()).thenReturn(List.of());
+        when(reviewSummaryService.summaryFor(anyLong())).thenReturn(new com.busanlocalfood.review.dto.ReviewDtos.SummaryResponse("NOT_ENOUGH_REVIEWS", null, 0, null, null, "리뷰 3개 이상이 되면 AI 요약을 볼 수 있습니다."));
         when(restaurantService.detail(eq(10L), any())).thenReturn(detail());
         when(reviewService.list(anyLong(), any(), anyInt(), anyInt())).thenReturn(new PageResponse<>(
                 List.of(review(1L, 7L, "나의리뷰", true), review(2L, 8L, "남의리뷰", false)), 0, 10, 2, 1));
@@ -137,6 +141,28 @@ class ReviewScreenHttpTest {
         Matcher matcher = CSRF_FIELD.matcher(page.getResponse().getContentAsString());
         assertThat(matcher.find()).as("상세 화면의 CSRF 필드").isTrue();
         return matcher.group(1);
+    }
+
+    @Test
+    void 상세_화면은_요약이_있으면_요약_본문을_보여_준다() throws Exception {
+        when(reviewSummaryService.summaryFor(10L)).thenReturn(new com.busanlocalfood.review.dto.ReviewDtos.SummaryResponse(
+                "READY", "진한 국물이 특징입니다.", 4, true, LocalDateTime.of(2026, 11, 3, 9, 0), null));
+
+        mockMvc.perform(get("/restaurants/10"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("AI 리뷰 요약")))
+                .andExpect(content().string(containsString("진한 국물이 특징입니다.")));
+    }
+
+    @Test
+    void 상세_화면은_요약이_실패해도_나머지_정보와_함께_정상_표시한다() throws Exception {
+        when(reviewSummaryService.summaryFor(10L)).thenReturn(new com.busanlocalfood.review.dto.ReviewDtos.SummaryResponse(
+                "UNAVAILABLE", null, 4, null, null, "요약을 불러올 수 없습니다. 잠시 후 다시 시도해 주세요."));
+
+        mockMvc.perform(get("/restaurants/10"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("요약을 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.")))
+                .andExpect(content().string(containsString("남의리뷰")));
     }
 
     @Test

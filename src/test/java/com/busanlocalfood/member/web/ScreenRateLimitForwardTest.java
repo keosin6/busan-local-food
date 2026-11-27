@@ -64,7 +64,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
                 // DataSource 자동 구성을 제외하므로 실제 연결은 일어나지 않는다.
                 "spring.datasource.url=jdbc:mysql://127.0.0.1:1/unused",
                 "spring.datasource.username=unused",
-                "spring.datasource.password=unused"
+                "spring.datasource.password=unused",
+                // 이 테스트는 AI를 쓰지 않는다. 스타터의 채팅 자동 구성이 OpenRouter 키 없이 만들어지지 않도록 끈다.
+                "spring.ai.model.chat=none"
         })
 class ScreenRateLimitForwardTest {
 
@@ -98,6 +100,9 @@ class ScreenRateLimitForwardTest {
 
     @MockitoBean
     private com.busanlocalfood.review.service.ReviewService reviewService;
+
+    @MockitoBean
+    private com.busanlocalfood.review.service.ReviewSummaryService reviewSummaryService;
 
     @MockitoBean
     private MemberAccountService accounts;

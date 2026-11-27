@@ -35,6 +35,20 @@ spring:
     deserialization:
       # 요청 본문의 알 수 없는 필드는 거부한다. 400 VALIDATION_FAILED로 응답한다.
       fail-on-unknown-properties: true
+  ai:
+    model:
+      # 채팅만 쓴다 (OpenRouter 경유). 나머지 OpenAI 모델 빈은 만들지 않는다.
+      # 켜 두면 OpenAI 키가 없을 때 기동이 실패하므로 none으로 끈다.
+      chat: openai
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    retry:
+      # AI API 자동 재시도를 끈다. 실패하면 한 번만 호출하고 UNAVAILABLE로 응답한다 (호출량 증가 방지).
+      max-attempts: 1
 
 # 요청 제한 (API_SPEC 1.4). HMAC 키는 환경 변수로만 주입한다. 기본값을 두지 않는다. JWT_SECRET과 달라야 한다.
 auth:
@@ -46,10 +60,18 @@ auth:
     cleanup-interval-ms: 600000
     cleanup-initial-delay-ms: 60000
 
+# AI 리뷰 요약 (F1-05). Spring AI OpenAI 스타터로 OpenRouter의 OpenAI 호환 엔드포인트를 호출합니다. 키와 모델 ID는 환경 변수로만 받습니다.
+# 키나 모델 ID가 없으면 요약은 UNAVAILABLE로 응답하고 외부 호출을 하지 않습니다. 애플리케이션 기동은 실패하지 않습니다.
 # 신뢰 프록시 IP 목록. 비어 있으면 X-Forwarded-For를 신뢰하지 않는다. 운영 기본값을 임의로 넣지 않는다.
 # S3 이미지 저장소 (F1-03). 리전과 버킷은 환경 변수로만 받는다. 자격 증명은 AWS 기본 체인(환경 변수 또는 EC2 인스턴스 역할)을 쓴다.
 # 값이 없으면 이미지 업로드와 삭제는 저장소 오류(502 STORAGE_ERROR)가 되고, 삭제 실패 객체는 storage_delete_task에 남는다.
 app:
+  ai:
+    openrouter:
+      base-url: https://openrouter.ai/api/v1
+      api-key: ${OPENROUTER_API_KEY:}
+      model: ${OPENROUTER_MODEL:}
+      timeout-seconds: 10
   aws:
     s3:
       region: ${AWS_REGION:}

@@ -8,6 +8,7 @@ import com.busanlocalfood.restaurant.dto.RestaurantDtos.DeleteResult;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.PageResponse;
 import com.busanlocalfood.review.dto.ReviewDtos.ReviewItem;
 import com.busanlocalfood.review.service.ReviewService;
+import com.busanlocalfood.review.service.ReviewSummaryService;
 import com.busanlocalfood.review.web.ReviewNotices;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.RestaurantDetail;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.RestaurantRequest;
@@ -41,10 +42,13 @@ public class RestaurantScreenController {
 
     private final RestaurantService restaurantService;
     private final ReviewService reviewService;
+    private final ReviewSummaryService reviewSummaryService;
 
-    public RestaurantScreenController(RestaurantService restaurantService, ReviewService reviewService) {
+    public RestaurantScreenController(RestaurantService restaurantService, ReviewService reviewService,
+                                      ReviewSummaryService reviewSummaryService) {
         this.restaurantService = restaurantService;
         this.reviewService = reviewService;
+        this.reviewSummaryService = reviewSummaryService;
     }
 
     /** `/`와 `/restaurants`의 목록 화면. HomeController도 이 메서드를 쓴다. */
@@ -108,6 +112,8 @@ public class RestaurantScreenController {
             model.addAttribute("reviewTotalElements", reviewList.totalElements());
             model.addAttribute("hasPrevReview", reviewList.page() > 0);
             model.addAttribute("hasNextReview", reviewList.page() + 1 < reviewList.totalPages());
+            // AI 요약 (F1-05). 요약 실패는 예외로 나가지 않는다. 상세 화면의 나머지 정보는 그대로 보인다.
+            model.addAttribute("summary", reviewSummaryService.summaryFor(id));
         } catch (BusinessException e) {
             return "redirect:/restaurants?error=not_found";
         }

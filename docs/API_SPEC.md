@@ -787,6 +787,8 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ## 7. AI 리뷰 요약 API (F1-05)
 
+> 구현 상태 (F1-05 PR, `main` 병합 전): 7.1을 구현했습니다. 응답 필드는 명세 예시와 같습니다. `cached`와 `createdAt`은 READY일 때만, `message`는 NOT_ENOUGH_REVIEWS와 UNAVAILABLE일 때만 나옵니다. AI 호출은 OpenRouter의 OpenAI 호환 엔드포인트로 하며 키와 모델 ID는 환경 변수 `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`에서만 읽습니다. 키나 모델 ID가 없으면 외부 호출 없이 UNAVAILABLE을 돌려줍니다. 요약은 최신 리뷰 30개와 본문 6000자 이내만 쓰고, 작성자 이름과 ID는 보내지 않습니다. 실제 OpenRouter 호출은 아직 검증하지 않았습니다.
+
 ### 7.1 맛집 AI 요약 조회
 
 - 메서드·URL: `GET /api/restaurants/{id}/summary`

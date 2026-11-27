@@ -20,6 +20,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("select coalesce(sum(r.rating), 0) from Review r where r.restaurant.id = :restaurantId")
     long sumRatingByRestaurantId(@Param("restaurantId") Long restaurantId);
 
+    /** 맛집 리뷰 중 가장 큰 ID. 리뷰가 없으면 0이다. 새 리뷰는 항상 더 큰 ID를 받으므로 요약 생성 전후 비교에 쓴다. */
+    @Query("select coalesce(max(r.id), 0) from Review r where r.restaurant.id = :restaurantId")
+    long maxIdByRestaurantId(@Param("restaurantId") Long restaurantId);
+
     /** 리뷰가 속한 맛집 ID만 읽는다. 삭제 요청의 잠금 대상을 찾는 데 쓴다. */
     @Query("select r.restaurant.id from Review r where r.id = :id")
     Optional<Long> findRestaurantIdById(@Param("id") Long id);
