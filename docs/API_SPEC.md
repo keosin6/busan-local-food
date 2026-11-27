@@ -831,7 +831,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ## 8. 찜 API (F1-06)
 
-> 구현 상태 (F1-06, 구현 완료, `main` 병합 전): 8.1~8.3을 구현했습니다. 응답 형식과 오류 코드는 명세와 같습니다. 경로는 명세대로 `/api/me/favorites`를 유지했습니다. 찜 목록 화면 경로는 명세대로 `/favorites`입니다. 찜 행 삭제는 맛집 삭제 트랜잭션에 있고, 회원 삭제는 DB CASCADE입니다(회원 탈퇴 API는 아직 없습니다). 맛집 목록 카드에도 찜 버튼이 있습니다(F1-06 보완). 목록 API(4.1)는 찜 정보를 주지 않으며, 카드의 찜 상태는 화면에서만 표시합니다. 브라우저 화면 검증은 하지 않았습니다.
+> 구현 상태 (F1-06, PR #45, `main` 병합 완료, merge commit `c9cb668`): 8.1~8.3을 구현했습니다. 응답 형식과 오류 코드는 명세와 같습니다. 경로는 명세대로 `/api/me/favorites`를 유지했습니다. 찜 목록 화면 경로는 명세대로 `/favorites`입니다. 찜 행 삭제는 맛집 삭제 트랜잭션에 있고, 회원 삭제는 DB CASCADE입니다(회원 탈퇴 API는 아직 없습니다). 맛집 목록 카드에도 찜 버튼이 있습니다(F1-06 보완). 목록 API(4.1)는 찜 정보를 주지 않으며, 카드의 찜 상태는 화면에서만 표시합니다. 브라우저 화면 검증은 하지 않았습니다.
 
 ### 8.1 찜하기
 
@@ -864,7 +864,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ## 9. AI 맛집 추천 API (F1-07)
 
-> 구현 상태 (F1-07, 구현 완료, `main` 병합 전): 9.1을 구현했습니다. 응답 필드는 명세 예시와 같습니다. 후보는 최근 등록 순 최대 100곳입니다. 응답의 `candidateCount`는 AI에 보낸 후보 수입니다. 카드의 이름, 카테고리, 평점은 DB 후보 값입니다. AI가 준 ID 중 후보에 없는 것은 버리고, 같은 ID는 한 번만 쓰며, 최대 5개만 돌려줍니다. 추천 이유는 300자까지 남깁니다. AI 응답은 순수 JSON 배열이어야 하며 마크다운 코드 블록으로 감싼 응답은 `AI_RESPONSE_INVALID`입니다. 결과가 없으면 `recommendations`는 빈 배열이고 `message`가 있습니다. 추천 결과는 저장하지 않습니다. 실제 OpenRouter 호출은 아직 검증하지 않았습니다. 화면 `/recommend`는 10절을 봅니다.
+> 구현 상태 (F1-07, PR #46, `main` 병합 완료, merge commit `9206026`): 9.1을 구현했습니다. 응답 필드는 명세 예시와 같습니다. 후보는 최근 등록 순 최대 100곳입니다. 응답의 `candidateCount`는 AI에 보낸 후보 수입니다. 카드의 이름, 카테고리, 평점은 DB 후보 값입니다. AI가 준 ID 중 후보에 없는 것은 버리고, 같은 ID는 한 번만 쓰며, 최대 5개만 돌려줍니다. 추천 이유는 300자까지 남깁니다. AI 응답은 순수 JSON 배열이어야 하며 마크다운 코드 블록으로 감싼 응답은 `AI_RESPONSE_INVALID`입니다. 결과가 없으면 `recommendations`는 빈 배열이고 `message`가 있습니다. 추천 결과는 저장하지 않습니다. 실제 OpenRouter 호출은 아직 검증하지 않았습니다. 화면 `/recommend`는 10절을 봅니다.
 
 ### 9.1 추천 요청
 
@@ -927,7 +927,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
-- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/restaurants`(목록), `/restaurants/{id}`(상세), `/restaurants/new`, `/restaurants/{id}/edit`(사진 관리 포함)는 F1-02(PR #37, merge commit `1f885dd`, `main` 병합 완료)와 F1-03(PR #39, `main` 병합 완료)으로 구현되어 있다. 작성자 본인 확인은 서비스 계층에서 한다. `/restaurants/new`, `/restaurants/{id}/edit`, `/restaurants/*/delete`, `/restaurants/*/images/**`는 화면 세션 인증 필수다. `/favorites`(찜 목록)와 `/restaurants/{id}/favorite`, `/restaurants/{id}/favorite/delete`(찜 제출)는 F1-06으로 구현되어 PR #45(merge commit `c9cb668`)로 `main` 병합 완료되었다. 찜 목록과 찜 제출은 화면 세션 인증이 필요하다. `/recommend`(GET 입력, POST 추천)는 F1-07로 구현 완료이며 PR 병합 전이다. 화면 세션 인증이 필요하다. `/admin/**`(관리자 대시보드, 맛집·리뷰·회원 관리, S3 삭제 재시도 화면)는 F1-09로 미구현이다. 메인 페이지 완성(F1-08)과 그 밖의 화면 URL도 미구현이다.
+- 구현 상태: `/`(메인 홈)는 F1-08에서 구현했으며 PR 병합 전이다. 최신 맛집 8곳, 카테고리 탐색, 검색 진입을 보여 주고 PR #25의 임시 홈 화면을 대체한다. `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/restaurants`(목록), `/restaurants/{id}`(상세), `/restaurants/new`, `/restaurants/{id}/edit`(사진 관리 포함)는 F1-02(PR #37, merge commit `1f885dd`, `main` 병합 완료)와 F1-03(PR #39, `main` 병합 완료)으로 구현되어 있다. 작성자 본인 확인은 서비스 계층에서 한다. `/restaurants/new`, `/restaurants/{id}/edit`, `/restaurants/*/delete`, `/restaurants/*/images/**`는 화면 세션 인증 필수다. `/favorites`(찜 목록)와 `/restaurants/{id}/favorite`, `/restaurants/{id}/favorite/delete`(찜 제출)는 F1-06으로 구현되어 PR #45(merge commit `c9cb668`)로 `main` 병합 완료되었다. 찜 목록과 찜 제출은 화면 세션 인증이 필요하다. `/recommend`(GET 입력, POST 추천)는 F1-07 PR #46(merge commit `9206026`)으로 `main` 병합 완료되었다. 화면 세션 인증이 필요하다. `/admin/**`(관리자 대시보드, 맛집·리뷰·회원 관리, S3 삭제 재시도 화면)는 F1-09로 미구현이다. 메인 페이지 완성(F1-08)과 그 밖의 화면 URL도 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---
