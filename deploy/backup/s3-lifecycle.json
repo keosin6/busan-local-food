@@ -1,0 +1,22 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-daily-backups-after-7-days",
+      "Filter": { "Prefix": "daily/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 7 }
+    },
+    {
+      "ID": "expire-weekly-backups-after-28-days",
+      "Filter": { "Prefix": "weekly/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 28 }
+    },
+    {
+      "ID": "abort-incomplete-uploads",
+      "Filter": { "Prefix": "" },
+      "Status": "Enabled",
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    }
+  ]
+}

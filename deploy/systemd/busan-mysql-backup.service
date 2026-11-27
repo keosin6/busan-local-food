@@ -1,0 +1,14 @@
+# MySQL 백업 실행 단위. 설치: /etc/systemd/system/busan-mysql-backup.service
+# 실행 스크립트: /opt/busan-local-food/bin/backup-mysql.sh. 결과는 journalctl -t busan-mysql-backup 으로 본다.
+[Unit]
+Description=Busan Local Food MySQL backup to S3
+After=mysql.service network-online.target
+Wants=network-online.target
+RequiresMountsFor=/data/mysql
+
+[Service]
+Type=oneshot
+ExecStart=/opt/busan-local-food/bin/backup-mysql.sh
+# 실패하면 종료 코드 1이 나오고, systemd 상태가 failed로 남는다.
+SuccessExitStatus=0
+TimeoutStartSec=3600

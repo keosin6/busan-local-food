@@ -1,0 +1,10 @@
+# MySQL 데이터 디렉터리를 영속 EBS 마운트(/data/mysql)로 옮길 때 쓰는 설정 예시.
+# 설치 후 /etc/mysql/mysql.conf.d/99-busan.cnf로 복사한다. docs/DEPLOYMENT.md 4절 참고.
+[mysqld]
+datadir = /data/mysql
+character-set-server = utf8mb4
+collation-server = utf8mb4_0900_ai_ci
+# 외부 접근 차단. 같은 EC2의 애플리케이션과 백업만 127.0.0.1로 접속한다.
+bind-address = 127.0.0.1
+# 서버 시간대를 서비스 시간대로 맞춘다. 앱도 SET time_zone을 실행한다.
+default-time-zone = '+09:00'
