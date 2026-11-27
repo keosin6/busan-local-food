@@ -10,6 +10,9 @@
 -- ddl-auto는 none을 유지한다. 적용 후 SHOW CREATE TABLE로 구조를 확인한다.
 -- 평균 평점(restaurant.average_rating)과 리뷰 수(restaurant.review_count)는 이 파일에서 바꾸지 않는다.
 -- 리뷰 작성·삭제 트랜잭션이 맛집 행을 잠그고 두 값을 다시 계산한다 (004에서 이미 만들었다).
+-- FK 정책: fk_review_restaurant은 CASCADE다. 맛집 삭제 트랜잭션이 리뷰를 먼저 지우므로 안전장치다.
+-- fk_review_member는 RESTRICT다. 리뷰가 남은 회원을 DB가 지우지 못하게 해서, 집계(맛집 평균·리뷰 수)가 리뷰 행과 어긋나지 않게 한다.
+-- 회원 탈퇴 정책(T1)이 정해지면 리뷰를 서비스 경로로 지우고 맛집 집계를 다시 계산한 뒤 회원을 지운다.
 
 CREATE TABLE review (
     id             BIGINT        NOT NULL AUTO_INCREMENT,
@@ -21,7 +24,7 @@ CREATE TABLE review (
     updated_at     DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
     CONSTRAINT fk_review_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurant (id) ON DELETE CASCADE,
-    CONSTRAINT fk_review_member FOREIGN KEY (member_id) REFERENCES member (id) ON DELETE CASCADE,
+    CONSTRAINT fk_review_member FOREIGN KEY (member_id) REFERENCES member (id) ON DELETE RESTRICT,
     CONSTRAINT uk_review_member_restaurant UNIQUE (restaurant_id, member_id),
     CONSTRAINT ck_review_rating CHECK (rating BETWEEN 1 AND 5),
     INDEX idx_review_restaurant_created (restaurant_id, created_at)

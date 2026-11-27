@@ -42,7 +42,7 @@
 | F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 이번 문서 작업으로 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) PR #26 보완 HEAD (`8e3df87`): DB 연결 429/429, DB 미설정 362 통과·67 건너뜀. (4) PR #28 (병합 커밋 `37df8e0`): DB 연결 484/484 통과, DB 미설정 408 통과·76 건너뜀, 실패 0, bootJar 성공. (5) PR #30 (`feat/stage2-4-google-account-linking`, `main` 병합 커밋 `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22, **PR #30 최종 HEAD 기준 보고값. 이번 문서 PR에서 재실행하지 않음**): `./gradlew clean test` 테스트 DB 연결 시 536개 실행, 건너뜀 0, 실패 0. 테스트 DB 미설정 시 536개 중 453 통과·83 건너뜀·실패 0. `bootJar` 성공. `git diff --check` 통과. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증과 Google OAuth2 엔드포인트 포함. (6) PR #35 (`feat/stage2-4-protected-restaurant-screens`, `main` 병합 커밋 `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26, **PR #35 당시 보고값. 이번 문서 PR에서 재실행하지 않음**): DB 미설정 `./gradlew clean test` 551개 중 83 건너뜀, 실패 0. 테스트 DB 설정(MySQL 8.0.46) 551개 실행, 실패 0. `bootJar` 성공. | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종, 화면 인증, T12 승인, Google 로그인 시작·콜백과 신규 가입·닉네임 설정은 `main` 병합 완료(PR #23, #25, #26, #28). Google 계정 연동·해제와 로컬 비밀번호 설정은 PR #30(6.22, `main` 병합 완료)로 구현. 프런트엔드 Access Token 자동 갱신(T13)은 PR #32로 `main` 병합 완료, 프런트엔드 429 처리(T20)는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 맛집 등록·수정 화면 세션 인증 보호는 PR #35로 `main` 병합 완료(merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26). |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 구현 완료 (`main` 병합 PR #37, `1f885dd`). 삭제 흐름의 이미지·S3·자식 행 처리는 F1-03 이후 | PR #37 당시 실행값: DB 미설정 610개 중 93 건너뜀, 실패 0. 테스트 DB 설정 610개 실행, 실패 0 (6.27, 6.28) | 명세 반영 완료 (Q2, Q5). 구현 차이는 API_SPEC 4절, FUNCTION_SPEC F1-02에 기록 |
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적 | `main` 병합 완료 (PR #39). 자동 재시도 없음, 관리자 재시도는 F1-09 | 기존 실행 기록(6.30 후속): DB 미설정 681개 중 112 건너뜀, 실패 0. 테스트 DB 설정 681개 실행, 실패 0 (이번 문서 작업에서 새로 실행하지 않음) | 명세 반영 완료 (Q2). 구현 차이는 API_SPEC 5절, FUNCTION_SPEC F1-03 |
-| F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 구현 완료 (PR 병합 전, 6.32) | 6.32 참조: DB 미설정 724개 중 130 건너뜀, 실패 0. 테스트 DB 설정 724개 실행, 실패 0 | 명세 반영 완료 (Q5). 구현 차이는 API_SPEC 6절, FUNCTION_SPEC F1-04 |
+| F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 구현 완료 (PR 병합 전, 6.32) | 6.32 참조: DB 미설정 727개 중 133 건너뜀, 실패 0. 테스트 DB 설정 727개 실행, 실패 0 | 명세 반영 완료 (Q5). 구현 차이는 API_SPEC 6절, FUNCTION_SPEC F1-04 |
 | F1-05 | 리뷰 3개 이상 AI 요약 및 DB 캐싱 | 다음 개발 단계 (미착수) | - | 명세 반영 완료 (Q6) |
 | F1-06 | 찜하기 및 찜 목록 | 미착수 | - | 명세 작성 완료 |
 | F1-07 | DB 등록 맛집 대상 AI 추천 | 미착수 | - | 명세 반영 완료 (Q6) |
@@ -925,17 +925,20 @@
 
 - 브랜치: `feat/f1-04-reviews` (기준: `main` `018be2e`). PR 생성 후 병합 전이다.
 - 조사: `review` 테이블은 어떤 SQL에도 없었다. `004`의 `review_count`는 맛집 컬럼이다. `restaurant.average_rating`(DECIMAL(2,1))과 `review_count`는 004에 이미 있어 바꾸지 않았다. 리뷰 API와 화면 경로는 기존 구현과 겹치지 않았다.
-- DB: `db/manual/006_create_review.sql` 추가. `review`(DATABASE_ERD 2.5, FK `ON DELETE CASCADE`, `uk_review_member_restaurant`, `ck_review_rating`, `idx_review_restaurant_created`). SQL 001~005는 바꾸지 않았다. 적용 순서는 001 → 002 → 003 → 004 → 005 → 006이다.
+- DB: `db/manual/006_create_review.sql` 추가. `review`(DATABASE_ERD 2.5, FK는 맛집 쪽 `ON DELETE CASCADE`, 회원 쪽 `ON DELETE RESTRICT`, `uk_review_member_restaurant`, `ck_review_rating`, `idx_review_restaurant_created`). SQL 001~005는 바꾸지 않았다. 적용 순서는 001 → 002 → 003 → 004 → 005 → 006이다.
 - API: `GET /api/restaurants/{id}/reviews`(공개), `POST /api/restaurants/{id}/reviews`(JWT, 201), `DELETE /api/reviews/{reviewId}`(JWT, 200). 응답은 API_SPEC 6.1~6.3과 같다.
 - 화면: 상세 화면의 리뷰 목록(최신순, 10개 단위 페이지), 로그인 회원의 작성 폼, 본인 리뷰의 삭제 버튼. 제출은 `POST /restaurants/{id}/reviews`, `POST /reviews/{reviewId}/delete`(세션과 CSRF). 비로그인은 작성 폼 대신 로그인 안내를 본다.
 - 동시성: 작성과 삭제는 맛집 행을 `findByIdForUpdate`(PESSIMISTIC_WRITE)로 잠근 뒤 권한·중복을 확인하고, 리뷰 행에서 개수와 평점 합을 다시 계산해 맛집 값을 쓴다. 삭제는 리뷰가 속한 맛집을 먼저 찾고, 잠근 뒤 리뷰를 다시 읽는다. 맛집 삭제는 리뷰를 명시적으로 지운 뒤 맛집을 지운다. 잠금을 일반 조회로 바꾼 변형에서 동시성 테스트 4개가 교착·리뷰 수 불일치·중복 허용으로 실패함을 확인했고, 수정본을 복원했다.
 - 평점: `BigDecimal`로 받아 정수인지 직접 확인한다. `Integer`로 받으면 Jackson이 5.5를 5로 바꿔 저장할 수 있어서 쓰지 않았다. 평균은 합계 나누기 개수를 소수 첫째 자리 HALF_UP으로 반올림한다.
 - 설정: `SecurityConfig`에 공개 GET 경로 `/api/restaurants/*/reviews`를, 화면 인증 필수 경로에 `/restaurants/*/reviews`, `/reviews/*/delete`를 추가했다. 인증·JWT·세션 정책 자체는 바꾸지 않았다.
 - 맛집 삭제 연동: `RestaurantService.delete`의 트랜잭션에 리뷰 삭제를 추가했다.
-- 테스트 (신규 43개): `ReviewInputRulesTest` 7(단위), `ReviewDbTest` 14(MySQL, 롤백 포함), `ReviewConcurrencyDbTest` 4(MySQL, 동시성), `ReviewApiHttpTest` 10, `ReviewScreenHttpTest` 8.
+- FK 정책 수정: 회원 쪽 `fk_review_member`를 CASCADE에서 RESTRICT로 바꿨다. CASCADE이면 리뷰가 남은 회원을 지울 때 리뷰가 DB에서 조용히 지워지고, 맛집의 평균과 리뷰 수가 갱신되지 않아 집계가 어긋난다. 이제 DB가 삭제를 막는다. 회원 탈퇴 정책(T1)이 정해지면 서비스 경로로 처리한다. 맛집 쪽 CASCADE는 맛집 삭제 트랜잭션이 리뷰를 먼저 지우므로 그대로 둔다.
+- 관련 테스트: `ReviewDbTest`에 FK 정책 검사(information_schema의 DELETE_RULE), 리뷰가 남은 회원 삭제 거부와 집계 유지, 리뷰가 없는 회원 삭제 허용을 추가했다. 회원 쪽 정책을 CASCADE로 되돌린 변형에서 FK 테스트 2개가 실패함을 확인하고 RESTRICT로 복원했다.
+- 테스트 (신규 46개): `ReviewInputRulesTest` 7(단위), `ReviewDbTest` 17(MySQL, FK와 롤백 포함), `ReviewConcurrencyDbTest` 4(MySQL, 동시성), `ReviewApiHttpTest` 10, `ReviewScreenHttpTest` 8.
 - 실행 결과 (이 브랜치, 이 세션에서 실제 실행):
-  - DB 미설정 `./gradlew clean test`: 724개 실행, 건너뜀 130개(모두 DB 테스트), 실패 0개, 오류 0개.
-  - 테스트 DB 설정(MySQL 8.0.46 로컬, SQL 001~006 적용) `./gradlew clean test`: 724개 실행, 건너뜀 0개, 실패 0개, 오류 0개.
+  - DB 미설정 `./gradlew clean test`: 727개 실행, 건너뜀 133개(모두 DB 테스트), 실패 0개, 오류 0개.
+  - 테스트 DB 설정(MySQL 8.0.46 로컬, SQL 001~006 적용) `./gradlew clean test`: 727개 실행, 건너뜀 0개, 실패 0개, 오류 0개.
+  - 참고: 한 번의 DB 포함 실행에서 기존 `GlobalExceptionHandlerTest.rateLimitExceededIsRenderedAs429WithRetryAfterAndNoInternals`가 실패했다. 응답 타임스탬프의 초가 42일 때 본문에 `"42"`가 들어가 단정이 깨지는 기존 테스트의 불안정성이다. 이 PR의 범위가 아니므로 고치지 않았고, 단독 실행과 전체 재실행은 통과했다.
   - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
 - 미검증: 브라우저에서 리뷰 화면 동작, EC2 운영 MySQL의 격리 수준과 잠금 대기 설정에서의 동시성, 실제 Tomcat에서의 HTTP 요청(MockMvc와 DB 테스트로만 확인).
 - 남은 문제: 맛집 행의 `updated_at`이 집계가 바뀔 때도 갱신된다(맛집 정보 수정 시각과 섞임, 후속 검토). 리뷰 수정 기능은 명세에 없어 만들지 않았다. API 오류 `details` 배열은 아직 없다. 내용 길이는 Java 문자열 길이 기준이라 이모지 같은 보조 평면 문자는 2자로 센다(후속 검토). AI 요약 캐시 무효화는 F1-05에서 추가한다. 관리자 리뷰 삭제는 F1-09 범위다.

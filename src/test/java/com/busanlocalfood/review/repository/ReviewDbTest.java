@@ -306,6 +306,42 @@ class ReviewDbTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review", Long.class)).isZero();
     }
 
+    @Test
+    void 리뷰_FK_정책은_회원은_RESTRICT이고_맛집은_CASCADE이다() {
+        String memberRule = jdbc.queryForObject(
+                "SELECT DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS "
+                        + "WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'review' AND CONSTRAINT_NAME = 'fk_review_member'",
+                String.class);
+        String restaurantRule = jdbc.queryForObject(
+                "SELECT DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS "
+                        + "WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'review' AND CONSTRAINT_NAME = 'fk_review_restaurant'",
+                String.class);
+
+        assertThat(memberRule).isEqualTo("RESTRICT");
+        assertThat(restaurantRule).isEqualTo("CASCADE");
+    }
+
+    @Test
+    void 리뷰가_남은_회원은_DB가_삭제를_막고_맛집_집계는_그대로다() {
+        Long id = newRestaurant("회원 FK 맛집");
+        reviewService.create(id, alice.getId(), rating("4"));
+
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM member WHERE id = ?", alice.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThat(members.findById(alice.getId())).isPresent();
+        assertThat(reviewRows(id)).isEqualTo(1);
+        assertThat(reload(id).getReviewCount()).isEqualTo(1);
+        assertThat(reload(id).getAverageRating()).isEqualByComparingTo("4.0");
+    }
+
+    @Test
+    void 리뷰가_없는_회원은_삭제할_수_있다() {
+        jdbc.update("DELETE FROM member WHERE id = ?", carol.getId());
+
+        assertThat(members.findById(carol.getId())).isEmpty();
+    }
+
     private static void assertInvalid(Runnable action) {
         assertThatThrownBy(action::run)
                 .isInstanceOfSatisfying(BusinessException.class,
