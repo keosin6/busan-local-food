@@ -23,7 +23,7 @@
 | DB 데이터 | 별도 EBS 볼륨에 영속 저장 (`/data/mysql`) |
 | DB 포트 | 외부 공개 금지 (3306은 보안 그룹에서 열지 않음) |
 | 웹 진입 | Nginx (80, 나중에 443) |
-| 애플리케이션 | Spring Boot JAR, 내부 8080 (127.0.0.1 바인딩) |
+| 애플리케이션 | Spring Boot JAR, 내부 8080 (`application-prod.yml`의 `server.address: 127.0.0.1`로 루프백에만 바인딩) |
 | 이미지 | 기존 AWS S3 (`AWS_S3_BUCKET`) |
 | 백업 | 매일 1회 `mysqldump` → 별도 백업 S3 버킷 (`BACKUP_S3_BUCKET`) |
 | CI/CD | GitHub Actions, AWS OIDC, SSM Run Command로 EC2 배포 |
@@ -500,6 +500,23 @@ ls -1t /opt/busan-local-food/releases
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+### 11.6 웹 바인딩과 Nginx 연결 확인
+
+- 운영 프로필(`SPRING_PROFILES_ACTIVE=prod`)은 `application-prod.yml`의 `server.address: 127.0.0.1`로 8080을 루프백에만 연다. 외부 인터페이스의 8080 접속은 거부된다.
+- 로컬 프로필과 기본 설정(`application.yml`, `application-local.yml`)은 바인딩 주소를 정하지 않는다. 기본값(모든 주소)을 그대로 쓴다.
+- Nginx는 같은 EC2에서 `http://127.0.0.1:8080`으로 프록시하므로 연결에 영향이 없다. 헬스 체크(`deploy.sh`의 `GET http://127.0.0.1:8080/`)도 그대로다.
+
+배포 후 확인 (EC2에서):
+
+```bash
+ss -ltn | grep ':8080'        # 127.0.0.1:8080 만 보여야 한다. 0.0.0.0:8080 또는 *:8080이면 잘못된 설정이다.
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/      # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1/            # Nginx 경유, 200
+curl -s -o /dev/null -m 5 -w '%{http_code}\n' http://<EC2 사설 IP>:8080/   # 000이어야 한다 (연결 거부)
+```
+
+검증 기록 (PR #49 후속, 로컬 호스트, EC2 아님): 바인딩 수정 전 jar는 `0.0.0.0:8080`(모든 주소)에 떴다. 수정 후 jar는 `127.0.0.1:8080`만 열고, 사설 IP 접속은 거부되었다. 저장소의 Nginx 설정(IPv6 줄 제외 사본)으로 `:80` 요청이 앱까지 전달되어 200을 받았다. 7MB 업로드는 Nginx에서 413, 3KB 요청은 앱까지 전달되었다 (403: CSRF 토큰 없음). **EC2에서의 확인은 아직 하지 않았다.**
+
 ## 12. 로그와 임시 파일 관리
 
 | 대상 | 위치 | 제한 |
@@ -569,6 +586,7 @@ sudo nginx -t && sudo systemctl reload nginx
 | 신규 | 도메인 없는 동안 로그인 불가 (8절) | 도메인 연결 시 해소 |
 | 신규 | Google OAuth 운영 값 필요 (8절) | Google Console 설정 필요 |
 | 해결 | CI DB 테스트 | 워크플로에 MySQL 8 서비스 컨테이너를 추가해 DB 테스트를 실행하고, 건너뜀이 있으면 실패한다 (이 PR) |
+| 확인 필요 | Nginx 설정의 `listen [::]:80`은 IPv6가 꺼진 호스트에서 `nginx -t`를 실패시킨다. 그러면 `setup-ec2.sh`가 중단된다. 조건부 설정 또는 확인 후 제거를 검토한다 (후속) |
 | 기존 | 여러 인스턴스 사이의 S3 재시도 동시 실행 미방지 | 단일 인스턴스 운영 전제 |
 | 기존 | `GlobalExceptionHandlerTest` 시간 의존 간헐 실패 | 별도 수정 필요 |
 | 기존 | 공개 요약 API 요청 제한 없음 | 후속 과제 |

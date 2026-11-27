@@ -14,7 +14,8 @@ Group=busan
 WorkingDirectory=/opt/busan-local-food
 # 운영 환경변수. 소유자 root:busan, 권한 640. 값은 이 파일에만 둔다.
 EnvironmentFile=/etc/busan-local-food/app.env
-# 8080은 127.0.0.1에만 바인딩한다. 외부 접근은 Nginx를 거친다 (application.yml server.port 8080).
+# 8080은 127.0.0.1에만 바인딩한다. 값은 application-prod.yml의 server.address: 127.0.0.1 이 정한다 (이 유닛은 바인딩을 바꾸지 않는다).
+# 외부 접근은 Nginx(80/443)를 거친다. 확인 절차: docs/DEPLOYMENT.md 11.6절.
 ExecStart=/usr/bin/java -Xms512m -Xmx1024m -Dfile.encoding=UTF-8 -jar /opt/busan-local-food/current.jar
 SuccessExitStatus=143
 Restart=on-failure
