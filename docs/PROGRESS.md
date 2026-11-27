@@ -12,12 +12,12 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR #30(`main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지 `/rate-limited`. **PR #35(`main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호(JWT 쿠키 단독 인증 불가, CSRF 유지). **남은 작업**: 그 밖의 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 나머지는 아래 7절 |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR #30(`main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지 `/rate-limited`. **PR #35(`main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호(JWT 쿠키 단독 인증 불가, CSRF 유지). **보호 화면**: 찜 목록·찜 제출(PR #45, `main` 병합 완료), `/recommend`(PR #46, 병합 전)도 세션 인증으로 보호된다. **남은 작업**: 회원 탈퇴 절차(T1, 정책 미정, API 없음). 남은 보호 대상 화면은 관리자 `/admin/**`(F1-09)뿐이다. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 나머지는 아래 7절 |
 | Stage 2 F1-02 맛집 관리 | 완료 — `main` 병합 (PR #37, merge commit `1f885dd`, 6.27·6.28). 카테고리 시드, 맛집 등록·수정·삭제, 목록·검색·정렬·페이지, 상세, 작성자 소유권 검사, 위도·경도 쌍 검증, 페이지 이동 시 검색 조건 유지. 이미지·리뷰·찜 연동은 아직 없음 |
 | Stage 3 F1-03 맛집 이미지 | `main` 병합 완료 — PR #39 (merge commit `123db18`, 6.30·6.31). S3 업로드·삭제, 이미지 메타데이터(SQL 005), `storage_delete_task`, 목록 썸네일, 상세 갤러리, 수정 화면 사진 관리, 삭제·업로드 동시성 잠금. 실제 AWS 버킷 검증과 자동 재시도는 아직 없음 |
 | Stage 5 F1-04 리뷰 | `main` 병합 완료 — PR #41 (merge commit `0f8b1f8`, 6.32·6.33). 작성(평점 1~5, 맛집당 한 번), 최신순 목록, 본인 삭제, 평균 평점과 리뷰 수의 잠금 기반 동기화, 맛집 삭제 시 리뷰 정리. AI 요약 캐시 무효화는 F1-05 |
 | Stage 6 F1-05 AI 리뷰 요약 | `main` 병합 완료 — PR #43 (merge commit `39532fa`, 6.34·6.35). Spring AI 1.1.8 OpenAI 스타터로 OpenRouter 호출. 3개 이상 맛집만 OpenRouter 요약, `ai_review_summary` 캐싱, 리뷰 작성·삭제 시 무효화, 동시 요청 공유, 실패는 UNAVAILABLE. 실제 OpenRouter 호출과 운영 설정은 미검증 |
-| **다음 개발 단계** | F1-07 AI 맛집 추천. F1-06 찜은 구현 완료(PR 병합 전, 6.37). F1-05 AI 리뷰 요약은 `main` 병합 완료(PR #43, `39532fa`, 6.34·6.35). F1-02(PR #37), F1-03(PR #39), F1-04(PR #41)은 `main` 병합 완료. 그 밖의 보호 대상 화면(F1-01 잔여), F1-06~F1-09. 상세는 7절 |
+| **다음 개발 단계** | F1-07 병합 이후 F1-08 메인 페이지 완성. F1-07 AI 맛집 추천(PR #46)은 구현 완료, 병합 전(6.39). F1-06 찜하기·찜 목록은 `main` 병합 완료(PR #45, `c9cb668`, 6.37·6.38). F1-02(PR #37), F1-03(PR #39), F1-04(PR #41), F1-05(PR #43)은 `main` 병합 완료. F1-01 잔여는 회원 탈퇴(T1)이며, 남은 보호 대상 화면은 관리자 `/admin/**`(F1-09)뿐이다. 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -25,13 +25,13 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **PR #35(6.26, `main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호. **남은 작업**: 그 밖의 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **PR #35(6.26, `main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호. **보호 화면**: 찜 목록·찜 제출(PR #45, `main` 병합 완료), `/recommend`(PR #46, 병합 전)도 세션 인증으로 보호된다. **남은 작업**: 회원 탈퇴 절차(T1, 정책 미정, API 없음). 남은 보호 대상 화면은 관리자 `/admin/**`(F1-09)뿐이다. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | F1-02 완료 (PR #37 병합, `1f885dd`). F1-08 미착수 | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | `main` 병합 완료 (PR #39, 6.30·6.31). AWS 버킷 검증은 배포 단계 | 의존: F1-02 (완료). T6 확인 |
 | 5 | F1-04 리뷰 | `main` 병합 완료 — PR #41 (6.32·6.33) | 평균 평점 포함 |
 | 6 | F1-05 AI 리뷰 요약·캐싱 | `main` 병합 완료 — PR #43 (`39532fa`, 6.34·6.35) | 의존: F1-04 (구현 완료) |
-| 7 | F1-06 찜 | 구현 완료 — PR 병합 전 (6.37) | |
-| 8 | F1-07 AI 맛집 추천 | 미착수 | 의존: F1-02. T10 (모델 설정) |
+| 7 | F1-06 찜 | `main` 병합 완료 — PR #45 (`c9cb668`, 6.37·6.38) | |
+| 8 | F1-07 AI 맛집 추천 | 구현 완료 — PR #46 병합 전 (6.39). `/recommend` 세션 인증 보호 | 의존: F1-02, F1-05 (AI 연동). T10 (모델 설정) |
 | 9 | F1-08 메인 페이지 완성 (최신 맛집, 카테고리 연결) | 미착수 | 의존: F1-02 |
 | 10 | F1-09 관리자 기능 (role, `/admin/**`, `/api/admin/**`, 대시보드, S3 재시도) | 미착수 | 의존: F1-01, F1-02, F1-03, F1-04. T1, T2 확정 필요 |
 | 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 미착수 | T4, T5 확정 필요 |
@@ -45,8 +45,8 @@
 | F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적 | `main` 병합 완료 (PR #39). 자동 재시도 없음, 관리자 재시도는 F1-09 | 기존 실행 기록(6.30 후속): DB 미설정 681개 중 112 건너뜀, 실패 0. 테스트 DB 설정 681개 실행, 실패 0 (이번 문서 작업에서 새로 실행하지 않음) | 명세 반영 완료 (Q2). 구현 차이는 API_SPEC 5절, FUNCTION_SPEC F1-03 |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | `main` 병합 완료 (PR #41, 6.32·6.33) | 6.32 참조: DB 미설정 727개 중 133 건너뜀, 실패 0. 테스트 DB 설정 727개 실행, 실패 0 | 명세 반영 완료 (Q5). 구현 차이는 API_SPEC 6절, FUNCTION_SPEC F1-04 |
 | F1-05 | 리뷰 3개 이상 AI 요약 및 DB 캐싱 | `main` 병합 완료 (PR #43, `39532fa`, 6.34·6.35). 실제 OpenRouter 호출은 미검증 | PR #43 보고값(6.35 최종, 이번 문서 작업에서 새로 실행하지 않음): DB 미설정 767개 중 145 건너뜀, 실패 0. 테스트 DB 설정 767개 실행, 실패 0 | 명세 반영 완료 (Q6). 구현 차이는 API_SPEC 7절, FUNCTION_SPEC F1-05 |
-| F1-06 | 찜하기 및 찜 목록 | 구현 완료 — PR 병합 전 (6.37, 보완 6.38). 맛집 목록 카드의 찜 버튼 포함 | 6.37 실행값: DB 미설정 805개 중 161 건너뜀, 실패 0. 테스트 DB 설정 805개 실행, 건너뜀 0, 실패 0 | 명세 반영 완료. 구현 차이는 API_SPEC 8절, FUNCTION_SPEC F1-06 |
-| F1-07 | DB 등록 맛집 대상 AI 추천 | 미착수 | - | 명세 반영 완료 (Q6) |
+| F1-06 | 찜하기 및 찜 목록 | `main` 병합 완료 — PR #45 (`c9cb668`, 6.37·6.38). 맛집 목록 카드의 찜 버튼 포함 | PR #45 보고값(이번 문서 작업에서 새로 실행하지 않음): 테스트 DB 설정 820개 실행, 건너뜀 0, 실패 0. DB 미설정 820개 중 165 건너뜀, 실패 0 | 명세 반영 완료. 구현 차이는 API_SPEC 8절, FUNCTION_SPEC F1-06 |
+| F1-07 | DB 등록 맛집 대상 AI 추천 | 구현 완료 — PR #46 병합 전 (6.39). 추천 화면 `/recommend`와 API `POST /api/recommendations` | 6.39 실행값: DB 미설정 853개 중 167 건너뜀, 실패 0. 테스트 DB 설정 853개 실행, 건너뜀 0, 실패 0. F1-07 신규 33개(서비스 15, API 7, 화면 9, DB 2) | 명세 반영 완료 (Q6). 구현 차이는 API_SPEC 9절, FUNCTION_SPEC F1-07 |
 | F1-08 | 메인 페이지, 카테고리 및 최신 맛집 | 미착수 | - | 명세 작성 완료 |
 | F1-09 | 관리자 기능 (USER/ADMIN, 관리자 화면·API, 대시보드, S3 재시도) | 미착수 | - | 명세 신규 작성 (Q5) |
 
@@ -1004,7 +1004,7 @@
 
 ### 6.37 F1-06 찜하기·찜 목록 구현 (2026-11-27)
 
-- 브랜치: `feat/stage2-5-restaurant-favorites` (기준: `main` `238a14d`). PR 생성 후 병합 전이다.
+- 브랜치: `feat/stage2-5-restaurant-favorites` (기준: `main` `238a14d`). PR #45로 `main` 병합 완료(merge commit `c9cb668`).
 - DB: `db/manual/008_create_favorite.sql`. `favorite`(DATABASE_ERD 2.6). 회원·맛집 FK 모두 CASCADE, `uk_favorite_member_restaurant` UNIQUE, `idx_favorite_member_created`(내 찜 목록), `idx_favorite_restaurant`(맛집별 찜 수). SQL 001~007은 바꾸지 않았다. 적용 순서는 001 → 002 → 003 → 004 → 005 → 006 → 007 → 008이다.
 - 서비스: `FavoriteService`. 찜하기는 맛집 행을 잠근 뒤 중복을 검사하고 저장한다. 동시 요청이 겹치면 UNIQUE가 최종으로 막는다. 찜 취소는 회원 ID로만 찾으므로 본인 찜만 지운다. 목록은 최신 찜 순, 페이지 크기 기본 12, 최대 50이다.
 - API: `POST /api/restaurants/{id}/favorite`(201), `DELETE /api/restaurants/{id}/favorite`(200), `GET /api/me/favorites`(200). 모두 JWT가 필요하다. 응답은 기존 `ApiSuccessResponse`다.
@@ -1030,6 +1030,24 @@
 - 정정: SQL 순서 기록을 `001 → 002 → 003 → 004 → 005 → 006 → 007 → 008`로 고쳤다(6.37에 `001 → 008`로 잘못 적혀 있었다).
 - 회귀 테스트: `FavoriteListButtonHttpTest` 11개(비회원 상태, 회원의 찜 여부별 버튼, 일괄 조회 1회, 찜하기 후 검색·페이지 유지 복귀, 찜 취소 후 홈 복귀, 중복 안내, CSRF 403, 열린 리다이렉트 차단, 검색·정렬·페이지가 서비스로 전달, 안내 문구, 홈 공유). `FavoriteDbTest`에 목록 찜 상태 일괄 조회 3개(쿼리 1회, 찜 없음과 빈 목록의 무조회, 상세와 일치, 다른 회원·삭제된 맛집 제외)를 추가했다.
 
+### 6.39 F1-07 AI 맛집 추천 구현 (2026-11-27)
+
+- 브랜치: `feat/stage2-5-ai-restaurant-recommendations` (기준: `main` `c9cb668`, PR #45 병합 뒤). PR 생성 후 병합 전이다.
+- 기준 문서: `docs/DECISIONS.md`는 저장소에 없다. 명세는 FUNCTION_SPEC F1-07과 API_SPEC 9절을 따랐다.
+- 구현: 취향 입력(1~200자) → 최근 등록 맛집 최대 100곳을 후보로 조회 → 후보가 없으면 AI를 부르지 않음 → F1-05와 같은 `ChatCompletionClient`(OpenRouter, `OPENROUTER_MODEL`, 타임아웃 10초)로 호출 → JSON 배열 `[{"restaurantId", "reason"}]` 파싱 → 후보에 있는 ID만 남기고 중복 제외 후 최대 5개 → 이름, 카테고리, 평점은 DB 후보에서 채움. 추천 결과는 저장하지 않음.
+- AI 사용 방식: F1-05의 AI 설정과 클라이언트를 그대로 썼다. 새 설정과 새 클라이언트를 만들지 않았다. 프롬프트는 F1-05와 같은 방식으로 데이터 구획(`<candidates>`, `<preference>`)을 쓰고 구획 문자를 지운다. 취향 원문은 로그에 남기지 않는다.
+- 오류: 취향 검증 실패 `400 VALIDATION_FAILED`, AI 호출 실패·타임아웃·설정 없음 `502 AI_UNAVAILABLE`, JSON이 아니거나 배열이 아니거나 필수 필드가 틀린 응답 `502 AI_RESPONSE_INVALID`. 두 오류 코드를 `ErrorCode`에 추가했다.
+- 명세와 차이: (1) AI 응답은 순수 JSON 배열만 받는다. 마크다운 코드 블록으로 감싼 응답은 `AI_RESPONSE_INVALID`다. (2) 추천 이유는 300자까지만 쓴다. (3) 추천 결과가 없으면(후보는 있으나 AI가 고르지 않았거나 전부 후보에 없을 때) 안내 문구를 준다. 명세에는 후보가 0개일 때 문구만 있었다. (4) 화면 제출은 리다이렉트 없이 같은 화면에 결과를 그린다.
+- 보안: `/recommend`는 세션 인증, `/api/recommendations`는 JWT 인증(USER, ADMIN 모두 허용). 기존 JWT 필터, SecurityFilterChain, OAuth2, Refresh Token 로직은 바꾸지 않았다. 화면 제출은 CSRF를 쓴다. F1-05 요약 동작은 바꾸지 않았다.
+- 화면: `/recommend` (GET 입력 화면, POST 추천). 헤더에 `AI 추천` 링크를 넣었다. 카드는 이름, 카테고리, 평균 평점, 추천 이유, 상세 링크를 보인다.
+- 테스트 (신규 33개): `RestaurantRecommendationServiceTest` 15(정상, 후보 0개 무호출, 100개 제한, 없는 ID 제외, 5개 제한, 중복 제외, 결과 없음 안내, 파싱 실패, 필수 필드 누락·형식 오류, AI 실패, AI 응답 검증 실패, 취향 검증, 200자 허용, 구획 탈출 차단, 추천 이유 300자 절단), `RecommendationApiHttpTest` 7(비인증 401, USER, ADMIN, 취향 누락과 길이 400, 알 수 없는 필드 400, AI_UNAVAILABLE 502, AI_RESPONSE_INVALID 502), `RecommendationScreenHttpTest` 9(비로그인 차단, 비로그인 CSRF 403, 입력 화면, 결과 카드, 후보 없음 안내, AI 실패 재시도 안내, AI 응답 오류 안내, 취향 검증 안내, 로그인 회원 CSRF 403), `RecommendationCandidateDbTest` 2(MySQL: 후보 없음 무호출, 최근 등록 순 최대 100개).
+- 회귀: F1-05 AI 리뷰 요약의 테스트(`ai.*`, `review.*`)를 함께 실행해 통과했다. 모든 WebMvc 테스트 클래스에 추천 서비스 목을 추가했다(새 컨트롤러가 스캔되기 때문).
+- 실행 결과 (이 브랜치, 이 세션에서 실제 실행):
+  - 테스트 DB 설정 (로컬 MySQL 8.0.46, SQL 001~008 적용, 테스트 전용 계정) `./gradlew clean test`: 853개 실행, 건너뜀 0개, 실패 0개, 오류 0개 (두 번째 실행 결과). 첫 번째 실행에서는 기존 시각 의존 테스트 `GlobalExceptionHandlerTest.rateLimitExceededIsRenderedAs429WithRetryAfterAndNoInternals` 1건이 실패했다. 이 테스트는 응답 본문에 초 단위 숫자 `42`가 없어야 한다고 확인하며, 실행 시각의 초가 42일 때 실패한다(이전 기록과 같은 현상). 같은 테스트를 다시 실행하면 통과했고, 전체 실행도 두 번째에 통과했다.
+  - DB 미설정 `./gradlew clean test`: 853개 실행, 건너뜀 167개(모두 DB 테스트), 실패 0개, 오류 0개.
+  - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
+- 미검증: 실제 OpenRouter 호출과 추천 품질, 운영 키·모델 설정, 브라우저 화면(`/recommend`, 카드 표시), 추천 응답 지연 체감. 모든 AI 호출은 모킹 또는 로컬 서버로 확인했다.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
@@ -1051,9 +1069,10 @@
    - F1-03 맛집 이미지: `main` 병합 완료 (PR #39, 6.30·6.31). 배포 단계에서 실제 AWS 버킷 업로드·삭제, EC2 IAM 권한, 버킷 공개 정책을 확인해야 한다. 삭제 실패 객체의 자동 재시도는 없다.
    - F1-04 리뷰: `main` 병합 완료 (PR #41, 6.32·6.33). 브라우저 화면과 EC2 MySQL 설정에서의 동작은 아직 확인하지 않았다.
    - F1-05 AI 리뷰 요약: `main` 병합 완료 (PR #43, merge commit `39532fa`, 6.34·6.35). 실제 OpenRouter 호출과 운영 키·모델 설정은 아직 검증하지 않았다.
-   - F1-06 찜: 구현 완료, PR 병합 전 (6.37, 보완 6.38). 맛집 목록 카드의 찜 버튼 포함. 브라우저 화면은 확인하지 않았다.
-   - **다음 개발 단계: F1-07 AI 맛집 추천** (F1-06 PR 병합 확인 뒤 시작).
-   - 이후: F1-08 메인 페이지, F1-09 관리자 (미착수)
+   - F1-06 찜: `main` 병합 완료 (PR #45, merge commit `c9cb668`, 6.37·6.38).
+   - F1-07 AI 맛집 추천: 구현 완료, PR 병합 전 (6.39). 실제 OpenRouter 호출과 브라우저 화면은 아직 검증하지 않았다.
+   - **다음 개발 단계: F1-08 메인 페이지 완성** (F1-07 PR 병합 확인 뒤 시작).
+   - 이후: F1-09 관리자 (미착수)
    - F1-02 구현 차이는 API_SPEC 4절과 FUNCTION_SPEC F1-02의 구현 상태 메모에 있다 (`thumbnailUrl`, `storageDeleted`, 이미지·찜 자리표시, 오류 `details`).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
    - Google 액세스 토큰의 HttpSession 저장 정책 검토 (6.21 위험 항목)

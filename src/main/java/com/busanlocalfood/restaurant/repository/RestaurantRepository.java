@@ -2,7 +2,9 @@ package com.busanlocalfood.restaurant.repository;
 
 import com.busanlocalfood.restaurant.domain.Restaurant;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -20,4 +22,10 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, J
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Restaurant r where r.id = :id")
     Optional<Restaurant> findByIdForUpdate(@Param("id") long id);
+
+    /**
+     * AI 추천 후보 (FUNCTION_SPEC F1-07). 최근 등록 순으로 최대 100개다. 카테고리를 한 번에 읽어 항목마다 추가 조회가 없다.
+     */
+    @EntityGraph(attributePaths = "category")
+    List<Restaurant> findTop100ByOrderByCreatedAtDescIdDesc();
 }
