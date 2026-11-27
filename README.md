@@ -65,7 +65,7 @@ AWS_REGION, AWS_S3_BUCKET
 OPENROUTER_API_KEY, OPENROUTER_MODEL
 ```
 
-`AWS_REGION`, `AWS_S3_BUCKET`은 S3 이미지 저장소 설정입니다. 둘 중 하나라도 없으면 이미지 업로드와 삭제는 502 `STORAGE_ERROR`로 실패합니다. 자격 증명은 AWS 기본 체인(환경 변수 또는 EC2 인스턴스 역할)을 쓰며 저장소에 두지 않습니다. `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`은 계획된 변수이며 아직 애플리케이션이 읽지 않습니다.
+`AWS_REGION`, `AWS_S3_BUCKET`은 S3 이미지 저장소 설정입니다. 둘 중 하나라도 없으면 이미지 업로드와 삭제는 502 `STORAGE_ERROR`로 실패합니다. 자격 증명은 AWS 기본 체인(환경 변수 또는 EC2 인스턴스 역할)을 쓰며 저장소에 두지 않습니다. `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`은 F1-05 AI 리뷰 요약의 실행 설정입니다. 애플리케이션은 Spring AI OpenAI 스타터를 통해 두 값을 읽습니다. 두 값이 모두 설정되면 OpenRouter AI 요약 호출에 사용됩니다. 하나라도 없으면 외부 호출 없이 요약 응답을 `UNAVAILABLE`로 처리하며, 애플리케이션 기동은 실패하지 않습니다.
 
 ## 실행 방법
 
