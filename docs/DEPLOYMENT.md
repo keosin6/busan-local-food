@@ -90,7 +90,12 @@ sudo /opt/busan-local-food/bin/mount-data-volume.sh /dev/nvme1n1 --format-new-vo
 sudo /opt/busan-local-food/bin/mount-data-volume.sh /dev/nvme1n1
 ```
 
-- 스크립트는 파일 시스템 서명이 있으면 포맷하지 않는다.
+- 파일 시스템 분기 (기존 데이터 보호 우선):
+  - 서명이 없는 새 장치: `--format-new-volume`을 명시했을 때만 ext4로 만든다.
+  - 이미 ext4가 있는 장치: 포맷하지 않고 마운트만 한다. `--format-new-volume`은 무시한다.
+  - ext4가 아닌 파일 시스템(xfs, btrfs 등): 포맷하지 않고, fstab을 쓰지 않고, 종료 코드 1로 중단한다. 데이터를 확인한 뒤 사람이 직접 결정한다.
+  - 장치에 서명이 없는데 옵션도 없으면 중단한다.
+- 마운트 뒤 `findmnt`로 실제 파일 시스템이 ext4인지 한 번 더 확인한다.
 - `/etc/fstab`은 `UUID=... /data ext4 defaults,nofail 0 2` 형식이다. `nofail`이므로 볼륨이 없어도 부팅은 멈추지 않으며, MySQL 유닛은 `RequiresMountsFor=/data/mysql`로 마운트를 기다린다.
 - 재부팅 후 확인: `findmnt /data` 와 `sudo mount -a`.
 
@@ -319,22 +324,45 @@ Google OAuth 제약: 운영 프로필은 `GOOGLE_CLIENT_ID`와 `GOOGLE_CLIENT_SE
 
 ## 9. S3, IAM, OIDC
 
-### 9.1 이미지 버킷 (기존 `AWS_S3_BUCKET`)
+### 9.1 이미지 버킷 (기존 `AWS_S3_BUCKET`, T21)
 
-- 현재 앱은 `https://<버킷>.s3.<리전>.amazonaws.com/<키>` 형식의 공개 URL을 화면에 쓴다 (`ImageUrls`).
-- 그래서 이 방식을 유지하면 버킷 읽기를 공개해야 하고, 그러면 "공개 접근 금지" 원칙과 충돌한다.
-- **결정 필요 (T21, 신규)**: (a) 버킷을 비공개로 두고 CloudFront(OAC)로 읽기, (b) 앱이 pre-signed URL을 만들기 (앱 코드 변경 필요), (c) 공개 읽기 유지(예외 승인). 세 방식 가운데 하나를 정하기 전까지 이미지 표시는 운영에서 확인되지 않는다. 이번 작업에서는 코드를 바꾸지 않았다.
+**상태: 권장안 검토 중. 사용자 확정 전까지 결정 완료로 보지 않는다.**
+
+- 현재 앱은 `https://<버킷>.s3.<리전>.amazonaws.com/<키>` 형식의 공개 S3 URL을 만든다 (`ImageUrls`). 이 URL은 버킷 공개 읽기를 전제한다.
+- 권장안: 이미지 버킷은 비공개로 유지하고, CloudFront + Origin Access Control(OAC)로만 읽는다. 버킷 정책은 CloudFront 배포(SourceArn 조건)에만 `s3:GetObject`를 허용한다.
+- 비공개 S3 + CloudFront OAC를 적용하려면 **이미지 URL 생성 방식의 후속 변경이 필요하다.** 지금의 S3 공개 URL을 설정된 CloudFront 주소 기준으로 만들도록 바꿔야 한다. 이번 PR은 애플리케이션 코드와 URL 구조를 바꾸지 않았다.
+- CloudFront 적용 전에는 운영 환경에서 이미지 표시를 검증할 수 없다. 로컬 테스트는 목 구현체로 URL 형식만 확인한다.
+- 공개 접근을 임시로 허용해서 문제를 해결하지 않는다. 비공개 원칙을 유지한다.
+- 후속 작업 목록: (1) CloudFront 배포와 OAC 생성 (사용자), (2) 버킷을 비공개로 설정하고 CloudFront만 허용하는 정책 적용 (사용자), (3) `ImageUrls`가 CloudFront 기준 URL을 쓰도록 설정화하는 코드 변경과 테스트 (별도 PR), (4) 운영에서 이미지 표시 확인.
 - 업로드·삭제 권한은 EC2 역할에 `s3:PutObject`, `s3:DeleteObject`로 이미지 버킷 객체 경로만 준다.
 
 ### 9.2 백업 버킷 (`BACKUP_S3_BUCKET`)
 
 EC2 역할에 필요한 권한만: 백업 키 경로에 `s3:PutObject`, `s3:GetObject`(검증·복구), `s3:ListBucket`(복구 목록). 수명 규칙 설정은 운영자 권한으로 한다.
 
-### 9.3 배포 아티팩트 버킷 (`DEPLOY_ARTIFACT_BUCKET`, T22 추가 결정)
+### 9.3 배포 아티팩트 버킷 (`DEPLOY_ARTIFACT_BUCKET`, T22)
 
-JAR를 EC2로 전달하려면 S3가 필요하다. 이미지 버킷과 백업 버킷을 섞지 않기 위해 세 번째 버킷을 쓰는 안을 택했다. **사용자 확인 필요**: 버킷을 새로 만들지, 다른 방법을 쓸지 정해 달라.
-- 공개 접근 차단, SSE-S3 기본 암호화, `releases/` 아래에만 쓴다.
-- 수명 규칙으로 오래된 아티팩트를 지울 수 있다 (선택). 스크립트는 EC2에서 최근 5개를 로컬에 보관한다.
+**상태: 결정됨. 배포 아티팩트 전용 버킷을 따로 쓴다. 사용자가 AWS에서 직접 만든다.**
+
+- 이 버킷이 필요한 이유: 배포 JAR는 이미지(사용자 업로드)나 백업(DB 덤프)과 수명과 접근 권한이 다르다. 한 버킷을 같이 쓰면 배포 권한으로 이미지나 백업을 건드리거나, 백업 권한으로 배포 JAR를 덮을 수 있고, 수명 규칙도 충돌한다. 그래서 이미지 버킷과 백업 버킷을 재사용하지 않는다.
+- 버킷 이름과 ARN은 사용자가 정한다. 이 문서와 저장소에는 실제 이름을 넣지 않았다.
+- 설정:
+  - 공개 접근 차단 4개 옵션 모두 켠다.
+  - 기본 암호화 SSE-S3(AES256).
+  - 객체 키는 `releases/<커밋 SHA>.jar`만 쓴다.
+- 접근 제한:
+  - GitHub Actions 배포 역할: `releases/*`에 `s3:PutObject`만. 읽기·삭제 권한 없음.
+  - EC2 인스턴스 역할: `releases/*`에 `s3:GetObject`만. 쓰기·삭제 권한 없음.
+- 수명 규칙은 두지 않는다. 배포 스크립트가 EC2에서 최근 5개 JAR만 로컬에 남긴다. 버킷의 오래된 아티팩트를 지울지는 사용자가 정한다.
+
+차단 설정 예시 (버킷 이름은 사용자가 채운다):
+
+```bash
+aws s3api put-public-access-block --bucket <DEPLOY_ARTIFACT_BUCKET> --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws s3api put-bucket-encryption --bucket <DEPLOY_ARTIFACT_BUCKET> --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+```
 
 ### 9.4 EC2 인스턴스 역할 (예시 권한 목록)
 
@@ -400,24 +428,39 @@ echo 'DEPLOY_ARTIFACT_BUCKET=<DEPLOY_ARTIFACT_BUCKET>' | sudo tee /etc/busan-loc
 ### 11.1 자동 배포 흐름 (`.github/workflows/deploy.yml`)
 
 1. `main`에 푸시(병합)되면 실행된다. 수동 실행(`workflow_dispatch`)도 `main` 기준에서만 배포된다.
-2. Java 21에서 `./gradlew clean test`, `./gradlew bootJar`를 실행한다. CI에는 MySQL이 없어 DB 테스트는 건너뛴다.
-3. JAR의 SHA-256을 계산하고 OIDC로 임시 자격 증명을 받는다.
-4. `releases/<커밋 SHA>.jar`를 배포 버킷에 올린다.
-5. SSM Run Command로 `/opt/busan-local-food/bin/deploy.sh <SHA> <sha256>`을 실행한다.
-6. 워크플로는 SSM 명령이 끝날 때까지 기다리고 결과를 출력한다.
+2. 배포 스크립트 가짜 명령 테스트와 `bash -n` 검사를 실행한다 (`deploy/tests/`).
+3. 워크플로의 MySQL 8 서비스 컨테이너(테스트 전용, 운영 DB 아님)에 수동 SQL 001~008을 순서대로 적용한다.
+4. Java 21에서 `./gradlew clean test`를 실행한다. `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`는 이 단계 env에만 설정한다. DB 테스트 191개가 실제로 실행된다.
+5. 테스트 결과 XML을 검사한다. 실패, 건너뜀, DB 테스트 0개 중 하나라도 있으면 워크플로가 실패하고 배포 단계로 가지 않는다.
+6. `./gradlew bootJar`를 실행하고 JAR의 SHA-256을 계산한다. OIDC로 임시 자격 증명을 받는다.
+7. `releases/<커밋 SHA>.jar`를 배포 버킷에 올린다.
+8. SSM Run Command로 `/opt/busan-local-food/bin/deploy.sh <SHA> <sha256>`을 실행한다.
+9. 워크플로는 SSM 명령이 끝날 때까지 기다리고 결과를 출력한다.
 
 ### 11.2 `deploy.sh` 동작
 
-1. 아티팩트를 내려받고 SHA-256이 다르면 아무것도 바꾸지 않고 실패한다.
-2. 새 JAR를 `releases/<시각>-<SHA7>.jar`로 두고 `current.jar`를 원자적으로 바꾼다.
-3. `systemctl restart busan-local-food`.
-4. `GET http://127.0.0.1:8080/`이 200을 낼 때까지 최대 60초 기다린다.
-5. 실패하면 직전 JAR로 되돌리고 다시 기동한 뒤 실패로 끝낸다.
-6. 성공하면 최근 5개만 남기고 오래된 JAR를 지운다.
+1. 아티팩트를 내려받고 SHA-256을 검증한다. 불일치하면 아무것도 바꾸지 않고 종료 코드 1로 끝낸다.
+2. `current.jar` 심볼릭 링크를 원자적으로 새 JAR로 바꾸고 `systemctl restart busan-local-food`를 실행한다.
+3. 재시작 명령의 성공, 서비스 active 상태, `GET http://127.0.0.1:8080/`의 200 응답을 각각 확인한다.
+4. 새 버전이 어느 단계에서든 실패하면 직전 JAR로 링크를 되돌리고 같은 확인을 다시 한다. 로그에 실패 사유가 단계별로 남는다.
+5. 성공하면 최근 5개만 남기고 오래된 JAR를 지운다. 실패한 새 JAR는 검사용으로 남긴다.
+
+종료 코드:
+
+| 코드 | 의미 | 할 일 |
+|---|---|---|
+| 0 | 배포 성공 | 없음 |
+| 1 | 배포 전 단계 실패 (인자, 설정, 다운로드, SHA-256). 현재 버전 그대로 | 원인 확인 후 재실행 |
+| 2 | 새 버전 실패, 이전 버전으로 복구 성공 | 실패 원인 확인 후 수정 |
+| 3 | 새 버전 실패, 이전 버전 복구도 실패 | 즉시 서비스 확인 (`journalctl -u busan-local-food -n 200`) |
+| 4 | 최초 배포 실패, 이전 JAR 없음 | 서비스가 비정상일 수 있음. 원인 확인 후 재배포 |
+
+`deploy/tests/test-deploy-rollback.sh`가 이 분기를 가짜 `systemctl`, `curl`, `aws`로 검사한다 (새 버전 재시작 실패, 헬스 실패, 이전 버전 재시작 실패, 최초 배포 실패, SHA 불일치).
 
 ### 11.3 수동 롤백
 
 ```bash
+# 종료 코드 0: 롤백 후 정상 응답. 1: 대상 없음, 재시작 명령 실패, 기동 실패, 헬스 체크 실패 중 하나 (메시지 확인)
 sudo /opt/busan-local-food/bin/rollback.sh                       # 현재 바로 전 JAR로
 sudo /opt/busan-local-food/bin/rollback.sh /opt/busan-local-food/releases/<파일>.jar   # 지정 JAR로
 ls -1t /opt/busan-local-food/releases
@@ -465,18 +508,18 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 14. 테스트와 미검증 항목
 
-### 14.1 이 작업에서 실행한 것
+### 14.1 실행한 것
 
-- `./gradlew clean test bootJar` (DB 미설정, 기준 `main` 4a2a11c, 애플리케이션 코드 변경 없음): 913개 실행, 191개 건너뜀(모두 DB 테스트), 실패 0, 오류 0. `bootJar` 성공.
-- 셸 문법 검사: `bash -n` (배포·롤백·백업·볼륨·EC2 설정 스크립트) 통과.
-- 스크립트 동작 시험 (실제 서버가 아닌 임시 디렉터리, `aws`·`systemctl`·`curl`·`mysqldump`를 가짜 명령으로 대체):
-  - `deploy.sh`: 정상 배포, 헬스 체크 실패 시 직전 JAR로 자동 롤백(종료 코드 1), SHA-256 불일치 시 현재 버전 유지(종료 코드 1). 세 경우 모두 기대대로 동작.
-  - `backup-mysql.sh`: 업로드 실패 시 로컬 파일 보존(종료 코드 1), 업로드와 크기 검증 성공 시 로컬 임시 파일 삭제(종료 코드 0). 일요일 주간 백업 경로는 시험하지 않았다.
-  - `rollback.sh`, `mount-data-volume.sh`는 가짜 명령 시험을 하지 않았다. 블록 장치와 systemd가 필요하다.
-- systemd 유닛 검증: `systemd-analyze verify` (서비스·백업 서비스·타이머). 백업 스크립트 미설치 경고 외 구문 오류 없음.
-- Nginx 구문 검사 (`nginx -t`): 이 환경에 nginx가 없어 실행하지 않았다. EC2 설치 후 `setup-ec2.sh`가 `nginx -t`를 실행한다.
-- GitHub Actions YAML 구문 검사: PyYAML로 파싱 확인. 전체 워크플로 실행과 actionlint는 실행하지 않았다.
-- S3 수명 규칙 JSON 파싱 확인.
+이 절은 PR #49 후속 수정(배포 롤백 수정, T21·T22 문서화, DB 테스트 CI 보완, EBS 파일 시스템 검사)의 검증이다.
+
+- `./gradlew clean test` (`TEST_DB_URL` 설정, 로컬 격리 MySQL 8.0, 테스트 전용 계정, `db/manual/001`~`008` 적용): 913개 실행, 건너뜀 0, 실패 0, 오류 0. DB 테스트 케이스 191개 실행. 워크플로와 같은 JDBC 설정(`sslMode=DISABLED&allowPublicKeyRetrieval=true`)을 썼다.
+- `./gradlew clean test` (DB 미설정): 913개 중 191개 건너뜀, 실패 0. 워크플로의 결과 검사는 이 경우를 실패로 처리한다 (건너뜀이 있으면 실패).
+- `./gradlew bootJar`: 성공.
+- `bash -n`: `deploy/scripts/*.sh`, `deploy/tests/*.sh` 전부 통과.
+- `deploy/tests/test-deploy-rollback.sh`: 22개 검사 통과. 가짜 `systemctl`, `curl`, `aws`, `id`를 쓴다. 케이스: SHA 불일치, 새 버전 재시작 실패 → 복구, 헬스 실패 → 복구, 기동 실패(active 아님) → 복구, 이전 버전 재시작도 실패 → 복구 실패 보고(코드 3), 최초 배포 헬스 실패와 재시작 실패 → 이전 버전 없음 보고(코드 4), 최초 배포 성공, `rollback.sh` 재시작 실패 보고, `rollback.sh` 정상 롤백.
+- `deploy/tests/test-mount-data-volume.sh`: 9개 검사 통과. 파일 시스템 분기(서명 없음·옵션 없음 중단, 서명 없음·옵션 포맷, ext4 마운트만, ext4 + 포맷 옵션 무시, xfs·btrfs 중단), fstab 줄 형식, `mkfs.ext4`가 포맷 분기 안에서만 호출되는지.
+- 이전 작성 검사: 백업 스크립트 가짜 명령 시험(업로드 실패 시 로컬 보존, 성공 시 삭제), systemd 유닛 `systemd-analyze verify`, S3 수명 규칙 JSON, 워크플로 YAML 파싱.
+- `git diff --check`: 통과 (결과는 PR 보고 참고).
 
 ### 14.2 실행하지 않은 것 (미검증)
 
@@ -487,7 +530,9 @@ sudo nginx -t && sudo systemctl reload nginx
 - 백업 실행, S3 업로드 검증, 복구
 - 실제 브라우저 접속, 화면 로그인 (Secure 쿠키 제약)
 - Google OAuth 운영 콜백, HTTPS 인증서 발급
-- DB 테스트 (`TEST_DB_URL` 설정 시) — 이 작업의 CI는 DB를 띄우지 않는다
+- GitHub Actions 워크플로의 실제 실행 (서비스 컨테이너 `mysql:8.0`, 스키마 적용 step, 결과 검사 step): 로컬 MySQL과 같은 설정으로 시험했을 뿐, 러너에서 실행하지는 않았다.
+- `mount-data-volume.sh` 실제 장치 마운트와 fstab 반영 (분기 판단 함수만 시험).
+- `rollback.sh`를 실제 systemd에서 돌린 결과 (가짜 명령만 썼다).
 
 ## 15. 남은 위험과 미확정 항목
 
@@ -497,11 +542,11 @@ sudo nginx -t && sudo systemctl reload nginx
 | T5 | MySQL 설치와 영속 저장소 | 절차 작성, 실제 설치 미검증 |
 | T6 | S3 삭제 자동 재시도 | 미확정 유지 (자동 재시도 없음, 수동만) |
 | T10 | OpenRouter 모델 ID | 미확정 유지 (`OPENROUTER_MODEL` 미설정이면 UNAVAILABLE) |
-| T21 (신규) | 이미지 공개 방식 (9.1절) | 결정 필요 |
-| T22 | 배포 아티팩트 버킷 추가 (9.3절) | 사용자 확인 필요 |
+| T21 | 이미지 공개 방식 (9.1절): 비공개 S3 + CloudFront OAC 권장안 | 권장안 검토 중. 사용자 확정 전까지 결정 완료 아님. 후속 코드 변경 필요 |
+| T22 | 배포 아티팩트 전용 버킷 (9.3절) | 결정됨. 사용자가 AWS에서 직접 생성 |
 | 신규 | 도메인 없는 동안 로그인 불가 (8절) | 도메인 연결 시 해소 |
 | 신규 | Google OAuth 운영 값 필요 (8절) | Google Console 설정 필요 |
-| 신규 | CI에서 DB 테스트 미실행 | 후속 과제 (별도 검토) |
+| 해결 | CI DB 테스트 | 워크플로에 MySQL 8 서비스 컨테이너를 추가해 DB 테스트를 실행하고, 건너뜀이 있으면 실패한다 (이 PR) |
 | 기존 | 여러 인스턴스 사이의 S3 재시도 동시 실행 미방지 | 단일 인스턴스 운영 전제 |
 | 기존 | `GlobalExceptionHandlerTest` 시간 의존 간헐 실패 | 별도 수정 필요 |
 | 기존 | 공개 요약 API 요청 제한 없음 | 후속 과제 |

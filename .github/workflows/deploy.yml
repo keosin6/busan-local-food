@@ -1,8 +1,11 @@
 # 운영 배포 워크플로. main에 병합(push)되면 테스트·bootJar 빌드 후 EC2에 배포한다.
-# 기존 CI 워크플로는 없었다. 이 파일이 저장소의 첫 워크플로다.
 # 장기 AWS 키는 쓰지 않는다. GitHub OIDC로 임시 자격 증명을 받는다.
 # 필요한 Repository Variables(비밀 아님): AWS_REGION, AWS_DEPLOY_ROLE_ARN, DEPLOY_ARTIFACT_BUCKET, EC2_INSTANCE_ID
 # 자세한 설정은 docs/DEPLOYMENT.md 9~10절.
+#
+# DB 테스트: 이 워크플로가 띄우는 MySQL 8 서비스 컨테이너(테스트 전용)에만 연결한다. 운영 DB에는 접속하지 않는다.
+# 테스트 DB 값은 아래 env에만 있고, 러너 안에서만 열린다. 운영 값과 무관하다.
+# 테스트가 실패하거나 DB 테스트가 건너뛰어지면 배포 단계까지 가지 않는다.
 name: deploy
 
 on:
@@ -26,6 +29,24 @@ jobs:
     permissions:
       contents: read
       id-token: write   # OIDC 토큰 발급 (AWS 임시 자격 증명)
+
+    # 테스트 전용 MySQL 8. 러너 안에서만 접근한다 (포트는 러너의 localhost로만 열린다).
+    services:
+      mysql-test:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: busan_local_food_test
+          MYSQL_USER: busan_test
+          MYSQL_PASSWORD: busan_ci_only_password
+          MYSQL_ROOT_PASSWORD: busan_ci_root_only_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbusan_ci_root_only_password"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+
     steps:
       - name: 소스 가져오기
         uses: actions/checkout@v4
@@ -37,12 +58,53 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: 테스트 (DB 없이 실행, DB 테스트는 건너뜀)
-        # CI에는 MySQL을 띄우지 않는다. DB 테스트(@DataJpaTest, AdminServiceDbTest 등)는 건너뛰어진다.
-        # 운영 DB 검증은 docs/DEPLOYMENT.md의 테스트 절차로 따로 한다.
+      - name: 배포 스크립트 가짜 명령 테스트와 구문 검사
+        run: |
+          set -euo pipefail
+          for f in deploy/scripts/*.sh deploy/tests/*.sh; do bash -n "$f"; done
+          bash deploy/tests/test-deploy-rollback.sh
+          bash deploy/tests/test-mount-data-volume.sh
+
+      - name: 테스트 DB 스키마 적용 (수동 SQL 001~008, 테스트 DB만)
+        env:
+          MYSQL_PWD: busan_ci_only_password
+        run: |
+          set -euo pipefail
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y mysql-client
+          fi
+          for f in $(ls db/manual/*.sql | sort); do
+            echo "apply $f"
+            mysql --ssl-mode=REQUIRED -h 127.0.0.1 -P 3306 -u busan_test busan_local_food_test < "$f"
+          done
+
+      - name: 테스트 (DB 테스트 포함)
+        env:
+          TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/busan_local_food_test?characterEncoding=UTF-8&sslMode=DISABLED&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+          TEST_DB_USERNAME: busan_test
+          TEST_DB_PASSWORD: busan_ci_only_password
         run: |
           chmod +x ./gradlew
           ./gradlew clean test --no-daemon
+
+      - name: 테스트 결과 검사 (건너뛴 테스트가 있으면 실패)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          total = skipped = failed = db_tests = 0
+          for path in glob.glob('build/test-results/test/*.xml'):
+              root = ET.parse(path).getroot()
+              total += int(root.get('tests'))
+              skipped += int(root.get('skipped'))
+              failed += int(root.get('failures')) + int(root.get('errors'))
+              if root.get('name', '').endswith('DbTest'):
+                  db_tests += int(root.get('tests'))
+          print(f'tests={total} skipped={skipped} failed={failed} db_test_cases={db_tests}')
+          if failed or skipped or db_tests == 0:
+              sys.exit('테스트 실패, 건너뜀 또는 DB 테스트 미실행')
+          PY
 
       - name: 실행 JAR 빌드
         run: ./gradlew bootJar --no-daemon
@@ -63,7 +125,7 @@ jobs:
           role-session-name: github-deploy-${{ github.run_id }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: 아티팩트 업로드 (배포 전용 S3)
+      - name: 아티팩트 업로드 (배포 전용 S3, releases/ 경로만)
         run: |
           set -euo pipefail
           aws s3 cp "deploy-out/${GITHUB_SHA}.jar" \
@@ -97,7 +159,7 @@ jobs:
           set +e
           aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
           RESULT=$?
-          # 출력은 서버 로그(deploy.sh가 남긴 문장)만 보여 준다. 비밀 값은 출력되지 않는다.
+          # 출력은 deploy.sh가 남긴 문장만 보여 준다. 비밀 값은 출력되지 않는다.
           aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
             --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
           exit $RESULT

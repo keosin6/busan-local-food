@@ -34,7 +34,7 @@
 | 8 | F1-07 AI 맛집 추천 | `main` 병합 완료 — PR #46 (`9206026`, 6.39). `/recommend` 세션 인증 보호 | 의존: F1-02, F1-05 (AI 연동). T10 (모델 설정) |
 | 9 | F1-08 메인 페이지 완성 (최신 맛집, 카테고리 연결) | `main` 병합 완료 — PR #47 (`7b20233`, 6.40) | 의존: F1-02 |
 | 10 | F1-09 관리자 기능 (role, `/admin/**`, `/api/admin/**`, 대시보드, S3 재시도) | `main` 병합 완료 — PR #48 (merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴·권한 변경은 이번 범위 제외(T1, T2) | 의존: F1-01, F1-02, F1-03, F1-04. T1 범위 제외 |
-| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 배포 기반 파일·문서 작성 완료, PR 병합 대기 (6.42). 실제 AWS 리소스 생성·배포·백업 복구는 미검증 | T4, T5 결정 (6.42). 이미지 공개 방식 T21, 배포 버킷 T22 결정 필요. 상세는 `docs/DEPLOYMENT.md` |
+| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 배포 기반 파일·문서 작성 완료, PR #49 병합 대기 (6.42, 후속 수정 6.43). 실제 AWS 리소스 생성·배포·백업 복구는 미검증 | T4, T5, T22 결정 (6.42·6.43). 이미지 공개 방식 T21은 권장안 검토 중. 상세는 `docs/DEPLOYMENT.md` |
 
 ## 2. 기능별 상태
 
@@ -81,8 +81,8 @@
 | T2 | 관리자 권한 부여·변경 방식, 최초 관리자 생성 방법 | 결정됨 (A안, 2026-11-27). 관리자 화면·API에 역할 변경 없음. 최초 관리자는 MySQL에서 직접 지정 |
 | T4 | DB 백업 주기, 보관 기간, 저장 위치, 복구 절차 | 결정됨 (Stage 11, 6.42). 매일 KST 03:20 백업, 일일 7일, 주간 4주(일요일), 백업 전용 S3 버킷, SSE-S3, 공개 차단. 스크립트·문서 작성, 실제 실행과 복구는 미검증 |
 | T5 | MySQL 설치 방식과 영속 저장소 구성 | 결정됨 (Stage 11, 6.42). Ubuntu 24.04에 MySQL 8 직접 설치, 별도 EBS를 `/data/mysql`에 마운트(UUID, nofail), 3306 외부 차단. 실제 설치·AppArmor 적용은 미검증 |
-| T21 | 이미지 공개 방식 | 결정 필요 (Stage 11, 6.42). 현재 앱은 공개 URL을 쓰므로 버킷 읽기 공개가 필요하다. 비공개 유지 원칙과 충돌. CloudFront(OAC), pre-signed URL(앱 변경), 공개 예외 중에서 선택 |
-| T22 | 배포 아티팩트 전달용 S3 버킷 | 사용자 확인 필요 (Stage 11, 6.42). 기존 이미지·백업 버킷과 분리한 세 번째 버킷을 가정했다 |
+| T21 | 이미지 공개 방식 | 권장안 검토 중, 사용자 확정 전까지 결정 완료로 보지 않는다 (6.43). 권장안: 비공개 S3 + CloudFront OAC. 현재 앱은 공개 S3 URL을 만들어 CloudFront 적용에는 이미지 URL 생성 방식의 후속 코드 변경이 필요하다. CloudFront 적용 전 운영 이미지 표시는 검증할 수 없다. 공개 접근 임시 허용으로 해결하지 않는다 |
+| T22 | 배포 아티팩트 전용 S3 버킷 | 결정됨 (6.43). 이미지·백업 버킷과 분리된 전용 버킷을 사용자가 AWS에서 직접 만든다. 비공개, SSE-S3, GitHub Actions는 `releases/`에만 쓰고 EC2는 `releases/`에서만 읽는다. 실제 이름과 ARN은 문서에 쓰지 않는다 |
 | T6 | S3 삭제 재시도 자동화 여부 | 미확정 유지 (배포 영향: 자동 재시도 없음, 관리자 수동 재시도만 사용) |
 | T10 | OpenRouter 사용 모델 ID 선정 (운영 설정 값) | Stage 8 전 |
 
@@ -1097,6 +1097,19 @@
 - 검증: `./gradlew clean test bootJar`(DB 미설정) 성공, 셸 스크립트 `bash -n` 통과, systemd 유닛 `systemd-analyze verify` 통과(백업 스크립트 미설치 경고 외), 워크플로 YAML 파싱 통과, S3 수명 규칙 JSON 파싱 통과.
 - 미검증: 실제 EC2·EBS·MySQL 설치, AppArmor 적용, S3 업로드·이미지 표시, IAM·OIDC·SSM 배포, 백업 실행과 복구, 브라우저 접속, Google 운영 콜백, HTTPS. 14절 참고.
 
+### 6.43 PR #49 리뷰 후속 수정: 배포 롤백, DB 테스트 CI, EBS 파일 시스템 검사, T21·T22 (2026-11-27)
+
+- 브랜치 `feat/stage11-deployment-foundation`에 커밋을 추가했다 (새 브랜치, 새 PR 없음). 애플리케이션 코드, 인증, JWT·Google OAuth, SQL 001~008, 이미지 업로드·삭제 로직은 바꾸지 않았다.
+- 배포 롤백 (`deploy/scripts/deploy.sh`): 재시작 명령 실패(`systemctl restart`)가 `set -e`로 스크립트를 바로 끝내던 문제를 고쳤다. 이제 재시작 명령, `is-active`, 헬스 체크를 각각 확인하고, 실패 사유를 단계별로 남긴 뒤 이전 JAR로 되돌린다. 종료 코드로 결과를 구분한다 (0 성공, 1 배포 전 실패, 2 복구 성공, 3 복구 실패, 4 최초 배포 실패). SHA-256 검증과 원자적 링크 교체는 그대로다.
+- `deploy/scripts/rollback.sh`: 재시작 명령 실패, 기동 실패, 헬스 체크 실패를 각각 다른 메시지로 보고한다.
+- 가짜 명령 테스트 `deploy/tests/test-deploy-rollback.sh` (22개 검사 통과): 새 버전 재시작 실패 → 복구, 헬스 실패 → 복구, 기동 실패 → 복구, 이전 버전도 실패 → 복구 실패 보고, 최초 배포 실패 → 이전 버전 없음 보고, rollback 재시작 실패, rollback 정상.
+- DB 테스트 CI 보완 (`.github/workflows/deploy.yml`): MySQL 8 서비스 컨테이너(테스트 전용)를 띄우고, 수동 SQL 001~008을 순서대로 적용한 뒤 `./gradlew clean test`를 실행한다. `TEST_DB_*`는 그 단계 env에만 있다. 결과 XML을 검사해 실패, 건너뜀, DB 테스트 0개 중 하나라도 있으면 배포 전에 실패한다. 로컬 격리 MySQL 8.0에서 같은 설정으로 `./gradlew clean test`를 돌려 913개 실행, 건너뜀 0, 실패 0, DB 테스트 191개 실행을 확인했다. 워크플로 자체의 러너 실행은 미검증이다.
+- 발견한 사항: MySQL 8 기본 인증(`caching_sha2_password`)은 TLS 없이 CLI로 접속하면 실패한다. 그래서 CI의 스키마 적용 step은 `--ssl-mode=REQUIRED`를 쓴다. JDBC 테스트 URL은 `allowPublicKeyRetrieval=true`로 동작했다.
+- EBS 마운트 (`deploy/scripts/mount-data-volume.sh`): 기존 파일 시스템 종류를 실제로 확인한다. ext4면 마운트만, 서명 없는 새 장치는 `--format-new-volume`이 있을 때만 ext4로 만든다, 그 밖의 파일 시스템(xfs 등)은 포맷도 fstab 기록도 하지 않고 중단한다. 마운트 뒤 `findmnt`로 ext4를 다시 확인한다. 판단 함수 시험 `deploy/tests/test-mount-data-volume.sh` (9개 검사 통과).
+- T21 (이미지 공개 방식): 권장안(비공개 S3 + CloudFront OAC)을 문서화했다. 현재 앱은 공개 S3 URL을 만들므로, CloudFront 적용에는 이미지 URL 생성 방식의 후속 코드 변경이 필요하다. CloudFront 적용 전에는 운영 이미지 표시를 검증할 수 없다. **사용자 확정 전까지 결정 완료로 표시하지 않는다.** 공개 접근을 임시로 허용하는 방법은 쓰지 않는다.
+- T22 (배포 아티팩트 버킷): 전용 버킷을 쓰는 설계를 확정했다. 이미지·백업 버킷과 분리하고, 비공개와 SSE-S3, GitHub Actions는 `releases/`에만 쓰고 EC2는 `releases/`에서만 읽는다. 사용자가 AWS에서 직접 만든다. 실제 이름과 ARN은 문서에 쓰지 않는다.
+- 미검증: 실제 EC2, EBS 장치 마운트와 재부팅, 실제 systemd 롤백, GitHub Actions 러너 실행, SSM 배포, S3, IAM, OIDC, 백업·복구, 이미지 표시.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
@@ -1127,5 +1140,5 @@
    - F1-02 구현 차이는 API_SPEC 4절과 FUNCTION_SPEC F1-02의 구현 상태 메모에 있다 (`thumbnailUrl`, `storageDeleted`, 이미지·찜 자리표시, 오류 `details`).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
    - Google 액세스 토큰의 HttpSession 저장 정책 검토 (6.21 위험 항목)
-5. 미확정 항목(T6, T10, T21, T22)은 각 단계 시작 전에 결정합니다. T21은 이미지 공개 방식, T22는 배포 아티팩트 버킷이다.
+5. 미확정 항목(T6, T10, T21)은 각 단계 시작 전에 결정합니다. T21은 이미지 공개 방식(권장안 검토 중), T6은 S3 삭제 자동 재시도, T10은 OpenRouter 모델 ID다.
 6. 실제 MySQL 스키마 적용은 사용자가 `db/manual/`의 SQL 파일을 직접 실행합니다. 이번 작업에서는 실행하지 않았습니다.
