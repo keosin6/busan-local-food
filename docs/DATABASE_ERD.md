@@ -249,6 +249,8 @@ erDiagram
 
 > 삭제 권한 (FR-04-03): 회원 삭제 API는 리뷰 작성자 본인만 허용합니다. 관리자 삭제는 F1-09에서 별도 API로 제공합니다.
 
+> 구현 메모 (SQL 006): 명세의 컬럼, UNIQUE, FK, CHECK, INDEX를 그대로 구현했습니다. `ON DELETE CASCADE`는 안전장치이고, 맛집 삭제 트랜잭션은 리뷰를 먼저 명시적으로 지웁니다.
+
 ### 2.6 favorite (찜)
 
 | 컬럼 | 타입 | NULL | 기본값 | 설명 |
@@ -399,6 +401,7 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 
 - `restaurant.review_count`와 `restaurant.average_rating`은 리뷰 작성·삭제 트랜잭션 안에서 갱신합니다.
 - 갱신 방식: `UPDATE restaurant SET review_count = review_count + 1, average_rating = ... WHERE id = ?` 또는 재계산 쿼리. 구현 시 동시성 테스트를 작성합니다.
+- 구현 (F1-04): 재계산 쿼리를 씁니다. 작성·삭제 트랜잭션은 맛집 행을 `PESSIMISTIC_WRITE`로 잠근 뒤 리뷰 행의 개수와 평점 합을 세고, 평균은 합계 나누기 개수를 소수 첫째 자리에서 반올림합니다. 리뷰가 없으면 0.0입니다. 동시성 테스트는 `ReviewConcurrencyDbTest`입니다.
 - 평균 평점은 `ROUND(AVG(rating), 1)`과 같은 규칙(소수점 첫째 자리 반올림)을 따릅니다.
 
 ## 5. 관리자 기능의 데이터 구조
@@ -426,6 +429,7 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 | 3 | `db/manual/003_create_auth_rate_limit_tables.sql` | 요청 제한 이벤트 4개와 카운터 1개 테이블 생성 | 금지 (이미 테이블이 있으면 실패) |
 | 4 | `db/manual/004_create_category_and_restaurant.sql` | `category`(시드 10개), `restaurant` 생성 (F1-02) | 금지 (이미 테이블이 있으면 실패) |
 | 5 | `db/manual/005_create_restaurant_image_and_storage_delete_task.sql` | `restaurant_image`, `storage_delete_task` 생성 (F1-03) | 금지 (이미 테이블이 있으면 실패) |
+| 6 | `db/manual/006_create_review.sql` | `review` 생성 (F1-04) | 금지 (이미 테이블이 있으면 실패) |
 
 - 적용 전에는 대상 DB를 백업하고 현재 스키마를 확인합니다. 운영 DB는 점검 시간에 적용합니다.
 - 002의 `UUID()`는 버전 1 형식입니다. 시각 정보와 서버 노드 식별 값을 담으므로, 마이그레이션 시점의 한 번 채우는 값으로만 씁니다. 애플리케이션의 신규 `family_id`는 버전 4(난수 기반) UUID를 사용합니다 (2026-11-12 확정, PROGRESS 6.8). 백필 값은 일회성이며 외부 노출 금지 대상입니다.
