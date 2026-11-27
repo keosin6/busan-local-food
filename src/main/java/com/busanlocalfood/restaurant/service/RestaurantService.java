@@ -21,6 +21,7 @@ import com.busanlocalfood.restaurant.repository.CategoryRepository;
 import com.busanlocalfood.restaurant.repository.RestaurantRepository;
 import com.busanlocalfood.restaurant.repository.RestaurantSearch;
 import com.busanlocalfood.review.repository.ReviewRepository;
+import com.busanlocalfood.review.repository.ReviewSummaryRepository;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,18 +53,21 @@ public class RestaurantService {
     private final MemberRepository members;
     private final RestaurantImageRepository images;
     private final ReviewRepository reviews;
+    private final ReviewSummaryRepository summaries;
     private final StorageCleanup storageCleanup;
     private final ImageUrls imageUrls;
     private final TransactionTemplate tx;
 
     public RestaurantService(RestaurantRepository restaurants, CategoryRepository categories, MemberRepository members,
-                             RestaurantImageRepository images, ReviewRepository reviews, StorageCleanup storageCleanup,
+                             RestaurantImageRepository images, ReviewRepository reviews,
+                             ReviewSummaryRepository summaries, StorageCleanup storageCleanup,
                              ImageUrls imageUrls, PlatformTransactionManager transactionManager) {
         this.restaurants = restaurants;
         this.categories = categories;
         this.members = members;
         this.images = images;
         this.reviews = reviews;
+        this.summaries = summaries;
         this.storageCleanup = storageCleanup;
         this.imageUrls = imageUrls;
         this.tx = new TransactionTemplate(transactionManager);
@@ -148,6 +152,8 @@ public class RestaurantService {
             images.deleteAll(owned);
             // 리뷰는 같은 트랜잭션에서 지운다. 맛집 행이 사라지면 ON DELETE CASCADE가 남은 리뷰도 지우지만, 순서를 명시한다.
             reviews.deleteAll(reviews.findByRestaurantId(restaurantId));
+            // AI 요약 캐시도 같은 트랜잭션에서 지운다 (F1-02 삭제 흐름, F1-05). FK CASCADE는 안전장치다.
+            summaries.deleteByRestaurantId(restaurantId);
             restaurants.delete(restaurant);
             return keys;
         });

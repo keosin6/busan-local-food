@@ -14,6 +14,7 @@ import com.busanlocalfood.review.dto.ReviewDtos.ReviewDeleteResult;
 import com.busanlocalfood.review.dto.ReviewDtos.ReviewItem;
 import com.busanlocalfood.review.dto.ReviewDtos.ReviewRequest;
 import com.busanlocalfood.review.repository.ReviewRepository;
+import com.busanlocalfood.review.repository.ReviewSummaryRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,13 +41,15 @@ public class ReviewService {
     private final ReviewRepository reviews;
     private final RestaurantRepository restaurants;
     private final MemberRepository members;
+    private final ReviewSummaryRepository summaries;
     private final TransactionTemplate tx;
 
     public ReviewService(ReviewRepository reviews, RestaurantRepository restaurants, MemberRepository members,
-                         PlatformTransactionManager transactionManager) {
+                         ReviewSummaryRepository summaries, PlatformTransactionManager transactionManager) {
         this.reviews = reviews;
         this.restaurants = restaurants;
         this.members = members;
+        this.summaries = summaries;
         this.tx = new TransactionTemplate(transactionManager);
     }
 
@@ -83,6 +86,8 @@ public class ReviewService {
                 throw new BusinessException(ErrorCode.REVIEW_ALREADY_EXISTS);
             }
             BigDecimal average = refreshStatistics(restaurant);
+            // AI 요약 캐시 무효화 (F1-05). 같은 트랜잭션, 같은 맛집 행 잠금 안에서 지운다.
+            summaries.deleteByRestaurantId(restaurantId);
             return new ReviewCreated(saved.getId(), saved.getRating(), saved.getContent(), average,
                     restaurant.getReviewCount());
         });
@@ -106,6 +111,7 @@ public class ReviewService {
             reviews.delete(review);
             reviews.flush();
             BigDecimal average = refreshStatistics(restaurant);
+            summaries.deleteByRestaurantId(restaurantId);
             return new DeletedReview(restaurantId,
                     new ReviewDeleteResult(average, restaurant.getReviewCount()));
         });

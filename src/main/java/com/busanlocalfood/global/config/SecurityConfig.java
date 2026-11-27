@@ -55,7 +55,7 @@ public class SecurityConfig {
 
     /** API 체인에서 인증 없이 GET할 수 있는 경로. 카테고리 목록(API_SPEC 3.1)과 맛집 목록·상세(4.1, 4.2)만 연다. */
     static final String[] PUBLIC_API_GET_PATHS = {"/api/categories", "/api/restaurants", "/api/restaurants/*",
-            "/api/restaurants/*/reviews"};
+            "/api/restaurants/*/reviews", "/api/restaurants/*/summary"};
 
     @Bean
     @Order(1)
