@@ -246,7 +246,7 @@
 ### 구현 상태 (PR #37 병합, merge commit `1f885dd`)
 - 구현됨: 등록·수정·삭제의 권한·검증 처리(403 `FORBIDDEN`, 404 `RESTAURANT_NOT_FOUND`, 400 `CATEGORY_NOT_FOUND`, 400 `VALIDATION_FAILED`), 목록(카테고리·검색·정렬·페이지, 이동 시 검색 조건 유지), 상세(작성자에게만 수정·삭제 표시), 카테고리 시드 10개, 화면 `/`, `/restaurants`, `/restaurants/{id}`, `/restaurants/new`, `/restaurants/{id}/edit`, 화면 삭제 `POST /restaurants/{id}/delete`(확인 대화상자 포함).
 - 구현 차이 (다음 단계에서 처리):
-  - 삭제 흐름 3단계의 `review`, `favorite`, `ai_review_summary` 행 삭제는 아직 없습니다 (F1-04~F1-06에서 추가). `restaurant_image` 행, `storage_delete_task` 기록, 4단계 S3 삭제는 F1-03에서 구현했습니다.
+  - 삭제 흐름 3단계의 `review` 행 삭제는 F1-04에서 구현했습니다. `favorite`, `ai_review_summary` 행 삭제는 아직 없습니다 (F1-06, F1-05에서 추가). `restaurant_image` 행, `storage_delete_task` 기록, 4단계 S3 삭제는 F1-03에서 구현했습니다.
   - 목록 카드의 대표 이미지와 상세의 이미지 갤러리는 F1-03에서 구현했습니다. 리뷰 목록과 작성 폼은 F1-04에서 구현했습니다. 찜 버튼과 AI 요약은 아직 없습니다 (F1-06, F1-05).
   - 삭제 응답의 `storageDeleteFailedCount`는 S3 삭제에 실패한 객체 수입니다 (F1-03 구현 이후 실제 값).
 
@@ -359,7 +359,7 @@
 
 ## F1-04 리뷰
 
-### 구현 상태 (F1-04 PR, `main` 병합 전)
+### 구현 상태 (PR #41, `main` 병합 완료, merge commit `0f8b1f8`)
 - 구현됨: 작성(로그인 회원, 평점 1~5 정수, 내용 공백 제외 1~500자, 맛집당 한 회원 한 번, 없는 맛집 404, 중복 409 `REVIEW_ALREADY_EXISTS`, 입력 오류 400), 목록(최신순, 작성자 닉네임, 작성 시각, 본인 여부), 본인 삭제(타인 403 `FORBIDDEN`, 없는 리뷰 404 `REVIEW_NOT_FOUND`), 맛집 평균 평점과 리뷰 수 동기화, 맛집 삭제 시 리뷰 삭제, 상세 화면의 리뷰 목록과 작성 폼과 본인 삭제 버튼.
 - 동시성: 작성과 삭제는 맛집 행을 `PESSIMISTIC_WRITE`로 잠근 뒤 리뷰 행에서 개수와 평점 합을 다시 계산한다. 평균은 소수 첫째 자리 반올림(HALF_UP)이다.
 - 차이와 미구현: AI 요약 캐시 무효화는 F1-05 구현 때 같은 트랜잭션에 추가한다. 관리자 리뷰 삭제는 F1-09다. 리뷰 수정 기능은 명세 범위에 없어 만들지 않았다. 맛집 행의 `updated_at`은 집계가 바뀔 때도 갱신된다(후속 검토).
