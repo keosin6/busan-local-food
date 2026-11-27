@@ -71,6 +71,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, PUBLIC_API_AUTH_POST_PATHS).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_API_GET_PATHS).permitAll()
+                        // 관리자 API (FUNCTION_SPEC F1-09): ADMIN만 허용한다. 비로그인은 401, USER는 403이다.
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 // API 인증은 세션을 쓰지 않는다. 화면 세션이 있어도 API 요청의 인증 근거가 되지 않는다.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -84,7 +86,8 @@ public class SecurityConfig {
                         .csrfTokenRepository(apiCsrfTokenRepository(environment))
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(new ApiAuthenticationEntryPoint(objectMapper)))
+                        .authenticationEntryPoint(new ApiAuthenticationEntryPoint(objectMapper))
+                        .accessDeniedHandler(new ApiAccessDeniedHandler(objectMapper)))
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .addFilterAfter(new SignupRateLimitFilter(rateLimitService, clientIpResolver, exceptionResolver),
                         CsrfFilter.class)
@@ -134,6 +137,8 @@ public class SecurityConfig {
                         "/restaurants/*/reviews", "/reviews/*/delete",
                         "/favorites", "/restaurants/*/favorite", "/restaurants/*/favorite/delete",
                         "/recommend").authenticated()
+                // 관리자 화면 (FUNCTION_SPEC F1-09): ADMIN만 허용한다. 비로그인은 /login, USER는 403이다.
+                .requestMatchers("/admin", "/admin/**").hasRole("ADMIN")
                 .anyRequest().permitAll());
         http.exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));

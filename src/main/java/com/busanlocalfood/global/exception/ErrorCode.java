@@ -30,6 +30,7 @@ public enum ErrorCode {
     // 맛집 (API_SPEC 1.3, 3.1, 4.x). 권한과 존재 여부 오류는 작성자 확인 뒤 서비스 계층에서 낸다.
     CATEGORY_NOT_FOUND(HttpStatus.BAD_REQUEST, "존재하지 않는 카테고리입니다."),
     RESTAURANT_NOT_FOUND(HttpStatus.NOT_FOUND, "맛집을 찾을 수 없습니다."),
+    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "회원을 찾을 수 없습니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "이 작업을 할 권한이 없습니다."),
 
     // 리뷰 (API_SPEC 1.3, 6.x, FUNCTION_SPEC F1-04). 한 회원은 한 맛집에 리뷰를 하나만 쓴다.
@@ -49,6 +50,7 @@ public enum ErrorCode {
     IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "이미지는 5MB 이하만 올릴 수 있습니다."),
     IMAGE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "맛집 이미지는 최대 5장까지 등록할 수 있습니다."),
     STORAGE_ERROR(HttpStatus.BAD_GATEWAY, "이미지 저장소 요청이 실패했습니다. 잠시 후 다시 시도해 주세요."),
+    STORAGE_RETRY_RUNNING(HttpStatus.CONFLICT, "S3 삭제 재시도가 이미 진행 중입니다. 끝난 뒤 다시 시도해 주세요."),
 
     // 요청 제한 (API_SPEC 1.3, 1.4). 메시지에 제한 기준이나 식별 정보를 넣지 않는다.
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),

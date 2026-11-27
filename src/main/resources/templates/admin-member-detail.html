@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('회원 상세')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-4 flex-grow-1" style="max-width: 760px;">
+    <h1 class="h3 mb-3">회원 상세</h1>
+    <div th:replace="~{fragments/admin-nav :: nav('members')}"></div>
+    <p class="mb-3"><a th:href="@{/admin/members}">← 회원 목록</a></p>
+    <p class="small text-muted">조회 전용입니다. 비밀번호, Google 계정 식별값, 로그인 토큰은 표시하지 않습니다.</p>
+
+    <dl class="row mb-0">
+        <dt class="col-sm-4">회원 ID</dt>
+        <dd class="col-sm-8" th:text="${member.memberId()}">1</dd>
+        <dt class="col-sm-4">이메일</dt>
+        <dd class="col-sm-8" th:text="${member.email()}">email</dd>
+        <dt class="col-sm-4">닉네임</dt>
+        <dd class="col-sm-8" th:text="${member.nickname()}">닉네임</dd>
+        <dt class="col-sm-4">역할</dt>
+        <dd class="col-sm-8" th:text="${member.role()}">USER</dd>
+        <dt class="col-sm-4">Google 연동</dt>
+        <dd class="col-sm-8" th:text="${member.googleLinked() ? '연동됨' : '연동 안 됨'}">연동 안 됨</dd>
+        <dt class="col-sm-4">등록한 맛집</dt>
+        <dd class="col-sm-8" th:text="${member.restaurantCount()}">0</dd>
+        <dt class="col-sm-4">작성한 리뷰</dt>
+        <dd class="col-sm-8" th:text="${member.reviewCount()}">0</dd>
+        <dt class="col-sm-4">가입일</dt>
+        <dd class="col-sm-8" th:text="${#temporals.format(member.createdAt(), 'yyyy-MM-dd HH:mm')}">2026-11-01 12:00</dd>
+    </dl>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

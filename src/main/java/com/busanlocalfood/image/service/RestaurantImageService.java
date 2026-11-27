@@ -2,6 +2,8 @@ package com.busanlocalfood.image.service;
 
 import com.busanlocalfood.global.exception.BusinessException;
 import com.busanlocalfood.global.exception.ErrorCode;
+import com.busanlocalfood.global.security.AdminAccess;
+import org.springframework.security.core.Authentication;
 import com.busanlocalfood.image.domain.RestaurantImage;
 import com.busanlocalfood.image.repository.RestaurantImageRepository;
 import com.busanlocalfood.image.service.ImagePolicy.ValidatedImage;
@@ -51,8 +53,20 @@ public class RestaurantImageService {
     }
 
     public ImageSummary upload(long restaurantId, long memberId, MultipartFile file) {
+        return uploadImage(restaurantId, memberId, file);
+    }
+
+    /** 관리자 이미지 업로드 (FUNCTION_SPEC F1-09). 작성자 확인만 생략하고, 형식·크기·개수 제한과 보상 삭제는 같다. */
+    public ImageSummary uploadAsAdmin(long restaurantId, Authentication actor, MultipartFile file) {
+        AdminAccess.requireAdmin(actor);
+        return uploadImage(restaurantId, null, file);
+    }
+
+    private ImageSummary uploadImage(long restaurantId, Long ownerOrNull, MultipartFile file) {
         Restaurant restaurant = findRestaurant(restaurantId);
-        requireOwner(restaurant, memberId);
+        if (ownerOrNull != null) {
+            requireOwner(restaurant, ownerOrNull);
+        }
         requireRoomForImage(restaurantId);
 
         ValidatedImage image = ImagePolicy.validate(file);
@@ -64,7 +78,7 @@ public class RestaurantImageService {
         }
 
         try {
-            return tx.execute(status -> saveMetadata(restaurantId, memberId, s3Key, image));
+            return tx.execute(status -> saveMetadata(restaurantId, ownerOrNull, s3Key, image));
         } catch (RuntimeException e) {
             compensateUpload(s3Key);
             throw e;
@@ -72,11 +86,23 @@ public class RestaurantImageService {
     }
 
     public ImageDeleteResult delete(long restaurantId, long imageId, long memberId) {
+        return deleteImage(restaurantId, imageId, memberId);
+    }
+
+    /** 관리자 이미지 삭제 (FUNCTION_SPEC F1-09). 작성자 확인만 생략하고, 잠금·소속 확인·DB 삭제·S3 삭제 순서는 같다. */
+    public ImageDeleteResult deleteAsAdmin(long restaurantId, long imageId, Authentication actor) {
+        AdminAccess.requireAdmin(actor);
+        return deleteImage(restaurantId, imageId, null);
+    }
+
+    private ImageDeleteResult deleteImage(long restaurantId, long imageId, Long ownerOrNull) {
         String s3Key = tx.execute(status -> {
             // 맛집 행을 잠가 맛집 전체 삭제와 직렬화한다. 맛집이 먼저 지워졌으면 여기서 RESTAURANT_NOT_FOUND가 된다.
             Restaurant restaurant = restaurants.findByIdForUpdate(restaurantId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESTAURANT_NOT_FOUND));
-            requireOwner(restaurant, memberId);
+            if (ownerOrNull != null) {
+                requireOwner(restaurant, ownerOrNull);
+            }
             RestaurantImage image = images.findByIdAndRestaurantId(imageId, restaurantId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESTAURANT_NOT_FOUND));
             cleanup.recordPending(image.getS3Key());
@@ -88,10 +114,12 @@ public class RestaurantImageService {
     }
 
     /** 맛집 행을 잠근 뒤 다시 확인하고 저장한다. 동시에 올라온 요청도 5장을 넘지 못한다. */
-    private ImageSummary saveMetadata(long restaurantId, long memberId, String s3Key, ValidatedImage image) {
+    private ImageSummary saveMetadata(long restaurantId, Long ownerOrNull, String s3Key, ValidatedImage image) {
         Restaurant locked = restaurants.findByIdForUpdate(restaurantId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESTAURANT_NOT_FOUND));
-        requireOwner(locked, memberId);
+        if (ownerOrNull != null) {
+            requireOwner(locked, ownerOrNull);
+        }
         requireRoomForImage(restaurantId);
 
         int sortOrder = images.maxSortOrder(restaurantId) + 1;

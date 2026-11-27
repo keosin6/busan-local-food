@@ -49,6 +49,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class})
 class RecommendationApiHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminQueryService adminQueries;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.admin.service.AdminStorageRetryService adminStorageRetry;
+
     private static final String JWT_SECRET = randomBase64Key();
     private static final long USER_ID = 7L;
     private static final long ADMIN_ID = 9L;

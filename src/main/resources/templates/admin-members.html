@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('회원 조회')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container-fluid px-3 px-md-4 py-4 flex-grow-1">
+    <h1 class="h3 mb-3">회원 조회</h1>
+    <div th:replace="~{fragments/admin-nav :: nav('members')}"></div>
+    <p class="small text-muted">이 화면은 조회만 합니다. 역할 변경, 정지, 탈퇴는 제공하지 않습니다.</p>
+
+    <form method="get" th:action="@{/admin/members}" class="row g-2 align-items-end mb-3">
+        <div class="col-12 col-md-6">
+            <label for="keyword" class="form-label">이메일 또는 닉네임</label>
+            <input type="search" class="form-control" id="keyword" name="keyword" maxlength="50" th:value="${keyword}">
+        </div>
+        <div class="col-12 col-md-3 d-grid">
+            <button type="submit" class="btn btn-outline-dark">검색</button>
+        </div>
+    </form>
+
+    <p class="small text-muted mb-2" th:text="'총 ' + ${result.totalElements()} + '명'">총 0명</p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">이메일</th>
+                <th scope="col">닉네임</th>
+                <th scope="col">역할</th>
+                <th scope="col">Google 연동</th>
+                <th scope="col" class="text-end">맛집</th>
+                <th scope="col" class="text-end">리뷰</th>
+                <th scope="col">가입일</th>
+                <th scope="col">상세</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="m : ${result.content()}">
+                <td th:text="${m.memberId()}">1</td>
+                <td th:text="${m.email()}">email</td>
+                <td th:text="${m.nickname()}">닉네임</td>
+                <td th:text="${m.role()}">USER</td>
+                <td th:text="${m.googleLinked() ? '연동' : '미연동'}">미연동</td>
+                <td class="text-end" th:text="${m.restaurantCount()}">0</td>
+                <td class="text-end" th:text="${m.reviewCount()}">0</td>
+                <td class="small" th:text="${#temporals.format(m.createdAt(), 'yyyy-MM-dd')}">2026-11-01</td>
+                <td><a class="btn btn-outline-dark btn-sm" th:href="@{/admin/members/{id}(id=${m.memberId()})}">보기</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <p th:if="${#lists.isEmpty(result.content())}" class="alert alert-secondary" role="status">조건에 맞는 회원이 없습니다.</p>
+
+    <nav aria-label="페이지" th:if="${result.totalPages() > 1}">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${result.page() == 0} ? 'disabled'">
+                <a class="page-link" th:href="@{${'/admin/members?' + baseQuery + '&page=' + (result.page() - 1)}}"
+                   th:unless="${result.page() == 0}">이전</a>
+                <span class="page-link" th:if="${result.page() == 0}">이전</span>
+            </li>
+            <li class="page-item disabled"><span class="page-link" th:text="${result.page() + 1} + ' / ' + ${result.totalPages()}">1 / 1</span></li>
+            <li class="page-item" th:classappend="${result.page() + 1 >= result.totalPages()} ? 'disabled'">
+                <a class="page-link" th:href="@{${'/admin/members?' + baseQuery + '&page=' + (result.page() + 1)}}"
+                   th:unless="${result.page() + 1 >= result.totalPages()}">다음</a>
+                <span class="page-link" th:if="${result.page() + 1 >= result.totalPages()}">다음</span>
+            </li>
+        </ul>
+    </nav>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

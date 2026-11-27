@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('맛집 수정 (관리자)')}"></head>
+<body class="d-flex flex-column min-vh-100">
+<div th:replace="~{fragments/layout :: header}"></div>
+
+<main class="container py-4 flex-grow-1" style="max-width: 880px;">
+    <h1 class="h3 mb-3">맛집 수정 <span class="small text-muted" th:text="'#' + ${restaurant.id()}">#1</span></h1>
+    <div th:replace="~{fragments/admin-nav :: nav('restaurants')}"></div>
+
+    <div th:if="${notice != null}" class="alert alert-success" role="status" th:text="${notice}">알림</div>
+    <div th:if="${error != null}" class="alert alert-danger" role="alert" th:text="${error}">오류</div>
+
+    <form method="post" th:action="@{/admin/restaurants/{id}/edit(id=${restaurant.id()})}" class="card card-body mb-4" novalidate>
+        <div class="row g-3">
+            <div class="col-12 col-md-6">
+                <label for="name" class="form-label">이름</label>
+                <input class="form-control" id="name" name="name" maxlength="50" required th:value="${restaurant.name()}">
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="categoryId" class="form-label">카테고리</label>
+                <select class="form-select" id="categoryId" name="categoryId" required>
+                    <option th:each="c : ${categories}" th:value="${c.id()}" th:text="${c.name()}"
+                            th:selected="${restaurant.category().id() == c.id()}">카테고리</option>
+                </select>
+            </div>
+            <div class="col-12">
+                <label for="address" class="form-label">주소</label>
+                <input class="form-control" id="address" name="address" maxlength="200" required th:value="${restaurant.address()}">
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="phone" class="form-label">전화번호 (선택)</label>
+                <input class="form-control" id="phone" name="phone" maxlength="20" th:value="${restaurant.phone()}">
+            </div>
+            <div class="col-6 col-md-3">
+                <label for="latitude" class="form-label">위도 (선택)</label>
+                <input class="form-control" id="latitude" name="latitude" th:value="${restaurant.latitude()}">
+            </div>
+            <div class="col-6 col-md-3">
+                <label for="longitude" class="form-label">경도 (선택)</label>
+                <input class="form-control" id="longitude" name="longitude" th:value="${restaurant.longitude()}">
+            </div>
+            <div class="col-12">
+                <label for="description" class="form-label">소개</label>
+                <textarea class="form-control" id="description" name="description" rows="4" maxlength="2000" required
+                          th:text="${restaurant.description()}"></textarea>
+            </div>
+        </div>
+        <p class="small text-muted mt-2 mb-0">작성자와 평균 평점, 리뷰 수는 이 화면에서 바꿀 수 없습니다.</p>
+        <div class="d-flex justify-content-end mt-3">
+            <button type="submit" class="btn btn-primary">저장</button>
+        </div>
+    </form>
+
+    <section class="mb-4" aria-labelledby="images-title">
+        <h2 class="h5" id="images-title">사진</h2>
+        <p th:if="${#lists.isEmpty(restaurant.images())}" class="text-muted small">등록된 사진이 없습니다.</p>
+        <div class="row row-cols-2 row-cols-md-3 g-2 mb-3" th:unless="${#lists.isEmpty(restaurant.images())}">
+            <div class="col" th:each="img : ${restaurant.images()}">
+                <img th:if="${img.url() != null}" th:src="${img.url()}" class="img-fluid rounded" alt="맛집 사진">
+                <div th:unless="${img.url() != null}" class="bg-light text-muted small rounded d-flex align-items-center justify-content-center"
+                     style="height: 120px;">사진을 표시할 수 없습니다</div>
+                <form class="mt-1" method="post" th:action="@{/admin/restaurants/{id}/images/{imageId}/delete(id=${restaurant.id()},imageId=${img.id()})}"
+                      data-confirm="이 사진을 삭제할까요?">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">사진 삭제</button>
+                </form>
+            </div>
+        </div>
+        <form method="post" enctype="multipart/form-data" th:action="@{/admin/restaurants/{id}/images(id=${restaurant.id()})}"
+              class="d-flex flex-wrap gap-2 align-items-center" data-once>
+            <label for="file" class="form-label mb-0">사진 추가 (JPEG, PNG, WEBP, 5MB 이하)</label>
+            <input class="form-control w-auto" type="file" id="file" name="file" accept="image/jpeg,image/png,image/webp" required>
+            <button type="submit" class="btn btn-outline-dark btn-sm">올리기</button>
+        </form>
+    </section>
+
+    <form method="post" th:action="@{/admin/restaurants/{id}/delete(id=${restaurant.id()})}"
+          data-confirm="이 맛집을 삭제할까요? 사진, 찜, 리뷰, AI 요약이 함께 삭제되며 되돌릴 수 없습니다.">
+        <button type="submit" class="btn btn-outline-danger">맛집 삭제</button>
+    </form>
+</main>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>
