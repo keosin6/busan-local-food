@@ -2,6 +2,7 @@ package com.busanlocalfood.restaurant.web;
 
 import com.busanlocalfood.global.exception.BusinessException;
 import com.busanlocalfood.global.exception.ErrorCode;
+import com.busanlocalfood.favorite.web.FavoriteNotices;
 import com.busanlocalfood.member.web.ScreenSession;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.CategoryResponse;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.DeleteResult;
@@ -100,6 +101,8 @@ public class RestaurantScreenController {
                          @RequestParam(name = "review", required = false) String review,
                          @RequestParam(name = "reviewError", required = false) String reviewError,
                          @RequestParam(name = "reviewPage", defaultValue = "0") int reviewPage,
+                         @RequestParam(name = "favorite", required = false) String favorite,
+                         @RequestParam(name = "favoriteError", required = false) String favoriteError,
                          Model model) {
         Long viewerId = ScreenSession.currentMemberId().orElse(null);
         try {
@@ -120,6 +123,7 @@ public class RestaurantScreenController {
         model.addAttribute("loggedIn", viewerId != null);
         model.addAttribute("error", error);
         model.addAttribute("reviewNotice", ReviewNotices.notice(review, reviewError));
+        model.addAttribute("favoriteNotice", FavoriteNotices.notice(favorite, favoriteError));
         return DETAIL_VIEW;
     }
 

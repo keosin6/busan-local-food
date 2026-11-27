@@ -53,6 +53,9 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class})
 class RestaurantImageApiHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     private static final String JWT_SECRET = randomBase64Key();
     private static final long MEMBER_ID = 7L;
     private static final long OTHER_MEMBER_ID = 8L;

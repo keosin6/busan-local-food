@@ -2,6 +2,7 @@ package com.busanlocalfood.restaurant.service;
 
 import com.busanlocalfood.global.exception.BusinessException;
 import com.busanlocalfood.global.exception.ErrorCode;
+import com.busanlocalfood.favorite.repository.FavoriteRepository;
 import com.busanlocalfood.image.domain.RestaurantImage;
 import com.busanlocalfood.image.repository.RestaurantImageRepository;
 import com.busanlocalfood.image.service.ImageUrls;
@@ -54,20 +55,23 @@ public class RestaurantService {
     private final RestaurantImageRepository images;
     private final ReviewRepository reviews;
     private final ReviewSummaryRepository summaries;
+    private final FavoriteRepository favorites;
     private final StorageCleanup storageCleanup;
     private final ImageUrls imageUrls;
     private final TransactionTemplate tx;
 
     public RestaurantService(RestaurantRepository restaurants, CategoryRepository categories, MemberRepository members,
                              RestaurantImageRepository images, ReviewRepository reviews,
-                             ReviewSummaryRepository summaries, StorageCleanup storageCleanup,
-                             ImageUrls imageUrls, PlatformTransactionManager transactionManager) {
+                             ReviewSummaryRepository summaries, FavoriteRepository favorites,
+                             StorageCleanup storageCleanup, ImageUrls imageUrls,
+                             PlatformTransactionManager transactionManager) {
         this.restaurants = restaurants;
         this.categories = categories;
         this.members = members;
         this.images = images;
         this.reviews = reviews;
         this.summaries = summaries;
+        this.favorites = favorites;
         this.storageCleanup = storageCleanup;
         this.imageUrls = imageUrls;
         this.tx = new TransactionTemplate(transactionManager);
@@ -101,9 +105,19 @@ public class RestaurantService {
     /** 맛집 상세 (API_SPEC 4.2). viewerId가 null이면 비회원이다. */
     @Transactional(readOnly = true)
     public RestaurantDetail detail(long restaurantId, Long viewerId) {
-        Restaurant restaurant = find(restaurantId);
-        return RestaurantDetail.of(restaurant, viewerId != null && restaurant.isOwnedBy(viewerId),
-                imagesOf(restaurantId));
+        return detailFor(find(restaurantId), viewerId);
+    }
+
+    /**
+     * 상세 응답을 만든다. 찜 수는 맛집별 COUNT 한 번, 찜 여부는 회원·맛집 쌍 조회 한 번이다.
+     * 목록이 아니라 한 맛집에만 쓰므로 맛집 수에 비례하는 추가 조회가 생기지 않는다.
+     */
+    private RestaurantDetail detailFor(Restaurant restaurant, Long viewerId) {
+        long id = restaurant.getId();
+        boolean isOwner = viewerId != null && restaurant.isOwnedBy(viewerId);
+        int favoriteCount = (int) favorites.countByRestaurantId(id);
+        boolean favorited = viewerId != null && favorites.existsByMemberIdAndRestaurantId(viewerId, id);
+        return RestaurantDetail.of(restaurant, isOwner, imagesOf(id), favoriteCount, favorited);
     }
 
     /** 등록 (API_SPEC 4.3). 작성자는 현재 인증된 회원이다. 새 맛집에는 이미지가 없다. */
@@ -124,7 +138,7 @@ public class RestaurantService {
         RestaurantInputRules.Validated input = RestaurantInputRules.validate(request);
         Category category = findCategory(input.categoryId());
         restaurant.update(category, input.fields());
-        return RestaurantDetail.of(restaurant, true, imagesOf(restaurantId));
+        return detailFor(restaurant, memberId);
     }
 
     /**
@@ -135,7 +149,7 @@ public class RestaurantService {
      * 2) 커밋 뒤: 각 키의 S3 객체를 지운다. 성공하면 추적 행을 지우고, 실패하면 추적 행을 남긴다.
      *    S3 실패는 맛집 삭제를 되돌리지 않는다. 응답의 storageDeleteFailedCount로 알린다.
      *
-     * 리뷰, 찜, AI 요약 행의 삭제는 해당 기능(F1-04~F1-06)이 들어올 때 같은 트랜잭션에 추가한다.
+     * 찜, 리뷰, AI 요약 행은 같은 트랜잭션에서 지운다 (DATABASE_ERD 삭제 흐름). FK CASCADE는 안전장치다.
      */
     public DeleteResult delete(long restaurantId, long memberId) {
         List<String> s3Keys = tx.execute(status -> {
@@ -150,6 +164,8 @@ public class RestaurantService {
                 keys.add(image.getS3Key());
             }
             images.deleteAll(owned);
+            // 찜은 리뷰보다 먼저 지운다 (F1-06, DATABASE_ERD 4.x 삭제 흐름). 맛집 행이 사라지면 CASCADE가 남은 찜도 지운다.
+            favorites.deleteAll(favorites.findByRestaurantId(restaurantId));
             // 리뷰는 같은 트랜잭션에서 지운다. 맛집 행이 사라지면 ON DELETE CASCADE가 남은 리뷰도 지우지만, 순서를 명시한다.
             reviews.deleteAll(reviews.findByRestaurantId(restaurantId));
             // AI 요약 캐시도 같은 트랜잭션에서 지운다 (F1-02 삭제 흐름, F1-05). FK CASCADE는 안전장치다.
@@ -172,7 +188,16 @@ public class RestaurantService {
     public RestaurantDetail loadForEdit(long restaurantId, long memberId) {
         Restaurant restaurant = find(restaurantId);
         requireOwner(restaurant, memberId);
-        return RestaurantDetail.of(restaurant, true, imagesOf(restaurantId));
+        return detailFor(restaurant, memberId);
+    }
+
+    /**
+     * 맛집 목록 항목으로 바꾼다. 대표 이미지는 맛집 수와 상관없이 한 번의 쿼리로 모은다.
+     * 찜 목록처럼 다른 기능이 맛집 목록을 만들 때 쓴다. 호출하는 쪽의 트랜잭션 안에서 부른다.
+     */
+    public List<RestaurantSummary> summaries(List<Restaurant> items) {
+        Map<Long, String> thumbnails = thumbnailsOf(items.stream().map(Restaurant::getId).toList());
+        return items.stream().map(r -> RestaurantSummary.from(r, thumbnails.get(r.getId()))).toList();
     }
 
     private Restaurant find(long restaurantId) {

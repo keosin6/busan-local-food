@@ -27,6 +27,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @Import(SecurityConfig.class)
 class HomeControllerTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     @MockitoBean
     private RestaurantService restaurantService;
 

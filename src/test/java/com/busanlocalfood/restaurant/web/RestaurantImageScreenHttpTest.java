@@ -62,6 +62,9 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, JwtConfig.class, TimeConfig.class})
 class RestaurantImageScreenHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     private static final String SESSION_CONTEXT = HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY;
     private static final Pattern CSRF_FIELD = Pattern.compile("\"_csrf\"[^>]*?value=\"([^\"]+)\"");
     /** JwtConfig가 기동 시 서명 키를 요구한다. 테스트마다 임의로 만든 키를 쓴다. */

@@ -80,6 +80,9 @@ import org.springframework.http.HttpHeaders;
         ScreenAuthHttpTest.ClientIpConfig.class})
 class ScreenAuthHttpTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     @MockitoBean
     private RestaurantService restaurantService;
 

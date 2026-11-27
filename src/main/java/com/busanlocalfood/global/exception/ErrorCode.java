@@ -36,6 +36,10 @@ public enum ErrorCode {
     REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 이 맛집에 리뷰를 작성했습니다."),
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
 
+    // 찜 (API_SPEC 1.3, 8.x, FUNCTION_SPEC F1-06). 한 회원은 한 맛집을 한 번만 찜할 수 있다.
+    FAVORITE_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 찜한 맛집입니다."),
+    FAVORITE_NOT_FOUND(HttpStatus.NOT_FOUND, "찜한 맛집이 아닙니다."),
+
     // 맛집 이미지 (API_SPEC 1.3, 5.1, FUNCTION_SPEC F1-03). 메시지에 저장소 자격 증명이나 서명 정보를 넣지 않는다.
     IMAGE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "JPEG, PNG, WEBP 형식의 이미지만 올릴 수 있습니다."),
     IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "이미지는 5MB 이하만 올릴 수 있습니다."),

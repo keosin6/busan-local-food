@@ -34,6 +34,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, GlobalExceptionHandlerTest.FailingController.class})
 class GlobalExceptionHandlerTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.busanlocalfood.favorite.service.FavoriteService favoriteService;
+
     @MockitoBean
     private RestaurantService restaurantService;
 
