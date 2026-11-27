@@ -72,5 +72,14 @@
         root.document.addEventListener(RATE_LIMITED_EVENT, function (event) {
             notice.show(event.detail);
         });
+        // 삭제처럼 되돌릴 수 없는 폼은 data-confirm 문구로 한 번 확인한다. 취소하면 제출하지 않는다.
+        root.document.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (form && form.hasAttribute && form.hasAttribute('data-confirm')) {
+                if (!root.confirm(form.getAttribute('data-confirm'))) {
+                    event.preventDefault();
+                }
+            }
+        });
     }
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

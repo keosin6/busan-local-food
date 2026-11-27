@@ -53,6 +53,9 @@ public class SecurityConfig {
     static final String[] PUBLIC_API_AUTH_POST_PATHS = {
             "/api/auth/signup", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout"};
 
+    /** API 체인에서 인증 없이 GET할 수 있는 경로. 카테고리 목록(API_SPEC 3.1)과 맛집 목록·상세(4.1, 4.2)만 연다. */
+    static final String[] PUBLIC_API_GET_PATHS = {"/api/categories", "/api/restaurants", "/api/restaurants/*"};
+
     @Bean
     @Order(1)
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http,
@@ -66,6 +69,7 @@ public class SecurityConfig {
         http.securityMatcher("/api/**")
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, PUBLIC_API_AUTH_POST_PATHS).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_API_GET_PATHS).permitAll()
                         .anyRequest().authenticated())
                 // API 인증은 세션을 쓰지 않는다. 화면 세션이 있어도 API 요청의 인증 근거가 되지 않는다.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -124,7 +128,8 @@ public class SecurityConfig {
                 // 보호 화면(API_SPEC 10): 마이페이지와 계정 관리, 맛집 등록·수정 화면.
                 // 화면 세션이 없으면 /login으로 보낸다. JWT 쿠키만으로는 화면 인증되지 않는다.
                 // 맛집 수정의 작성자 본인 확인은 F1-02에서 서버 측 서비스가 맡는다. 여기서는 로그인 여부만 본다.
-                .requestMatchers("/mypage", "/mypage/**", "/restaurants/new", "/restaurants/*/edit").authenticated()
+                .requestMatchers("/mypage", "/mypage/**", "/restaurants/new", "/restaurants/*/edit",
+                        "/restaurants/*/delete").authenticated()
                 .anyRequest().permitAll());
         http.exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));
