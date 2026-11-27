@@ -136,10 +136,11 @@ public class FavoriteScreenController {
         switch (origin) {
             case FAVORITES:
                 return "redirect:" + LIST_PATH + "?page=" + safePage + "&" + key + "=" + value;
-            case RESTAURANTS:
             case HOME:
-                String base = origin == Origin.HOME ? "/" : "/restaurants";
-                return "redirect:" + base + "?" + listQuery(category, keyword, sort, safePage, size)
+                // 홈은 검색 조건과 페이지가 없다. 카드가 있던 자리로만 돌아간다.
+                return "redirect:/?" + key + "=" + value + "#restaurant-" + id;
+            case RESTAURANTS:
+                return "redirect:/restaurants?" + listQuery(category, keyword, sort, safePage, size)
                         + "&" + key + "=" + value + "#restaurant-" + id;
             default:
                 return "redirect:/restaurants/" + id + "?" + key + "=" + value + "#favorite";

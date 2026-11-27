@@ -137,6 +137,9 @@ class FavoriteListButtonHttpTest {
         when(restaurantService.list(any(), any(), any(), anyInt(), anyInt())).thenReturn(
                 new PageResponse<>(List.of(summary(1L, "첫째 맛집"), summary(2L, "둘째 맛집")), 0, 12, 2, 1));
         when(favoriteService.favoritedAmong(eq(MEMBER_ID), anyList())).thenReturn(Set.of(1L));
+        // 홈은 최신 맛집 목록을 쓴다 (F1-08).
+        when(restaurantService.latest(anyInt())).thenReturn(
+                List.of(summary(1L, "첫째 맛집"), summary(2L, "둘째 맛집")));
     }
 
     private String csrfFromPage(MockHttpSession session, String path) throws Exception {
@@ -195,7 +198,7 @@ class FavoriteListButtonHttpTest {
 
         mockMvc.perform(post("/restaurants/1/favorite/delete").session(session).param("_csrf", csrf)
                         .param("from", "home").param("page", "0").param("size", "12"))
-                .andExpect(redirectedUrl("/?size=12&page=0&favorite=removed#restaurant-1"));
+                .andExpect(redirectedUrl("/?favorite=removed#restaurant-1"));
         verify(favoriteService).unfavorite(1L, MEMBER_ID);
     }
 

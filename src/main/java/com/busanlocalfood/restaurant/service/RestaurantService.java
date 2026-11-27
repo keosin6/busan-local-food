@@ -49,6 +49,8 @@ public class RestaurantService {
             .and(Sort.by(Sort.Direction.DESC, "createdAt"))
             .and(Sort.by(Sort.Direction.DESC, "id"));
 
+    private static final int SIZE_MAX = 50;
+
     private final RestaurantRepository restaurants;
     private final CategoryRepository categories;
     private final MemberRepository members;
@@ -81,6 +83,16 @@ public class RestaurantService {
     @Transactional(readOnly = true)
     public List<CategoryResponse> categories() {
         return categories.findAllByOrderBySortOrderAscIdAsc().stream().map(CategoryResponse::from).toList();
+    }
+
+    /**
+     * 홈의 최신 맛집 (FUNCTION_SPEC F1-08). 최근 등록 순으로 count개(1~50)만 읽는다. 전체 맛집을 읽지 않는다.
+     * 맛집 수와 상관없이 쿼리 수가 일정하다. 맛집·카테고리는 한 번에, 대표 이미지는 한 번의 IN 쿼리로 읽는다.
+     */
+    @Transactional(readOnly = true)
+    public List<RestaurantSummary> latest(int count) {
+        int limit = Math.min(Math.max(count, 1), SIZE_MAX);
+        return summaries(restaurants.findByOrderByCreatedAtDescIdDesc(PageRequest.of(0, limit)));
     }
 
     /** 맛집 목록과 검색 (API_SPEC 4.1). 비회원도 조회한다. 항목마다 대표 이미지 URL을 붙인다. */
