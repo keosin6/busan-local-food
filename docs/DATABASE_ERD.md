@@ -227,6 +227,7 @@ erDiagram
 - UNIQUE: `uk_image_s3_key (s3_key)`
 - INDEX: `idx_image_restaurant (restaurant_id, sort_order)`
 - 삭제 규칙: 이 행을 삭제할 때는 같은 트랜잭션에서 `storage_delete_task`에 `s3_key`를 기록합니다. S3 객체 삭제는 커밋 후 수행합니다 (FUNCTION_SPEC F1-03).
+- 구현 메모 (SQL 005): 명세에 없던 CHECK를 추가했습니다. `ck_image_file_size` (1~5242880), `ck_image_content_type` (`image/jpeg`, `image/png`, `image/webp`), `ck_image_sort_order` (0 이상).
 
 ### 2.5 review (리뷰)
 
@@ -315,6 +316,7 @@ erDiagram
 - 행의 의미: "DB에서는 이미 삭제되었지만 S3 객체는 아직 지워지지 않은 키". S3 삭제에 성공하면 행을 삭제합니다.
 - 생성 규칙: 맛집 삭제·이미지 삭제 트랜잭션 안에서 INSERT합니다. 이렇게 하면 DB 커밋 후 프로세스가 중단되어도 키가 남습니다.
 - 재시도: 관리자 API로 수동 재시도합니다 (FR-03-06, FR-09-06). 자동 재시도 여부는 T6에서 정합니다.
+- 구현 메모 (SQL 005): 명세에 없던 CHECK `ck_storage_task_retry` (`retry_count >= 0`)를 추가했습니다. 나머지 컬럼, UNIQUE, INDEX는 명세와 같습니다.
 
 #### 추가 이유
 
@@ -421,6 +423,8 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 | 1 | `db/manual/001_create_member_refresh_token.sql` | `member`, `refresh_token` 생성 | 금지 (이미 적용된 파일) |
 | 2 | `db/manual/002_add_refresh_token_family_id.sql` | `refresh_token.family_id` 추가, 기존 행 UUID 부여, NOT NULL, `idx_refresh_family` | 금지 (실패 시 SHOW CREATE TABLE로 단계를 확인하고 남은 문장만 실행) |
 | 3 | `db/manual/003_create_auth_rate_limit_tables.sql` | 요청 제한 이벤트 4개와 카운터 1개 테이블 생성 | 금지 (이미 테이블이 있으면 실패) |
+| 4 | `db/manual/004_create_category_and_restaurant.sql` | `category`(시드 10개), `restaurant` 생성 (F1-02) | 금지 (이미 테이블이 있으면 실패) |
+| 5 | `db/manual/005_create_restaurant_image_and_storage_delete_task.sql` | `restaurant_image`, `storage_delete_task` 생성 (F1-03) | 금지 (이미 테이블이 있으면 실패) |
 
 - 적용 전에는 대상 DB를 백업하고 현재 스키마를 확인합니다. 운영 DB는 점검 시간에 적용합니다.
 - 002의 `UUID()`는 버전 1 형식입니다. 시각 정보와 서버 노드 식별 값을 담으므로, 마이그레이션 시점의 한 번 채우는 값으로만 씁니다. 애플리케이션의 신규 `family_id`는 버전 4(난수 기반) UUID를 사용합니다 (2026-11-12 확정, PROGRESS 6.8). 백필 값은 일회성이며 외부 노출 금지 대상입니다.

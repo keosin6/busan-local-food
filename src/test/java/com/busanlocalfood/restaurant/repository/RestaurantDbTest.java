@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.busanlocalfood.global.exception.BusinessException;
+import com.busanlocalfood.image.config.ImageStorageConfig;
+import com.busanlocalfood.image.service.ImageStorage;
+import com.busanlocalfood.image.service.ImageUrls;
+import com.busanlocalfood.image.service.StorageCleanup;
 import com.busanlocalfood.global.exception.ErrorCode;
 import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.repository.MemberRepository;
@@ -26,6 +30,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -44,9 +49,12 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 })
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
-@Import(RestaurantService.class)
+@Import({RestaurantService.class, StorageCleanup.class, ImageUrls.class, ImageStorageConfig.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RestaurantDbTest {
+
+    @MockitoBean
+    private ImageStorage imageStorage;
 
     private static final List<String> SEED_NAMES = List.of("한식", "중식", "일식", "양식", "분식",
             "카페·디저트", "해산물", "고기·구이", "술집", "기타");
@@ -84,6 +92,7 @@ class RestaurantDbTest {
     }
 
     private void cleanRows() {
+        jdbc.update("DELETE FROM storage_delete_task");
         restaurants.deleteAll();
         members.findAll().stream()
                 .filter(m -> m.getEmail().startsWith("db-"))

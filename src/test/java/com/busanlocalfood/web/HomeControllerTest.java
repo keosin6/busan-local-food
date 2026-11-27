@@ -30,6 +30,9 @@ class HomeControllerTest {
     @MockitoBean
     private RestaurantService restaurantService;
 
+    @MockitoBean
+    private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
+
     @org.junit.jupiter.api.BeforeEach
     void emptyRestaurantList() {
         org.mockito.Mockito.when(restaurantService.list(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),

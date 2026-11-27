@@ -129,7 +129,11 @@ public class RestaurantScreenController {
     }
 
     @GetMapping("/restaurants/{id}/edit")
-    public String editForm(@PathVariable("id") long id, Model model) {
+    public String editForm(@PathVariable("id") long id,
+                           @RequestParam(name = "image", required = false) String image,
+                           @RequestParam(name = "imageError", required = false) String imageError,
+                           @RequestParam(name = "storage", required = false) String storage,
+                           Model model) {
         Long memberId = ScreenSession.currentMemberId().orElse(null);
         if (memberId == null) {
             return "redirect:/login";
@@ -140,6 +144,8 @@ public class RestaurantScreenController {
             model.addAttribute("restaurantId", id);
             model.addAttribute("form", formValues(restaurant));
             model.addAttribute("categories", restaurantService.categories());
+            model.addAttribute("images", restaurant.images());
+            model.addAttribute("imageNotice", ImageNotices.notice(image, imageError, "1".equals(storage)));
             return FORM_VIEW;
         } catch (BusinessException e) {
             return redirectAfterFailure(e, id);
@@ -187,7 +193,7 @@ public class RestaurantScreenController {
         }
     }
 
-    private static String redirectAfterFailure(BusinessException e, long id) {
+    static String redirectAfterFailure(BusinessException e, long id) {
         if (e.getErrorCode() == ErrorCode.FORBIDDEN) {
             return "redirect:/restaurants/" + id + "?error=forbidden";
         }

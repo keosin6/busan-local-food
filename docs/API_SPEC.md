@@ -566,10 +566,9 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ## 4. 맛집 API (F1-02, F1-03)
 
-> 구현 상태 (PR #37 병합, merge commit `1f885dd`): 3.1과 4.1~4.5는 구현되었습니다. 아래는 명세와 구현이 다르거나 아직 없는 부분입니다. 명세 본문은 설계 기준으로 두고, 구현에 맞춰 바꾸지 않았습니다.
-> - 4.1 목록 항목의 `thumbnailUrl`은 아직 없습니다 (F1-03).
-> - 4.2 상세의 `images`는 항상 빈 배열, `favoriteCount`는 0, `isFavorited`는 `false`입니다 (F1-03, F1-06 전 자리표시).
-> - 4.5 삭제 응답은 `deletedImageCount`, `storageDeleteFailedCount` 두 필드만 있습니다. 본문 설명의 `storageDeleted` 필드는 없습니다. 이미지 S3 삭제와 `storage_delete_task` 기록은 F1-03에서 구현합니다. 리뷰·찜·AI 요약 행 삭제는 해당 기능 구현 후 추가합니다.
+> 구현 상태: 3.1과 4.1~4.5는 구현되었습니다(F1-02는 PR #37 `main` 병합, merge commit `1f885dd`). F1-03(PR 병합 전)으로 4.1 `thumbnailUrl`(대표 이미지 URL)과 4.2 `images`(이미지 목록)가 실제 값을 돌려주며, S3 설정이 없으면 URL은 `null`입니다. 아래는 명세와 구현이 아직 다른 부분입니다. 명세 본문은 설계 기준으로 두고, 구현에 맞춰 바꾸지 않았습니다.
+> - 4.2 상세의 `favoriteCount`는 0, `isFavorited`는 `false`입니다 (F1-06 전 자리표시).
+> - 4.5 삭제 응답은 `deletedImageCount`, `storageDeleteFailedCount` 두 필드만 있습니다. 본문 설명의 `storageDeleted` 필드는 없습니다. `storageDeleteFailedCount`는 S3 삭제 실패로 `storage_delete_task`에 남은 객체 수입니다. 리뷰·찜·AI 요약 행 삭제는 해당 기능 구현 후 추가합니다.
 > - 1.2 공통 응답 형식의 오류 `details` 배열은 아직 응답에 없습니다.
 
 ### 4.1 맛집 목록·검색
@@ -684,6 +683,9 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 ---
 
 ## 5. 맛집 이미지 API (F1-03)
+
+> 구현 상태 (F1-03, PR 병합 전): 5.1과 5.2를 구현했습니다. 형식은 MIME 헤더, 확장자, 파일 앞부분 시그니처(JPEG, PNG, WEBP)를 모두 확인합니다. 한 장 5MB 이하, 맛집당 5장 이하이며 개수는 맛집 행을 잠근 뒤 다시 셉니다. 객체 키는 `restaurants/{restaurantId}/{uuid}.{ext}`이고 원본 파일명은 DB에만 저장합니다. 요청 본문이 6MB를 넘으면 API는 400 `IMAGE_TOO_LARGE`, 화면은 수정 화면 안내로 응답합니다. 객체 URL은 `https://{버킷}.s3.{리전}.amazonaws.com/{키}` 형식입니다. 버킷의 공개 읽기 정책과 CDN은 배포 단계에서 확정합니다(미확정). 리전과 버킷은 환경 변수 `AWS_REGION`, `AWS_S3_BUCKET`입니다. 설정이 없으면 업로드와 삭제는 502 `STORAGE_ERROR`로 실패합니다.
+> 미검증: 실제 AWS 버킷에 업로드하거나 삭제한 적이 없습니다. S3 연동은 목(mock)으로만 확인했습니다.
 
 ### 5.1 이미지 업로드 (작성자)
 
@@ -910,7 +912,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
-- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/restaurants/new`와 `/restaurants/{id}/edit`는 화면 세션 인증 필수로 설정되어 있다(F1-01, 맛집 컨트롤러 미구현. 작성자 본인 확인은 F1-02에서 서버 측으로 구현한다). 나머지 화면 URL(`/restaurants` 이하, `/admin/**` 등)은 미구현이다.
+- 구현 상태: `/`(홈), `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/restaurants`(목록), `/restaurants/{id}`(상세), `/restaurants/new`, `/restaurants/{id}/edit`(사진 관리 포함)는 F1-02(PR #37, merge commit `1f885dd`, `main` 병합 완료)와 F1-03(구현 완료, PR 병합 전)으로 구현되어 있다. 작성자 본인 확인은 서비스 계층에서 한다. `/restaurants/new`, `/restaurants/{id}/edit`, `/restaurants/*/delete`, `/restaurants/*/images/**`는 화면 세션 인증 필수다. `/favorites`, `/recommend`, `/admin/**` 등 나머지 화면 URL은 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---

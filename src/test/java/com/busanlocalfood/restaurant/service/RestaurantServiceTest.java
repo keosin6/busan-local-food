@@ -9,6 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.busanlocalfood.global.exception.BusinessException;
+import com.busanlocalfood.image.repository.RestaurantImageRepository;
+import com.busanlocalfood.image.service.ImageUrls;
+import com.busanlocalfood.image.service.StorageCleanup;
 import com.busanlocalfood.global.exception.ErrorCode;
 import com.busanlocalfood.member.domain.Member;
 import com.busanlocalfood.member.repository.MemberRepository;
@@ -24,6 +27,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /** 맛집 서비스의 작성자 확인, 없는 맛집, 없는 카테고리 분기. 리포지토리는 목이다. DB 없이 실행한다. */
 class RestaurantServiceTest {
@@ -36,6 +40,9 @@ class RestaurantServiceTest {
     private RestaurantRepository restaurants;
     private CategoryRepository categories;
     private MemberRepository members;
+    private RestaurantImageRepository images;
+    private StorageCleanup storageCleanup;
+    private ImageUrls imageUrls;
     private RestaurantService service;
 
     private Restaurant stored;
@@ -46,7 +53,11 @@ class RestaurantServiceTest {
         restaurants = mock(RestaurantRepository.class);
         categories = mock(CategoryRepository.class);
         members = mock(MemberRepository.class);
-        service = new RestaurantService(restaurants, categories, members);
+        images = mock(RestaurantImageRepository.class);
+        storageCleanup = mock(StorageCleanup.class);
+        imageUrls = mock(ImageUrls.class);
+        service = new RestaurantService(restaurants, categories, members, images, storageCleanup, imageUrls,
+                mock(PlatformTransactionManager.class));
 
         category = mock(Category.class);
         Member owner = Member.create("owner@example.com", "hash", "작성자", "google-sub-owner");
@@ -55,6 +66,8 @@ class RestaurantServiceTest {
         ReflectionTestUtils.setField(stored, "id", RESTAURANT_ID);
 
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(stored));
+        // 삭제는 맛집 행을 잠근 뒤 권한을 본다 (findByIdForUpdate).
+        when(restaurants.findByIdForUpdate(RESTAURANT_ID)).thenReturn(Optional.of(stored));
         when(categories.findById(CATEGORY_ID)).thenReturn(Optional.of(category));
     }
 

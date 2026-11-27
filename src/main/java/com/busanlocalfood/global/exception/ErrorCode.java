@@ -32,6 +32,12 @@ public enum ErrorCode {
     RESTAURANT_NOT_FOUND(HttpStatus.NOT_FOUND, "맛집을 찾을 수 없습니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "이 작업을 할 권한이 없습니다."),
 
+    // 맛집 이미지 (API_SPEC 1.3, 5.1, FUNCTION_SPEC F1-03). 메시지에 저장소 자격 증명이나 서명 정보를 넣지 않는다.
+    IMAGE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "JPEG, PNG, WEBP 형식의 이미지만 올릴 수 있습니다."),
+    IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "이미지는 5MB 이하만 올릴 수 있습니다."),
+    IMAGE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "맛집 이미지는 최대 5장까지 등록할 수 있습니다."),
+    STORAGE_ERROR(HttpStatus.BAD_GATEWAY, "이미지 저장소 요청이 실패했습니다. 잠시 후 다시 시도해 주세요."),
+
     // 요청 제한 (API_SPEC 1.3, 1.4). 메시지에 제한 기준이나 식별 정보를 넣지 않는다.
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
 

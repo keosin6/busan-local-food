@@ -77,6 +77,9 @@ class ProtectedScreenHttpTest {
     @MockitoBean
     private RestaurantService restaurantService;
 
+    @MockitoBean
+    private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
+
     private static final String SESSION_CONTEXT = HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY;
     private static final Pattern CSRF_FIELD = Pattern.compile("\"_csrf\"[^>]*?value=\"([^\"]+)\"");
     private static final String LOGIN_LOCATION = "http://localhost/login";

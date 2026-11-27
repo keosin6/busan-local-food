@@ -9,8 +9,8 @@ import java.util.List;
 /**
  * 맛집 API 요청과 응답 형식 (API_SPEC 3.1, 4.1~4.5). 화면 폼과 API 본문이 같은 입력 형식을 쓴다.
  *
- * 이미지(F1-03), 찜(F1-06), 리뷰(F1-04), AI 요약(F1-05) 기능은 아직 없다. 그래서 상세 응답의 images는 빈 목록,
- * favoriteCount는 0, isFavorited는 false로 준다. 이 값들은 실제 데이터가 아니라 기능이 없다는 뜻의 기본값이다.
+ * 이미지는 F1-03에서 연결했다. 찜(F1-06), 리뷰(F1-04), AI 요약(F1-05)은 아직 없다. 그래서 상세 응답의 favoriteCount는 0,
+ * isFavorited는 false로 준다. 이 값들은 실제 데이터가 아니라 기능이 없다는 뜻의 기본값이다.
  */
 public final class RestaurantDtos {
 
@@ -37,18 +37,27 @@ public final class RestaurantDtos {
     public record OwnerRef(long memberId, String nickname) {
     }
 
-    /** 목록 항목 (API_SPEC 4.1). 썸네일은 이미지 기능(F1-03) 이후 추가한다. */
+    /**
+     * 목록 항목 (API_SPEC 4.1). thumbnailUrl은 대표 이미지(sort_order가 가장 작은 것)의 URL이다.
+     * 이미지가 없거나 S3 설정이 없으면 null이다.
+     */
     public record RestaurantSummary(Long id, String name, CategoryRef category, String address,
-                                    BigDecimal averageRating, int reviewCount, LocalDateTime createdAt) {
-        public static RestaurantSummary from(Restaurant restaurant) {
+                                    BigDecimal averageRating, int reviewCount, String thumbnailUrl,
+                                    LocalDateTime createdAt) {
+        public static RestaurantSummary from(Restaurant restaurant, String thumbnailUrl) {
             return new RestaurantSummary(restaurant.getId(), restaurant.getName(),
                     CategoryRef.from(restaurant.getCategory()), restaurant.getAddress(),
-                    restaurant.getAverageRating(), restaurant.getReviewCount(), restaurant.getCreatedAt());
+                    restaurant.getAverageRating(), restaurant.getReviewCount(), thumbnailUrl,
+                    restaurant.getCreatedAt());
         }
     }
 
-    /** 이미지 항목 자리. F1-03 전까지 목록은 항상 비어 있다. */
+    /** 이미지 항목 (API_SPEC 5.1). url은 S3 설정이 없으면 null이다. */
     public record ImageSummary(Long id, String url, int sortOrder) {
+    }
+
+    /** 이미지 삭제 응답 (API_SPEC 5.2). storageDeleted가 false면 DB 삭제는 끝났고 S3 삭제는 재시도 대기다. */
+    public record ImageDeleteResult(Long imageId, boolean storageDeleted) {
     }
 
     /** 상세 (API_SPEC 4.2). isOwner는 인증된 회원 기준으로 계산한다. 비회원은 false다. */
@@ -57,17 +66,20 @@ public final class RestaurantDtos {
                                    BigDecimal averageRating, int reviewCount, OwnerRef owner,
                                    List<ImageSummary> images, int favoriteCount, boolean isFavorited,
                                    boolean isOwner, LocalDateTime createdAt, LocalDateTime updatedAt) {
-        public static RestaurantDetail of(Restaurant restaurant, boolean isOwner) {
+        public static RestaurantDetail of(Restaurant restaurant, boolean isOwner, List<ImageSummary> images) {
             return new RestaurantDetail(restaurant.getId(), restaurant.getName(),
                     CategoryRef.from(restaurant.getCategory()), restaurant.getAddress(), restaurant.getPhone(),
                     restaurant.getDescription(), restaurant.getLatitude(), restaurant.getLongitude(),
                     restaurant.getAverageRating(), restaurant.getReviewCount(),
                     new OwnerRef(restaurant.getMember().getId(), restaurant.getMember().getNickname()),
-                    List.of(), 0, false, isOwner, restaurant.getCreatedAt(), restaurant.getUpdatedAt());
+                    images, 0, false, isOwner, restaurant.getCreatedAt(), restaurant.getUpdatedAt());
         }
     }
 
-    /** 삭제 응답 (API_SPEC 4.5). 이미지가 없으면 두 수는 0이다. */
+    /**
+     * 삭제 응답 (API_SPEC 4.5). deletedImageCount는 함께 지운 이미지 행 수다.
+     * storageDeleteFailedCount는 S3 삭제가 실패해 storage_delete_task에 남은 객체 수다. DB 삭제는 이미 끝났다.
+     */
     public record DeleteResult(Long restaurantId, int deletedImageCount, int storageDeleteFailedCount) {
     }
 

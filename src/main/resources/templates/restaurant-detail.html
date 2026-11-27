@@ -43,8 +43,21 @@
     <h2 class="h5 mt-4">소개</h2>
     <p style="white-space: pre-line;" th:text="${restaurant.description()}">설명</p>
 
+    <section class="mt-4" aria-labelledby="gallery-title">
+        <h2 class="h5" id="gallery-title">사진</h2>
+        <p th:if="${#lists.isEmpty(restaurant.images())}" class="text-muted small mb-0">등록된 사진이 없습니다.</p>
+        <div th:unless="${#lists.isEmpty(restaurant.images())}" class="row row-cols-2 row-cols-md-3 g-2">
+            <div class="col" th:each="img : ${restaurant.images()}">
+                <img th:if="${img.url() != null}" th:src="${img.url()}" class="img-fluid rounded" alt="맛집 사진">
+                <div th:unless="${img.url() != null}"
+                     class="bg-light text-muted small rounded d-flex align-items-center justify-content-center"
+                     style="height: 120px;">사진을 표시할 수 없습니다</div>
+            </div>
+        </div>
+    </section>
+
     <section class="mt-4 text-muted small">
-        <p class="mb-1">이미지, 리뷰, 찜, AI 요약은 해당 기능이 구현되면 여기에 표시됩니다.</p>
+        <p class="mb-1">리뷰, 찜, AI 요약은 해당 기능이 구현되면 여기에 표시됩니다.</p>
     </section>
 </main>
 

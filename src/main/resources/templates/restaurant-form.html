@@ -55,6 +55,38 @@
             <a class="btn btn-outline-secondary" th:href="${mode == 'edit'} ? @{/restaurants/{id}(id=${restaurantId})} : @{/restaurants}">취소</a>
         </div>
     </form>
+    <section th:if="${mode == 'edit'}" class="mt-5" aria-labelledby="images-title">
+        <h2 class="h5" id="images-title">사진 관리</h2>
+        <div th:if="${imageNotice != null}" class="alert alert-info py-2" role="status" th:text="${imageNotice}">안내</div>
+        <p class="text-muted small">JPEG, PNG, WEBP 형식, 한 장 5MB 이하, 최대 5장. 첫 번째 사진이 목록의 대표 사진입니다.</p>
+
+        <div class="row row-cols-2 row-cols-md-3 g-2 mb-3" th:unless="${#lists.isEmpty(images)}">
+            <div class="col" th:each="img : ${images}">
+                <div class="card h-100">
+                    <img th:if="${img.url() != null}" th:src="${img.url()}" class="card-img-top" alt="맛집 사진"
+                         style="height: 120px; object-fit: cover;">
+                    <div class="card-body p-2">
+                        <form method="post" th:action="@{/restaurants/{id}/images/{imageId}/delete(id=${restaurantId},imageId=${img.id()})}"
+                              data-confirm="이 사진을 삭제할까요? 삭제한 사진은 되돌릴 수 없습니다.">
+                            <button type="submit" class="btn btn-outline-danger btn-sm w-100">삭제</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p th:if="${#lists.isEmpty(images)}" class="text-muted small">등록된 사진이 없습니다.</p>
+
+        <form method="post" enctype="multipart/form-data"
+              th:action="@{/restaurants/{id}/images(id=${restaurantId})}"
+              th:unless="${#lists.size(images) >= 5}">
+            <label for="file" class="form-label">사진 추가</label>
+            <div class="input-group">
+                <input type="file" class="form-control" id="file" name="file" accept="image/jpeg,image/png,image/webp" required>
+                <button type="submit" class="btn btn-outline-dark">업로드</button>
+            </div>
+        </form>
+        <p th:if="${#lists.size(images) >= 5}" class="text-muted small mb-0">사진은 최대 5장까지 올릴 수 있습니다.</p>
+    </section>
 </main>
 
 <div th:replace="~{fragments/layout :: footer}"></div>

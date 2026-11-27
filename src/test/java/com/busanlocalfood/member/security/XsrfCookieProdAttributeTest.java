@@ -40,6 +40,9 @@ class XsrfCookieProdAttributeTest {
     private RestaurantService restaurantService;
 
     @MockitoBean
+    private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
+
+    @MockitoBean
     private MemberAccountService memberAccountService;
 
     @MockitoBean
