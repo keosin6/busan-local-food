@@ -72,7 +72,7 @@ class HomeControllerTest {
     void homePageIsPublicAndLinksBootstrapAndAppAssets() throws Exception {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
-                .andExpect(view().name("restaurant-list"))
+                .andExpect(view().name("home"))
                 .andExpect(content().string(containsString("/vendor/bootstrap/css/bootstrap.min.css")))
                 .andExpect(content().string(containsString("/vendor/bootstrap/js/bootstrap.bundle.min.js")))
                 .andExpect(content().string(containsString("/css/app.css")))

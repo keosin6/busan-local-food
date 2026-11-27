@@ -4,6 +4,7 @@ import com.busanlocalfood.restaurant.domain.Restaurant;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -28,4 +29,10 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, J
      */
     @EntityGraph(attributePaths = "category")
     List<Restaurant> findTop100ByOrderByCreatedAtDescIdDesc();
+
+    /**
+     * 홈의 최신 맛집 (FUNCTION_SPEC F1-08). 최근 등록 순이고 Pageable로 개수를 제한한다. 카테고리는 같은 쿼리에서 읽는다.
+     */
+    @EntityGraph(attributePaths = "category")
+    List<Restaurant> findByOrderByCreatedAtDescIdDesc(Pageable pageable);
 }

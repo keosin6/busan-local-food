@@ -4,15 +4,50 @@
 <body class="d-flex flex-column min-vh-100">
 <div th:replace="~{fragments/layout :: header}"></div>
 
-<main class="container py-5 flex-grow-1">
-    <div class="p-4 p-md-5 mb-4 bg-light rounded-3 border">
-        <h1 class="display-6 fw-bold">부산 맛집 정보 및 리뷰</h1>
-        <p class="lead mb-0">부산의 맛집을 찾고 리뷰를 남기는 플랫폼의 기본 골격입니다. 이 화면은 임시 화면입니다.</p>
-    </div>
+<main class="container py-4 flex-grow-1">
+    <section class="rounded-3 border bg-light p-4 p-md-5 mb-4" aria-labelledby="home-title">
+        <h1 id="home-title" class="h2 fw-bold mb-2">부산 맛집을 찾아보세요</h1>
+        <p class="text-muted mb-3">부산의 맛집을 등록하고, 리뷰와 찜으로 기록하며, AI 추천으로 골라 볼 수 있습니다.</p>
+        <form method="get" th:action="@{/restaurants}" role="search" class="row g-2">
+            <div class="col-12 col-md-9">
+                <label for="home-keyword" class="visually-hidden">맛집 검색</label>
+                <input type="search" class="form-control form-control-lg" id="home-keyword" name="keyword"
+                       maxlength="50" placeholder="맛집 이름 또는 주소로 검색">
+            </div>
+            <div class="col-12 col-md-3 d-grid">
+                <button type="submit" class="btn btn-primary btn-lg">검색</button>
+            </div>
+        </form>
+    </section>
 
-    <div class="alert alert-secondary" role="status">
-        아직 구현되지 않은 기능: 맛집 등록, 리뷰, 찜, AI 요약·추천, 관리자 기능.
-    </div>
+    <section class="mb-4" aria-labelledby="category-title">
+        <h2 id="category-title" class="h5 mb-3">카테고리별 탐색</h2>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-outline-dark btn-sm" th:each="c : ${categories}"
+               th:href="@{/restaurants(category=${c.id()})}" th:text="${c.name()}">한식</a>
+        </div>
+    </section>
+
+    <section aria-labelledby="latest-title">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 id="latest-title" class="h5 mb-0">최근 등록된 맛집</h2>
+            <a class="small" th:href="@{/restaurants}">전체 맛집 보기</a>
+        </div>
+
+        <div th:if="${favoriteNotice != null}" class="alert alert-info py-2" role="status" th:text="${favoriteNotice}">안내</div>
+
+        <div th:if="${#lists.isEmpty(latest)}" class="alert alert-secondary" role="status">
+            아직 등록된 맛집이 없습니다.
+            <span th:if="${loggedIn}"><a th:href="@{/restaurants/new}">첫 맛집을 등록</a>해 보세요.</span>
+            <span th:unless="${loggedIn}"><a th:href="@{/login}">로그인</a>한 뒤 맛집을 등록할 수 있습니다.</span>
+        </div>
+
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3" th:unless="${#lists.isEmpty(latest)}">
+            <div class="col" th:each="r : ${latest}">
+                <th:block th:replace="~{fragments/restaurant-card :: card}"></th:block>
+            </div>
+        </div>
+    </section>
 </main>
 
 <div th:replace="~{fragments/layout :: footer}"></div>
