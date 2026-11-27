@@ -97,6 +97,15 @@ public class Restaurant {
         this.longitude = fields.longitude();
     }
 
+    /**
+     * 리뷰 작성·삭제 트랜잭션이 리뷰 행에서 다시 계산한 값을 쓴다 (FUNCTION_SPEC F1-04 평균 평점 규칙).
+     * 화면이나 클라이언트가 계산한 값을 받지 않는다.
+     */
+    public void updateReviewStatistics(int reviewCount, java.math.BigDecimal averageRating) {
+        this.reviewCount = reviewCount;
+        this.averageRating = averageRating;
+    }
+
     public boolean isOwnedBy(long memberId) {
         return member != null && member.getId() != null && member.getId() == memberId;
     }

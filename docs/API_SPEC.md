@@ -568,7 +568,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 > 구현 상태: 3.1과 4.1~4.5는 구현되었습니다(F1-02는 PR #37 `main` 병합, merge commit `1f885dd`). F1-03(PR #39, `main` 병합 완료, merge commit `123db18`)으로 4.1 `thumbnailUrl`(대표 이미지 URL)과 4.2 `images`(이미지 목록)가 실제 값을 돌려주며, S3 설정이 없으면 URL은 `null`입니다. 아래는 명세와 구현이 아직 다른 부분입니다. 명세 본문은 설계 기준으로 두고, 구현에 맞춰 바꾸지 않았습니다.
 > - 4.2 상세의 `favoriteCount`는 0, `isFavorited`는 `false`입니다 (F1-06 전 자리표시).
-> - 4.5 삭제 응답은 `deletedImageCount`, `storageDeleteFailedCount` 두 필드만 있습니다. 본문 설명의 `storageDeleted` 필드는 없습니다. `storageDeleteFailedCount`는 S3 삭제 실패로 `storage_delete_task`에 남은 객체 수입니다. 리뷰·찜·AI 요약 행 삭제는 해당 기능 구현 후 추가합니다.
+> - 4.5 삭제 응답은 `deletedImageCount`, `storageDeleteFailedCount` 두 필드만 있습니다. 본문 설명의 `storageDeleted` 필드는 없습니다. `storageDeleteFailedCount`는 S3 삭제 실패로 `storage_delete_task`에 남은 객체 수입니다. 리뷰 행 삭제는 F1-04에서 구현했습니다. 찜과 AI 요약 행 삭제는 해당 기능 구현 후 추가합니다.
 > - 1.2 공통 응답 형식의 오류 `details` 배열은 아직 응답에 없습니다.
 
 ### 4.1 맛집 목록·검색
@@ -724,6 +724,8 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 ---
 
 ## 6. 리뷰 API (F1-04)
+
+> 구현 상태 (F1-04 PR, `main` 병합 전): 6.1~6.3을 구현했습니다. 평점은 정수 1~5만 받습니다(소수는 거부). 내용은 공백을 뺀 뒤 1~500자입니다. 목록은 최신순이며 기본 10개, 최대 50개입니다. 작성과 삭제는 맛집 행을 잠근 뒤 리뷰 행에서 평균과 리뷰 수를 다시 계산합니다. `isMine`은 조회한 회원이 작성자일 때만 `true`입니다. AI 요약 캐시(F1-05) 무효화는 아직 없습니다. 명세의 오류 `details` 배열은 아직 없습니다.
 
 ### 6.1 리뷰 목록
 
@@ -905,6 +907,8 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/restaurants/{id}/edit` | GET | 세션 필요 | 작성자 | 맛집 수정 폼 및 이미지 관리 | F1-02, F1-03 |
 | `/restaurants/{id}/images` | POST | 세션 필요 (CSRF) | 작성자 | 수정 화면에서 사진 업로드 (multipart `file`) | F1-03 |
 | `/restaurants/{id}/images/{imageId}/delete` | POST | 세션 필요 (CSRF) | 작성자 | 수정 화면에서 사진 삭제 | F1-03 |
+| `/restaurants/{id}/reviews` | POST | 세션 필요 (CSRF) | 회원 | 맛집 상세 화면의 리뷰 작성 폼 제출 | F1-04 |
+| `/reviews/{reviewId}/delete` | POST | 세션 필요 (CSRF) | 작성자 | 맛집 상세 화면의 본인 리뷰 삭제 | F1-04 |
 | `/favorites` | GET | 세션 필요 | 회원 본인 | 내 찜 목록 | F1-06 |
 | `/recommend` | GET | 세션 필요 | 회원 | AI 추천 입력 및 결과 | F1-07 |
 | `/admin` | GET | 세션 필요 | ADMIN | 관리자 대시보드 | F1-09 |
