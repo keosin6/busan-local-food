@@ -898,6 +898,18 @@
   - 관리자 S3 삭제 재시도는 F1-09 범위라서 구현하지 않았다.
 - DB 적용 방법: `db/manual/005_create_restaurant_image_and_storage_delete_task.sql`을 `--default-character-set=utf8mb4`로 한 번 실행한다. 순서는 001 → 002 → 003 → 004 → 005다. 재실행하면 실패한다.
 
+#### 6.30 후속: 삭제 동시성 수정 (같은 PR #39)
+
+- 수정: `RestaurantService.delete`와 `RestaurantImageService.delete`가 맛집 행을 일반 조회 대신 `findByIdForUpdate`로 잠근다. 잠근 뒤 작성자 확인, 이미지 목록 조회(맛집 삭제), 해당 이미지 확인(이미지 삭제), `storage_delete_task` 기록, 행 삭제 순서다. S3 삭제는 DB 커밋 뒤에만 한다. 같은 맛집에 대한 업로드(`saveMetadata`)도 같은 잠금을 쓰므로 세 경로는 한 맛집 행에서 직렬화된다.
+- 발견 원인: 일반 조회로 이미지 목록을 읽은 뒤 커밋되지 않은 업로드가 끼어들면, 맛집 삭제가 그 이미지 행을 `ON DELETE CASCADE`로 지우면서 `storage_delete_task`에 기록하지 않아 S3 객체가 고아로 남을 수 있었다.
+- 테스트: `RestaurantDeleteConcurrencyDbTest` 7개 (실제 MySQL 8.0.46, SQL 001~005). 잠금 대기(맛집 삭제가 다른 트랜잭션의 잠금이 풀릴 때까지 기다리는지), 업로드와 맛집 삭제 경합 25회(고아 객체 없음), 보상 경합(업로드 중 맛집 삭제, 객체는 보상으로 지움), 개별 이미지 삭제와 맛집 삭제 경합 25회(키마다 정확히 한 번 삭제, 추적 기록 중복 없음), 맛집 삭제 트랜잭션 중간 실패(S3 미호출, 행과 기록 롤백), 이미지 삭제 트랜잭션 실패(S3 미호출), 맛집이 먼저 지워진 뒤 이미지 삭제(RESTAURANT_NOT_FOUND, 기록 없음).
+- 수정 전 코드 검증: 같은 테스트를 일반 조회 버전에 실행하면 업로드 경합에서 고아 객체가, 개별 삭제 경합에서 추적 기록 키 중복(`uk_storage_task_s3_key` 위반)이 실패했다. 잠금 대기 테스트는 수정 전후 모두 통과했다. 이 테스트는 `DELETE` 문이 잠금에 막힘을 확인하는 것이므로 경합의 판별은 앞의 두 테스트가 한다.
+- 실행 결과 (수정 커밋 기준):
+  - DB 미설정 `./gradlew clean test`: 681개 실행, 건너뜀 112개(모두 DB 테스트), 실패 0개.
+  - 테스트 DB 설정 `./gradlew clean test`: 681개 실행, 건너뜀 0개, 실패 0개.
+  - `./gradlew bootJar`: 성공. `git diff --check`: 통과.
+- 미검증: 동시성 테스트는 로컬 MySQL 8.0.46에서만 실행했다. EC2에 설치될 운영 MySQL 설정(격리 수준, 잠금 대기 시간)에서는 확인하지 않았다. 실제 AWS S3 검증은 여전히 하지 않았다.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
