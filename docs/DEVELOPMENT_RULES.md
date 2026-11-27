@@ -99,6 +99,19 @@ Java 21 · Spring Boot 3.x · Spring Security · Spring Data JPA · Spring AI 1.
 - 쓰기 API는 인증과 권한 검사를 모두 거칩니다. 권한 검사는 컨트롤러가 아니라 서비스 계층에서 수행합니다.
 - 관리자 권한(`ADMIN`)은 Spring Security 규칙(`/admin/**`, `/api/admin/**`)과 서비스 계층 검사로 **서버에서** 검증합니다. URL을 숨기는 것만으로는 보호하지 않습니다 (FR-09-08).
 - 일반 회원이 자신의 `role`을 바꾸는 API나 입력 경로를 만들지 않습니다 (FR-09-09).
+- 관리자 서비스 진입점은 `AdminAccess.requireAdmin`으로 인증 정보의 `ROLE_ADMIN`을 먼저 확인합니다. 요청의 role 값은 신뢰하지 않습니다. 권한이 없으면 `FORBIDDEN`, 인증이 없으면 `TOKEN_INVALID`입니다.
+- 초기 관리자 지정 절차 (T2 A안): 관리자 화면과 API에는 역할 변경 기능이 없습니다. 운영자가 MySQL에서 직접 지정합니다.
+  1. 대상 회원의 이메일을 확인합니다.
+  2. 아래 SQL을 실행합니다. `실제_관리자_이메일`은 운영자가 확인한 값으로 바꿉니다. 코드, 테스트, Git에는 실제 이메일을 남기지 않습니다.
+  3. 변경된 행 수가 1인지 확인하고, `SELECT id, email, role FROM member WHERE email = '실제_관리자_이메일';`로 role이 `ADMIN`인지 조회합니다.
+  4. 역할은 다음 로그인 또는 토큰 재발급부터 반영됩니다.
+
+  ```sql
+  UPDATE member
+  SET role = 'ADMIN'
+  WHERE email = '실제_관리자_이메일'
+    AND role = 'USER';
+  ```
 - 쿠키 속성:
   - `JSESSIONID`(화면 세션): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`.
   - `access_token`(API JWT): `HttpOnly`, `SameSite=Lax`, 운영 환경에서는 `Secure`. Path는 `/api`로 제한합니다.

@@ -34,7 +34,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 별도 쿠키 없음 | OAuth2 임시 상태는 HTTP 세션(`JSESSIONID`)에 저장 | - | - | - | - | 세션과 같음 |
 
 - `access_token`의 Path는 `/api`로 제한합니다. API 요청에서만 전송됩니다. 화면 요청은 `JSESSIONID`로 인증합니다.
-- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 PR #23(merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18)으로 `main`에 병합 완료되었습니다. 화면 인증(회원가입·로그인·로그아웃, 2.9~2.11)은 PR #25(merge commit `d1b9e1d`, 6.19)로 `main`에 병합 완료되었습니다. 화면 로그아웃은 PR #26 보완(6.20)에 따라 같은 세션의 API 로그아웃 성공 뒤에만 허용되는 서버 측 일회성 승인을 확인합니다. 화면 세션(`JSESSIONID`)은 API 인증 수단으로 쓰이지 않고, API JWT는 화면 로그인 상태를 만들지 않습니다. Google OAuth2 로그인 시작·콜백과 신규 가입 닉네임 설정(2.5, 2.5.1)은 PR #28(merge commit `37df8e024ffea4065c6c1213265010527970dc48`, 6.21)로 `main`에 병합 완료되었습니다. Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/mypage`(계정 관리), 맛집 등록·수정 화면, 찜 목록(`/favorites`)과 찜 제출 화면, AI 추천(`/recommend`) 화면은 화면 세션 인증으로 보호됩니다. 관리자 `/admin/**`는 F1-09로 아직 미구현입니다. 화면 체인(`@Order(2)`)은 세션 인증을 쓰며, 실제 화면 보호 정책이 적용되어 있습니다. 위의 보호 화면은 세션 인증으로 막고, 그 밖의 화면은 공개입니다. JWT 필터는 넣지 않습니다.
+- 구현 상태 (PR #19, `main` 병합 완료, merge commit `dd147e3f595825047d017ddcbb20df95f55ec40f`): API 체인(`/api/**`, `@Order(1)`, `STATELESS`)은 `Authorization: Bearer` 헤더 또는 `access_token` 쿠키의 JWT를 인증 근거로 씁니다. Bearer 헤더가 있으면 쿠키는 보지 않으며, 잘못된 Bearer 헤더는 쿠키로 대체하지 않고 401입니다. CSRF는 `Authorization: Bearer` 스킴의 상태 변경 요청에만 면제하며, 그 밖(쿠키 인증, Basic 등 다른 스킴, 헤더 없는 익명 요청)은 검증합니다. Bearer 면제는 토큰 값 검증과 별개이므로, 잘못된 Bearer는 CSRF 403이 아니라 인증 401입니다. 인증 실패는 401 `TOKEN_INVALID`입니다. 공개 경로는 2.1~2.4의 네 경로뿐입니다. API 응답에는 `XSRF-TOKEN` 쿠키가 실립니다. API 인증 HTTP(2.1~2.4, 2.8)는 PR #23(merge commit `56faff2566743c89911d4d87407fff5ac6c1732e`, 6.18)으로 `main`에 병합 완료되었습니다. 화면 인증(회원가입·로그인·로그아웃, 2.9~2.11)은 PR #25(merge commit `d1b9e1d`, 6.19)로 `main`에 병합 완료되었습니다. 화면 로그아웃은 PR #26 보완(6.20)에 따라 같은 세션의 API 로그아웃 성공 뒤에만 허용되는 서버 측 일회성 승인을 확인합니다. 화면 세션(`JSESSIONID`)은 API 인증 수단으로 쓰이지 않고, API JWT는 화면 로그인 상태를 만들지 않습니다. Google OAuth2 로그인 시작·콜백과 신규 가입 닉네임 설정(2.5, 2.5.1)은 PR #28(merge commit `37df8e024ffea4065c6c1213265010527970dc48`, 6.21)로 `main`에 병합 완료되었습니다. Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/mypage`(계정 관리), 맛집 등록·수정 화면, 찜 목록(`/favorites`)과 찜 제출 화면, AI 추천(`/recommend`) 화면은 화면 세션 인증으로 보호됩니다. 관리자 `/admin/**`(관리자 화면)는 F1-09에서 구현되어 ADMIN 권한으로 보호됩니다. 화면 체인(`@Order(2)`)은 세션 인증을 쓰며, 실제 화면 보호 정책이 적용되어 있습니다. 위의 보호 화면은 세션 인증으로 막고, 그 밖의 화면은 공개입니다. JWT 필터는 넣지 않습니다.
 - `refresh_token`의 Path는 `/api/auth`로 제한합니다. 재발급과 API 로그아웃 요청에서만 전송됩니다. 화면 로그아웃(`/logout`)에는 전송되지 않습니다. 화면 로그아웃은 먼저 `POST /api/auth/logout`을 호출합니다 (T12, 2.11).
 - 쿠키를 만료시킬 때는 발급 당시와 같은 Path와 Domain을 사용합니다.
 - 만료 시간은 환경 변수 `JWT_ACCESS_TOKEN_EXPIRY_SECONDS`, `JWT_REFRESH_TOKEN_EXPIRY_SECONDS`를 따릅니다. 위 값은 기본값입니다.
@@ -106,6 +106,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 | 409 | GOOGLE_ALREADY_LINKED | 이미 다른 회원에게 연결된 Google 계정 (FR-01-11) |
 | 409 | LAST_LOGIN_METHOD | 남은 로그인 수단이 없어 Google 연동을 해제할 수 없음 (FR-01-13). 화면 해제 흐름에서는 `/mypage?error=password_required`로 안내 (2.7) |
 | 502 | STORAGE_ERROR | S3 오류 (업로드 등 S3 호출이 필요한 요청 실패) |
+| 409 | STORAGE_RETRY_RUNNING | S3 삭제 수동 재시도가 이미 진행 중 (F1-09) |
 | 502 | AI_UNAVAILABLE | OpenRouter 호출 실패 또는 타임아웃 |
 | 502 | AI_RESPONSE_INVALID | AI 응답 파싱 실패 |
 | 500 | INTERNAL_ERROR | 서버 내부 오류 |
@@ -211,7 +212,7 @@ REST API와 Thymeleaf 화면 URL을 정의합니다. 테이블 구조는 [DATABA
 - 검증 실패 기준은 다음과 같습니다. 서명 위조와 변조, 알고리즘 불일치, 발급자 불일치, 대상 불일치, 만료(60초 초과), 미래 발급 시각(60초 초과), 필수 클레임 누락, `sub` 형식 오류, `role` 값 오류는 모두 검증 실패입니다.
 - 검증 실패의 구체적인 원인은 외부 응답에 노출하지 않으며, 공통 인증 실패(401 `TOKEN_INVALID`)로 매핑합니다. 이 매핑은 인증 필터 단계에서 구현합니다.
 - Access Token은 `access_token` 쿠키로만 전달합니다. JSON 응답 본문에는 포함하지 않습니다 (1.1절).
-- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 PR #23(merge commit `56faff2`)으로 `main`에 병합 완료되었습니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증(회원가입·로그인·로그아웃)은 PR #25(`d1b9e1d`)로 `main`에 병합 완료되었습니다. Google 로그인 요청 제한(시작·콜백, IP별 15분 10회)과 닉네임 제출 요청 제한은 PR #28로 구현·병합되었습니다. `/mypage`, 화면용 429 안내 페이지, Google 계정 연결·해제, 로컬 비밀번호 설정은 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/mypage`(계정 관리), 맛집 등록·수정 화면, 찜 목록(`/favorites`)과 찜 제출 화면, AI 추천(`/recommend`) 화면은 Spring Security 세션 인증으로 보호되어 구현되었습니다. `/admin/**`는 F1-09에서 구현 예정입니다.
+- 구현 상태 (2026-11-12, PR #19 병합 후 갱신): Access Token 발급·검증과 Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기는 서비스 계층까지 구현되었습니다. API 인증 필터 연결과 API·화면 SecurityFilterChain 분리는 PR #19로 `main`에 병합 완료되었습니다. 2절의 API 인증 HTTP(로그인·재발급·로그아웃·내 정보)는 PR #23(merge commit `56faff2`)으로 `main`에 병합 완료되었습니다. 요청 제한은 서비스 계층(1.4), 회원가입 집계, 로그인·재발급 HTTP 연결까지 구현되었습니다. 화면 인증(회원가입·로그인·로그아웃)은 PR #25(`d1b9e1d`)로 `main`에 병합 완료되었습니다. Google 로그인 요청 제한(시작·콜백, IP별 15분 10회)과 닉네임 제출 요청 제한은 PR #28로 구현·병합되었습니다. `/mypage`, 화면용 429 안내 페이지, Google 계정 연결·해제, 로컬 비밀번호 설정은 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/mypage`(계정 관리), 맛집 등록·수정 화면, 찜 목록(`/favorites`)과 찜 제출 화면, AI 추천(`/recommend`) 화면은 Spring Security 세션 인증으로 보호되어 구현되었습니다. `/admin/**`(관리자 화면)는 F1-09에서 구현되었습니다.
 
 ## 2. 인증 API (F1-01)
 
@@ -927,12 +928,14 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 | `/admin/storage-deletions` | GET | 세션 필요 | ADMIN | S3 삭제 재시도 대기 목록, 재시도 | F1-09 |
 
 - 권한 없는 `/admin/**` 화면 요청은 403 화면을 보여 줍니다. 로그인하지 않았다면 `/login`으로 이동합니다.
-- 구현 상태: `/`(메인 홈)는 F1-08에서 구현했으며 PR 병합 전이다. 최신 맛집 8곳, 카테고리 탐색, 검색 진입을 보여 주고 PR #25의 임시 홈 화면을 대체한다. `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/restaurants`(목록), `/restaurants/{id}`(상세), `/restaurants/new`, `/restaurants/{id}/edit`(사진 관리 포함)는 F1-02(PR #37, merge commit `1f885dd`, `main` 병합 완료)와 F1-03(PR #39, `main` 병합 완료)으로 구현되어 있다. 작성자 본인 확인은 서비스 계층에서 한다. `/restaurants/new`, `/restaurants/{id}/edit`, `/restaurants/*/delete`, `/restaurants/*/images/**`는 화면 세션 인증 필수다. `/favorites`(찜 목록)와 `/restaurants/{id}/favorite`, `/restaurants/{id}/favorite/delete`(찜 제출)는 F1-06으로 구현되어 PR #45(merge commit `c9cb668`)로 `main` 병합 완료되었다. 찜 목록과 찜 제출은 화면 세션 인증이 필요하다. `/recommend`(GET 입력, POST 추천)는 F1-07 PR #46(merge commit `9206026`)으로 `main` 병합 완료되었다. 화면 세션 인증이 필요하다. `/admin/**`(관리자 대시보드, 맛집·리뷰·회원 관리, S3 삭제 재시도 화면)는 F1-09로 미구현이다. 메인 페이지 완성(F1-08)과 그 밖의 화면 URL도 미구현이다.
+- 구현 상태: `/`(메인 홈)는 F1-08에서 구현했으며 PR 병합 전이다. 최신 맛집 8곳, 카테고리 탐색, 검색 진입을 보여 주고 PR #25의 임시 홈 화면을 대체한다. `/login`, `/signup`, `/logout`(POST)은 `main` 병합 완료(PR #25, `d1b9e1d`, 6.19; 보완 PR #26, 6.20). `/signup/google/nickname`(GET·POST)은 `main` 병합 완료(PR #28, 6.21). Google 로그인 시작과 콜백은 화면 URL 표 밖의 OAuth2 경로로 2.5에 명시되어 있다. `/mypage`(마이페이지, 연결·해제·비밀번호 설정 포함)와 `/mypage/password`는 PR #30(`feat/stage2-4-google-account-linking`, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)에서 구현했으며 `main` 병합 완료입니다. `/restaurants`(목록), `/restaurants/{id}`(상세), `/restaurants/new`, `/restaurants/{id}/edit`(사진 관리 포함)는 F1-02(PR #37, merge commit `1f885dd`, `main` 병합 완료)와 F1-03(PR #39, `main` 병합 완료)으로 구현되어 있다. 작성자 본인 확인은 서비스 계층에서 한다. `/restaurants/new`, `/restaurants/{id}/edit`, `/restaurants/*/delete`, `/restaurants/*/images/**`는 화면 세션 인증 필수다. `/favorites`(찜 목록)와 `/restaurants/{id}/favorite`, `/restaurants/{id}/favorite/delete`(찜 제출)는 F1-06으로 구현되어 PR #45(merge commit `c9cb668`)로 `main` 병합 완료되었다. 찜 목록과 찜 제출은 화면 세션 인증이 필요하다. `/recommend`(GET 입력, POST 추천)는 F1-07 PR #46(merge commit `9206026`)으로 `main` 병합 완료되었다. 화면 세션 인증이 필요하다. `/admin/**`(관리자 대시보드, 맛집·리뷰 관리, 회원 조회, S3 삭제 재시도 화면)는 F1-09에서 구현되어 ADMIN 권한으로 보호된다(PR 병합 전). 메인 페이지 완성(F1-08)과 그 밖의 화면 URL도 미구현이다.
 - 화면 폼 제출(등록, 수정, 리뷰, 찜)은 위 REST API를 `fetch`로 호출하거나 일반 폼 POST(Spring MVC 컨트롤러)로 처리합니다. 구현 방식은 `DEVELOPMENT_RULES.md`의 6.3절을 따릅니다.
 
 ---
 
 ## 11. 관리자 API (F1-09)
+
+> 구현 상태 (F1-09, 구현 완료, `main` 병합 전): 11.1~11.12를 구현했습니다. 경로, 요청 쿼리, 응답 필드는 명세와 같습니다. 회원 정지, 탈퇴, 권한 변경 API는 없습니다(T1, T2). 최근 7일은 서비스 시간대 `Asia/Seoul` 기준으로 오늘을 포함한 7일입니다. S3 재시도는 자동 스케줄러가 없고, 한 프로세스에서 동시에 한 번만 돕니다. 동시 요청은 409 `STORAGE_RETRY_RUNNING`입니다. S3 DeleteObject는 없는 객체에도 성공을 돌려주므로 이미 지워진 객체는 성공으로 처리됩니다. 관리자 맛집·이미지·리뷰 작업은 작성자 확인만 생략하고, 나머지 흐름은 일반 API와 같습니다. 실제 AWS S3 검증은 하지 않았습니다.
 
 모든 관리자 API는 `ADMIN` 권한이 필요합니다 (FR-09-07, FR-09-08). 권한 없는 요청은 403 `FORBIDDEN`, 로그인하지 않은 요청은 401 `TOKEN_INVALID`를 반환합니다.
 
@@ -1112,7 +1115,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 }
 ```
 - 개별 객체 실패는 오류가 아니므로 `200`으로 응답합니다.
-- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN
+- 주요 오류: 401 TOKEN_INVALID, 403 FORBIDDEN, 409 STORAGE_RETRY_RUNNING
 
 ---
 
