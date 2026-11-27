@@ -17,6 +17,13 @@ repositories {
     mavenCentral()
 }
 
+dependencyManagement {
+    imports {
+        // AWS SDK v2 버전은 BOM으로 한 곳에서 고정한다 (F1-03 S3 이미지 저장).
+        mavenBom 'software.amazon.awssdk:bom:2.31.78'
+    }
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
@@ -25,6 +32,8 @@ dependencies {
     implementation 'org.springframework.security:spring-security-oauth2-jose'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'com.mysql:mysql-connector-j'
+    // S3 객체 업로드·삭제 (F1-03). 버전은 위 BOM이 정한다.
+    implementation 'software.amazon.awssdk:s3'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }

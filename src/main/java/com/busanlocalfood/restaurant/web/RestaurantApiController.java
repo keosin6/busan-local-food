@@ -85,7 +85,7 @@ public class RestaurantApiController {
         return null;
     }
 
-    private static long requireMemberId(Authentication authentication) {
+    static long requireMemberId(Authentication authentication) {
         Long memberId = memberIdOf(authentication);
         if (memberId == null) {
             throw new BusinessException(ErrorCode.TOKEN_INVALID);
