@@ -28,7 +28,11 @@ public class HomeController {
                        @RequestParam(name = "error", required = false) String error,
                        @RequestParam(name = "deleted", required = false) String deleted,
                        @RequestParam(name = "storage", required = false) String storage,
+                       @RequestParam(name = "favorite", required = false) String favorite,
+                       @RequestParam(name = "favoriteError", required = false) String favoriteError,
                        Model model) {
-        return restaurantScreen.listPage(category, keyword, sort, page, size, error, deleted, storage, model);
+        model.addAttribute("listFrom", "home");
+        return restaurantScreen.listPage(category, keyword, sort, page, size, error, deleted, storage,
+                favorite, favoriteError, model);
     }
 }

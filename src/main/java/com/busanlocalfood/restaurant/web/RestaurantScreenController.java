@@ -2,6 +2,7 @@ package com.busanlocalfood.restaurant.web;
 
 import com.busanlocalfood.global.exception.BusinessException;
 import com.busanlocalfood.global.exception.ErrorCode;
+import com.busanlocalfood.favorite.service.FavoriteService;
 import com.busanlocalfood.favorite.web.FavoriteNotices;
 import com.busanlocalfood.member.web.ScreenSession;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.CategoryResponse;
@@ -21,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,17 +46,20 @@ public class RestaurantScreenController {
     private final RestaurantService restaurantService;
     private final ReviewService reviewService;
     private final ReviewSummaryService reviewSummaryService;
+    private final FavoriteService favoriteService;
 
     public RestaurantScreenController(RestaurantService restaurantService, ReviewService reviewService,
-                                      ReviewSummaryService reviewSummaryService) {
+                                      ReviewSummaryService reviewSummaryService, FavoriteService favoriteService) {
         this.restaurantService = restaurantService;
         this.reviewService = reviewService;
         this.reviewSummaryService = reviewSummaryService;
+        this.favoriteService = favoriteService;
     }
 
     /** `/`와 `/restaurants`의 목록 화면. HomeController도 이 메서드를 쓴다. */
     public String listPage(Long category, String keyword, String sort, int page, int size,
-                           String error, String deleted, String storage, Model model) {
+                           String error, String deleted, String storage, String favorite, String favoriteError,
+                           Model model) {
         PageResponse<RestaurantSummary> result;
         try {
             result = restaurantService.list(category, keyword, sort, page, size);
@@ -79,6 +84,17 @@ public class RestaurantScreenController {
         model.addAttribute("error", error);
         model.addAttribute("deleted", "1".equals(deleted));
         model.addAttribute("storageDelayed", "1".equals(storage));
+        model.addAttribute("favoriteNotice", FavoriteNotices.notice(favorite, favoriteError));
+        model.addAttribute("pageSize", result.size());
+        // 찜 상태는 목록 전체를 한 번에 구한다 (N+1 방지). 비회원은 빈 집합이라 모든 카드가 찜하지 않은 상태다.
+        Long viewerId = ScreenSession.currentMemberId().orElse(null);
+        List<Long> ids = result.content().stream().map(RestaurantSummary::id).toList();
+        Set<Long> favoritedIds = viewerId == null ? Set.of() : favoriteService.favoritedAmong(viewerId, ids);
+        model.addAttribute("favoritedIds", favoritedIds);
+        // 찜 버튼이 돌아갈 목록 종류. HomeController가 "home"을 미리 넣는다. 그 밖에는 /restaurants다.
+        if (!model.containsAttribute("listFrom")) {
+            model.addAttribute("listFrom", "restaurants");
+        }
         return LIST_VIEW;
     }
 
@@ -91,8 +107,10 @@ public class RestaurantScreenController {
                        @RequestParam(name = "error", required = false) String error,
                        @RequestParam(name = "deleted", required = false) String deleted,
                        @RequestParam(name = "storage", required = false) String storage,
+                       @RequestParam(name = "favorite", required = false) String favorite,
+                       @RequestParam(name = "favoriteError", required = false) String favoriteError,
                        Model model) {
-        return listPage(category, keyword, sort, page, size, error, deleted, storage, model);
+        return listPage(category, keyword, sort, page, size, error, deleted, storage, favorite, favoriteError, model);
     }
 
     @GetMapping("/restaurants/{id}")

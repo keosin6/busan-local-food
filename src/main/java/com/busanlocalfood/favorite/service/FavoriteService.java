@@ -12,7 +12,9 @@ import com.busanlocalfood.restaurant.dto.RestaurantDtos.PageResponse;
 import com.busanlocalfood.restaurant.dto.RestaurantDtos.RestaurantSummary;
 import com.busanlocalfood.restaurant.repository.RestaurantRepository;
 import com.busanlocalfood.restaurant.service.RestaurantService;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -96,6 +98,18 @@ public class FavoriteService {
         List<Restaurant> items = result.getContent().stream().map(Favorite::getRestaurant).toList();
         return new PageResponse<>(restaurantService.summaries(items), result.getNumber(), result.getSize(),
                 result.getTotalElements(), result.getTotalPages());
+    }
+
+    /**
+     * 목록 카드의 찜 상태를 한 번에 구한다. 찜한 맛집 ID 집합이다. 맛집 ID 목록이 비면 조회하지 않는다.
+     * 비회원은 호출하지 않는다(화면이 빈 집합을 쓴다). 상세 화면의 찜 여부와 같은 테이블을 읽으므로 값이 어긋나지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> favoritedAmong(long memberId, List<Long> restaurantIds) {
+        if (restaurantIds.isEmpty()) {
+            return Set.of();
+        }
+        return new HashSet<>(favorites.findFavoritedRestaurantIds(memberId, restaurantIds));
     }
 
     private int countOf(long restaurantId) {

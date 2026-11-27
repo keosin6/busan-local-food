@@ -2,8 +2,12 @@ package com.busanlocalfood.favorite.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.busanlocalfood.favorite.dto.FavoriteDtos.FavoriteState;
+import com.busanlocalfood.favorite.repository.FavoriteRepository;
 import com.busanlocalfood.favorite.service.FavoriteService;
 import com.busanlocalfood.global.exception.BusinessException;
 import com.busanlocalfood.global.exception.ErrorCode;
@@ -23,6 +27,7 @@ import com.busanlocalfood.restaurant.repository.RestaurantRepository;
 import com.busanlocalfood.restaurant.service.RestaurantService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,6 +45,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,6 +75,10 @@ class FavoriteDbTest {
 
     @Autowired
     private FavoriteService favoriteService;
+
+    /** 목록 찜 상태 조회가 맛집 수와 상관없이 쿼리 한 번인지 확인하려고 감싼다. 동작은 그대로다. */
+    @MockitoSpyBean
+    private FavoriteRepository favoriteSpy;
 
     @Autowired
     private RestaurantService restaurantService;
@@ -351,5 +361,60 @@ class FavoriteDbTest {
                 pool.shutdownNow();
             }
         }
+    }
+
+    @Test
+    void 목록_찜_상태는_한_번의_쿼리로_맛집_여러_개를_구하고_본인_찜만_돌려준다() {
+        Long a = newRestaurant("목록 A");
+        Long b = newRestaurant("목록 B");
+        Long c = newRestaurant("목록 C");
+        Long d = newRestaurant("목록 D");
+        favoriteService.favorite(a, alice.getId());
+        favoriteService.favorite(c, alice.getId());
+        favoriteService.favorite(b, bob.getId());
+        // 설정 단계의 찜하기 호출 기록을 지우고, 목록 조회 한 번만 센다.
+        org.mockito.Mockito.clearInvocations(favoriteSpy);
+
+        Set<Long> aliceFavorited = favoriteService.favoritedAmong(alice.getId(), List.of(a, b, c, d));
+
+        assertThat(aliceFavorited).containsExactlyInAnyOrder(a, c);
+        // 맛집이 네 개여도 찜 여부 조회는 IN 쿼리 한 번이고, 맛집마다 따로 묻지 않는다 (N+1 방지).
+        verify(favoriteSpy, org.mockito.Mockito.times(1)).findFavoritedRestaurantIds(any(), any());
+        verify(favoriteSpy, never()).existsByMemberIdAndRestaurantId(any(), any());
+    }
+
+    @Test
+    void 찜하지_않은_맛집_목록과_빈_목록은_쿼리하지_않고_빈_집합을_돌려준다() {
+        Long a = newRestaurant("빈 목록 A");
+
+        assertThat(favoriteService.favoritedAmong(alice.getId(), List.of())).isEmpty();
+        assertThat(favoriteService.favoritedAmong(alice.getId(), List.of(a))).isEmpty();
+        verify(favoriteSpy, org.mockito.Mockito.times(1)).findFavoritedRestaurantIds(any(), any());
+    }
+
+    @Test
+    void 목록의_찜_상태와_상세의_찜_여부는_같은_데이터를_보고_서로_일치한다() {
+        Long a = newRestaurant("일치 A");
+        Long b = newRestaurant("일치 B");
+        favoriteService.favorite(a, alice.getId());
+        favoriteService.favorite(b, bob.getId());
+
+        Set<Long> listView = favoriteService.favoritedAmong(alice.getId(), List.of(a, b));
+        for (Long id : List.of(a, b)) {
+            boolean detailView = restaurantService.detail(id, alice.getId()).isFavorited();
+            assertThat(listView.contains(id)).isEqualTo(detailView);
+        }
+    }
+
+    @Test
+    void 목록_찜_상태_일괄_조회는_다른_회원의_찜과_삭제된_맛집을_섞지_않는다() {
+        Long kept = newRestaurant("남음");
+        Long gone = newRestaurant("삭제됨");
+        favoriteService.favorite(kept, alice.getId());
+        favoriteService.favorite(gone, alice.getId());
+        restaurantService.delete(gone, owner.getId());
+
+        assertThat(favoriteService.favoritedAmong(alice.getId(), List.of(kept, gone))).containsExactly(kept);
+        assertThat(favoriteService.favoritedAmong(bob.getId(), List.of(kept, gone))).isEmpty();
     }
 }

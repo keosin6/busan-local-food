@@ -568,7 +568,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 > 구현 상태: 3.1과 4.1~4.5는 구현되었습니다(F1-02는 PR #37 `main` 병합, merge commit `1f885dd`). F1-03(PR #39, `main` 병합 완료, merge commit `123db18`)으로 4.1 `thumbnailUrl`(대표 이미지 URL)과 4.2 `images`(이미지 목록)가 실제 값을 돌려주며, S3 설정이 없으면 URL은 `null`입니다. 아래는 명세와 구현이 아직 다른 부분입니다. 명세 본문은 설계 기준으로 두고, 구현에 맞춰 바꾸지 않았습니다.
 > - 4.2 상세의 `favoriteCount`와 `isFavorited`는 실제 찜 데이터입니다 (F1-06). 비회원은 `isFavorited`가 `false`입니다.
-> - 4.5 삭제 응답은 `deletedImageCount`, `storageDeleteFailedCount` 두 필드만 있습니다. 본문 설명의 `storageDeleted` 필드는 없습니다. `storageDeleteFailedCount`는 S3 삭제 실패로 `storage_delete_task`에 남은 객체 수입니다. 리뷰 행 삭제는 F1-04에서 구현했습니다. 찜과 AI 요약 행 삭제는 해당 기능 구현 후 추가합니다.
+> - 4.5 삭제 응답은 `deletedImageCount`, `storageDeleteFailedCount` 두 필드만 있습니다. 본문 설명의 `storageDeleted` 필드는 없습니다. `storageDeleteFailedCount`는 S3 삭제 실패로 `storage_delete_task`에 남은 객체 수입니다. 리뷰 행 삭제는 F1-04에서 구현했습니다. 맛집 삭제 트랜잭션은 찜(F1-06), 리뷰(F1-04), AI 요약 캐시(F1-05) 행을 함께 지웁니다. 이 세 기능은 모두 구현되었습니다.
 > - 1.2 공통 응답 형식의 오류 `details` 배열은 아직 응답에 없습니다.
 
 ### 4.1 맛집 목록·검색
@@ -831,7 +831,7 @@ Redirect URI는 하나를 사용합니다. 처리 경로는 세션의 연동 진
 
 ## 8. 찜 API (F1-06)
 
-> 구현 상태 (F1-06, 구현 완료, `main` 병합 전): 8.1~8.3을 구현했습니다. 응답 형식과 오류 코드는 명세와 같습니다. 경로는 명세대로 `/api/me/favorites`를 유지했습니다. 찜 목록 화면 경로는 명세대로 `/favorites`입니다. 찜 행 삭제는 맛집 삭제 트랜잭션에 있고, 회원 삭제는 DB CASCADE입니다(회원 탈퇴 API는 아직 없습니다). 맛집 목록 카드의 찜 버튼은 아직 없습니다. 브라우저 화면 검증은 하지 않았습니다.
+> 구현 상태 (F1-06, 구현 완료, `main` 병합 전): 8.1~8.3을 구현했습니다. 응답 형식과 오류 코드는 명세와 같습니다. 경로는 명세대로 `/api/me/favorites`를 유지했습니다. 찜 목록 화면 경로는 명세대로 `/favorites`입니다. 찜 행 삭제는 맛집 삭제 트랜잭션에 있고, 회원 삭제는 DB CASCADE입니다(회원 탈퇴 API는 아직 없습니다). 맛집 목록 카드에도 찜 버튼이 있습니다(F1-06 보완). 목록 API(4.1)는 찜 정보를 주지 않으며, 카드의 찜 상태는 화면에서만 표시합니다. 브라우저 화면 검증은 하지 않았습니다.
 
 ### 8.1 찜하기
 
