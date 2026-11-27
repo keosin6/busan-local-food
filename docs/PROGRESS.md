@@ -14,7 +14,8 @@
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
 | Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR #30(`main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지 `/rate-limited`. **PR #35(`main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호(JWT 쿠키 단독 인증 불가, CSRF 유지). **남은 작업**: 그 밖의 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 나머지는 아래 7절 |
 | Stage 2 F1-02 맛집 관리 | 완료 — `main` 병합 (PR #37, merge commit `1f885dd`, 6.27·6.28). 카테고리 시드, 맛집 등록·수정·삭제, 목록·검색·정렬·페이지, 상세, 작성자 소유권 검사, 위도·경도 쌍 검증, 페이지 이동 시 검색 조건 유지. 이미지·리뷰·찜 연동은 아직 없음 |
-| **다음 개발 단계** | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적과 삭제 흐름 연결). F1-02는 `main` 병합 완료. 그 밖의 보호 대상 화면(F1-01 잔여), F1-04~F1-09. 상세는 7절 |
+| Stage 3 F1-03 맛집 이미지 | 구현 완료 — PR 병합 전 (6.30). S3 업로드·삭제, 이미지 메타데이터(SQL 005), `storage_delete_task`, 목록 썸네일, 상세 갤러리, 수정 화면 사진 관리. 실제 AWS 버킷 검증은 아직 하지 않음 |
+| **다음 개발 단계** | F1-04 리뷰 (평균 평점 포함). F1-02는 `main` 병합 완료, F1-03은 구현 완료(PR 병합 전, 6.30). 그 밖의 보호 대상 화면(F1-01 잔여), F1-05~F1-09. 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -24,8 +25,8 @@
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
 | 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **PR #35(6.26, `main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호. **남은 작업**: 그 밖의 보호 대상 화면. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | F1-02 완료 (PR #37 병합, `1f885dd`). F1-08 미착수 | 카테고리 시드 포함, 작성자 권한 |
-| 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | **다음 개발 단계** (미착수) | 의존: F1-02 (완료). T6 확인 |
-| 5 | F1-04 리뷰 | 미착수 | 평균 평점 포함 |
+| 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | 구현 완료 (PR 병합 전, 6.30). 실제 AWS 버킷 검증은 미실시 | 의존: F1-02 (완료). T6 확인 |
+| 5 | F1-04 리뷰 | **다음 개발 단계** (미착수) | 평균 평점 포함 |
 | 6 | F1-05 AI 리뷰 요약·캐싱 | 미착수 | 의존: F1-04 |
 | 7 | F1-06 찜 | 미착수 | |
 | 8 | F1-07 AI 맛집 추천 | 미착수 | 의존: F1-02. T10 (모델 설정) |
@@ -39,8 +40,8 @@
 |----|------|------|--------|----------------|
 | F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 이번 문서 작업으로 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) PR #26 보완 HEAD (`8e3df87`): DB 연결 429/429, DB 미설정 362 통과·67 건너뜀. (4) PR #28 (병합 커밋 `37df8e0`): DB 연결 484/484 통과, DB 미설정 408 통과·76 건너뜀, 실패 0, bootJar 성공. (5) PR #30 (`feat/stage2-4-google-account-linking`, `main` 병합 커밋 `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22, **PR #30 최종 HEAD 기준 보고값. 이번 문서 PR에서 재실행하지 않음**): `./gradlew clean test` 테스트 DB 연결 시 536개 실행, 건너뜀 0, 실패 0. 테스트 DB 미설정 시 536개 중 453 통과·83 건너뜀·실패 0. `bootJar` 성공. `git diff --check` 통과. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증과 Google OAuth2 엔드포인트 포함. (6) PR #35 (`feat/stage2-4-protected-restaurant-screens`, `main` 병합 커밋 `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26, **PR #35 당시 보고값. 이번 문서 PR에서 재실행하지 않음**): DB 미설정 `./gradlew clean test` 551개 중 83 건너뜀, 실패 0. 테스트 DB 설정(MySQL 8.0.46) 551개 실행, 실패 0. `bootJar` 성공. | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종, 화면 인증, T12 승인, Google 로그인 시작·콜백과 신규 가입·닉네임 설정은 `main` 병합 완료(PR #23, #25, #26, #28). Google 계정 연동·해제와 로컬 비밀번호 설정은 PR #30(6.22, `main` 병합 완료)로 구현. 프런트엔드 Access Token 자동 갱신(T13)은 PR #32로 `main` 병합 완료, 프런트엔드 429 처리(T20)는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 맛집 등록·수정 화면 세션 인증 보호는 PR #35로 `main` 병합 완료(merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26). |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 구현 완료 (`main` 병합 PR #37, `1f885dd`). 삭제 흐름의 이미지·S3·자식 행 처리는 F1-03 이후 | PR #37 당시 실행값: DB 미설정 610개 중 93 건너뜀, 실패 0. 테스트 DB 설정 610개 실행, 실패 0 (6.27, 6.28) | 명세 반영 완료 (Q2, Q5). 구현 차이는 API_SPEC 4절, FUNCTION_SPEC F1-02에 기록 |
-| F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 다음 개발 단계 (미착수) | - | 명세 반영 완료 (Q2) |
-| F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 미착수 | - | 명세 반영 완료 (Q5) |
+| F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적·재시도 | 구현 완료 (PR 병합 전, 6.30). 관리자 재시도는 F1-09 | 6.30 참조 (DB 없이 674개 중 105 건너뜀, 실패 0. 테스트 DB 설정 시 674개 실행, 실패 0) | 명세 반영 완료 (Q2). 구현 차이는 API_SPEC 5절, FUNCTION_SPEC F1-03 |
+| F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | 다음 개발 단계 (미착수) | - | 명세 반영 완료 (Q5) |
 | F1-05 | 리뷰 3개 이상 AI 요약 및 DB 캐싱 | 미착수 | - | 명세 반영 완료 (Q6) |
 | F1-06 | 찜하기 및 찜 목록 | 미착수 | - | 명세 작성 완료 |
 | F1-07 | DB 등록 맛집 대상 AI 추천 | 미착수 | - | 명세 반영 완료 (Q6) |
@@ -868,6 +869,35 @@
 - DATABASE_ERD 2.2·2.3은 `db/manual/004_create_category_and_restaurant.sql`과 컬럼, 기본값, FK, CHECK, 인덱스 이름이 일치하여 수정하지 않았다.
 - 검증: 변경 파일 목록 확인, `git diff --check`, 문서 내 F1-02 상태와 PR #37 번호 일관성 확인, 기능 코드와 SQL 변경 없음 확인. 이 문서 작업에서는 Gradle 테스트를 다시 실행하지 않았다. 테스트 수치는 6.27·6.28의 실행값을 그대로 인용했다.
 
+### 6.30 F1-03 맛집 이미지와 S3 연동 구현 (2026-11-27)
+
+- 브랜치: `feat/f1-03-restaurant-images-s3` (기준: `main` `16b9869`). PR 생성 후 병합 전이다. 병합 뒤 실제 AWS 버킷 검증이 필요하다.
+- DB: `db/manual/005_create_restaurant_image_and_storage_delete_task.sql` 추가. `restaurant_image`(DATABASE_ERD 2.4, FK `ON DELETE CASCADE`, `uk_image_s3_key`, `idx_image_restaurant`)와 `storage_delete_task`(2.9, `uk_storage_task_s3_key`, `idx_storage_task_created`). 명세에 없던 CHECK 4개를 추가했다(이미지 크기·형식·순서, 재시도 횟수). SQL 001~004는 바꾸지 않았다.
+- 의존성: `software.amazon.awssdk:s3`를 추가했다. 버전은 `software.amazon.awssdk:bom:2.31.78`으로 고정했다(`build.gradle` `dependencyManagement`). 다른 의존성은 추가하지 않았다.
+- 설정: 환경 변수 `AWS_REGION`, `AWS_S3_BUCKET`(`application.yml`의 `app.aws.s3`). 자격 증명은 AWS 기본 체인이 찾는다(코드·설정에 키 없음). 설정이 없으면 항상 실패하는 저장소를 쓴다. 가짜 성공은 없다. 요청 크기는 파일 5MB, 요청 전체 6MB로 제한했다.
+- 업로드(API 5.1, 화면 `POST /restaurants/{id}/images`): 작성자 확인과 개수 사전 확인 → 파일 검증(MIME 헤더, 확장자, 실제 파일 시그니처, 크기, 0바이트 금지) → S3 업로드 → DB 저장. DB 저장은 맛집 행을 잠근 뒤 다시 개수를 세므로 동시 요청도 5장을 넘지 않는다(설계 의도). DB 저장이 실패하면 올린 객체를 지우고, 지우기도 실패하면 `storage_delete_task`에 별도 트랜잭션으로 남긴다. S3 업로드 실패는 DB에 아무것도 쓰지 않고 502 `STORAGE_ERROR`다.
+- 삭제(API 5.2, 화면 `POST /restaurants/{id}/images/{imageId}/delete`): DB 트랜잭션에서 이미지 행 삭제와 `storage_delete_task` 기록을 같이 하고 커밋한다. 커밋 뒤 S3를 지운다. 성공하면 기록을 지우고, 실패하면 기록을 남기고 `storageDeleted: false`를 준다. DB 트랜잭션 실패 시에는 S3를 건드리지 않는다.
+- 맛집 삭제(`RestaurantService.delete`): 같은 방식으로 이미지 키를 기록하고 맛집과 이미지 행을 지운다. 커밋 뒤 S3를 지운다. 응답의 `deletedImageCount`와 `storageDeleteFailedCount`는 실제 처리 결과다. 이전 F1-02의 0 고정 값은 없어졌다.
+- 조회: 목록 항목에 `thumbnailUrl`(대표 이미지 = `sort_order` 최소), 상세에 `images`. 수정 화면에 사진 목록, 업로드 폼, 삭제 버튼을 넣었다. 이미지가 없을 때의 기본 문구가 있다.
+- 보안 유지: 화면은 세션과 CSRF, API는 JWT, 작성자 본인만. 관리자 우회 권한은 추가하지 않았다. 화면 보호 경로에 `/restaurants/*/images`, `/restaurants/*/images/**`를 추가했다. 기존 회원·인증·Google·Refresh Token·요청 제한 코드는 바꾸지 않았다.
+- S3 오류 메시지: HTTP 상태와 AWS 오류 코드 중 영문·숫자·`._-`만 남기고 서명, 자격 증명, 요청 헤더는 넣지 않는다. 이 메시지가 `storage_delete_task.last_error`에 들어간다.
+- 테스트 (신규): `ImagePolicyTest` 10, `S3ImageStorageTest` 6(S3Client 목), `RestaurantImageServiceTest` 15(목, 보상·기록 분기 포함), `RestaurantImageDbTest` 12(MySQL, SQL 001~005 적용), `RestaurantImageApiHttpTest` 11, `RestaurantImageScreenHttpTest` 7, `ImageUploadErrorAdviceTest` 3. 기존 `RestaurantDbTest`는 새 의존성에 맞춰 수정했다(10개 유지).
+- 기존 테스트 수정: 맛집·회원 슬라이스 테스트에 `RestaurantImageService` 목을 추가했다. `RestaurantServiceTest`는 새 생성자에 맞췄다.
+- 실행 결과 (실제 실행값, 이 커밋 기준):
+  - DB 미설정 `./gradlew clean test`: 674개 실행, 건너뜀 105개(모두 DB 테스트), 실패 0개, 오류 0개.
+  - 테스트 DB 설정(MySQL 8.0.46 로컬, SQL 001~005 적용, `TEST_DB_URL`에 `characterEncoding=UTF-8`) `./gradlew clean test`: 674개 실행, 건너뜀 0개, 실패 0개, 오류 0개.
+  - `./gradlew bootJar`: 성공. 산출물에 `s3-2.31.78.jar` 포함을 확인했다.
+  - `git diff --check`: 통과.
+- 미검증 (중요):
+  - 실제 AWS S3 버킷 업로드·삭제는 하지 않았다. S3 연동은 목으로만 확인했다.
+  - 버킷 공개 읽기 정책과 CDN, 운영 IAM 권한은 확정하지 않았다. 이미지 URL이 브라우저에서 열리는지 확인하지 않았다.
+  - 브라우저에서 수정 화면의 업로드·삭제, 목록 썸네일, 상세 갤러리를 직접 확인하지 않았다. 화면 테스트는 HTML 문자열만 확인한다.
+  - 실제 Tomcat의 요청 크기 초과 응답은 확인하지 않았다. `ImageUploadErrorAdvice`는 단위 테스트와 MockMvc로만 확인했다.
+  - 동시 업로드 경합은 실제 병렬 요청으로 테스트하지 않았다. 잠금 쿼리와 순차 DB 테스트만 있다.
+  - 리뷰·찜·AI 요약 행의 삭제 연동은 해당 기능이 없어서 아직 없다(F1-04~F1-06).
+  - 관리자 S3 삭제 재시도는 F1-09 범위라서 구현하지 않았다.
+- DB 적용 방법: `db/manual/005_create_restaurant_image_and_storage_delete_task.sql`을 `--default-character-set=utf8mb4`로 한 번 실행한다. 순서는 001 → 002 → 003 → 004 → 005다. 재실행하면 실패한다.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
@@ -886,8 +916,9 @@
    - PR #33 (`feat/stage2-4-rate-limit-frontend`, merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25): T20 프런트엔드 429 처리. 429와 401 구분, `Retry-After` 기준 재시도 시점 안내, 자동 재요청 없음, 쿠키와 화면 세션 유지
    - PR #35 (`feat/stage2-4-protected-restaurant-screens`, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26): `/restaurants/new`, `/restaurants/*/edit` 화면 세션 인증 보호. JWT 쿠키 단독 인증 불가, CSRF 유지
 3. F1-02 맛집 관리: `main` 병합 완료 (PR #37, merge commit `1f885dd`, 6.27·6.28·6.29). 구현 범위는 카테고리 시드와 조회, 맛집 등록·수정·삭제(작성자 본인만), 목록·검색·정렬·페이지, 상세, 위도·경도 쌍 검증, 페이지 이동 시 검색 조건 유지, API JWT 인증과 화면 세션 인증 구분이다. 브라우저 화면 검증은 하지 않았다. 자동화 테스트는 링크 HTML과 폼 필드만 확인한다.
-   - **다음 개발 단계: F1-03 맛집 이미지 업로드와 S3 삭제 흐름** (`restaurant_image`, `storage_delete_task`, 삭제 흐름 3·4단계, 목록 대표 이미지, 상세 갤러리)
-   - 이후: F1-04 리뷰, F1-05 AI 요약, F1-06 찜, F1-07 AI 추천, F1-08 메인 페이지, F1-09 관리자 (미착수)
+   - F1-03 맛집 이미지: 구현 완료, PR 병합 전 (6.30). 병합 뒤 실제 AWS 버킷 업로드·삭제를 검증해야 한다.
+   - **다음 개발 단계: F1-04 리뷰 (평균 평점 포함)**, 그다음 삭제 흐름의 리뷰·찜·AI 요약 행 정리를 같은 트랜잭션에 추가한다.
+   - 이후: F1-05 AI 요약, F1-06 찜, F1-07 AI 추천, F1-08 메인 페이지, F1-09 관리자 (미착수)
    - F1-02 구현 차이는 API_SPEC 4절과 FUNCTION_SPEC F1-02의 구현 상태 메모에 있다 (`thumbnailUrl`, `storageDeleted`, 이미지·찜 자리표시, 오류 `details`).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
    - Google 액세스 토큰의 HttpSession 저장 정책 검토 (6.21 위험 항목)
