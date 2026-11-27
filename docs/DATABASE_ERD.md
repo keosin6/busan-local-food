@@ -265,6 +265,8 @@ erDiagram
 - UNIQUE: `uk_favorite_member_restaurant (member_id, restaurant_id)` — 중복 찜 방지 (FR-06-02)
 - INDEX: `idx_favorite_member_created (member_id, created_at)` — 내 찜 목록
 
+> 구현 메모 (SQL 008): 명세 컬럼, FK 두 개(CASCADE), UNIQUE, 내 찜 목록 인덱스를 그대로 구현했습니다. 맛집별 찜 수 조회를 위해 `idx_favorite_restaurant (restaurant_id)`를 추가했습니다(FK 제약에도 쓰입니다). 맛집을 지우면 찜이 DB CASCADE로, 맛집 삭제 트랜잭션에서도 지워집니다. 회원을 지우면 그 회원의 찜이 CASCADE로 지워집니다.
+
 ### 2.7 ai_review_summary (AI 리뷰 요약 캐시)
 
 | 컬럼 | 타입 | NULL | 기본값 | 설명 |
@@ -422,7 +424,7 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 - 한 번 적용된 SQL 파일은 수정하지 않습니다. 새 변경은 다음 번호의 파일로 추가합니다. `ddl-auto`는 `none`을 유지합니다.
 - 이번 변경(`member` 컬럼 교체, `storage_delete_task` 추가)은 아직 배포된 DB가 없으므로 초기 스키마에 직접 반영합니다.
 
-### 6.1 수동 SQL 적용 순서 (001~007)
+### 6.1 수동 SQL 적용 순서 (001~008)
 
 | 순서 | 파일 | 내용 | 재실행 |
 |------|------|------|--------|
@@ -433,6 +435,7 @@ DB 내부 정리는 한 트랜잭션에서 수행하고, S3 삭제는 커밋 후
 | 5 | `db/manual/005_create_restaurant_image_and_storage_delete_task.sql` | `restaurant_image`, `storage_delete_task` 생성 (F1-03) | 금지 (이미 테이블이 있으면 실패) |
 | 6 | `db/manual/006_create_review.sql` | `review` 생성 (F1-04) | 금지 (이미 테이블이 있으면 실패) |
 | 7 | `db/manual/007_create_ai_review_summary.sql` | `ai_review_summary` 생성 (F1-05) | 금지 (이미 테이블이 있으면 실패) |
+| 8 | `db/manual/008_create_favorite.sql` | `favorite` 생성 (F1-06) | 금지 (이미 테이블이 있으면 실패) |
 
 - 적용 전에는 대상 DB를 백업하고 현재 스키마를 확인합니다. 운영 DB는 점검 시간에 적용합니다.
 - 002의 `UUID()`는 버전 1 형식입니다. 시각 정보와 서버 노드 식별 값을 담으므로, 마이그레이션 시점의 한 번 채우는 값으로만 씁니다. 애플리케이션의 신규 `family_id`는 버전 4(난수 기반) UUID를 사용합니다 (2026-11-12 확정, PROGRESS 6.8). 백필 값은 일회성이며 외부 노출 금지 대상입니다.
