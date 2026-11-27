@@ -77,6 +77,9 @@ class MyPageHttpTest {
     @MockitoBean
     private RestaurantService restaurantService;
 
+    @MockitoBean
+    private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
+
     private static final String CLIENT_ID = "test-client-mypage";
     private static final String CLIENT_SECRET = "test-secret-mypage";
     private static final String JWT_SECRET = randomBase64Key();

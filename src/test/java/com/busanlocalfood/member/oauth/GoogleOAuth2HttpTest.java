@@ -75,6 +75,9 @@ class GoogleOAuth2HttpTest {
     private RestaurantService restaurantService;
 
     @MockitoBean
+    private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
+
+    @MockitoBean
     private MemberAccountService memberAccountService;
 
     static final String CLIENT_ID = "test-client-" + randomToken();

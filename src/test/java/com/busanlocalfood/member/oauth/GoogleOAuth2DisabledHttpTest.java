@@ -57,6 +57,9 @@ class GoogleOAuth2DisabledHttpTest {
     private RestaurantService restaurantService;
 
     @MockitoBean
+    private com.busanlocalfood.image.service.RestaurantImageService restaurantImageService;
+
+    @MockitoBean
     private MemberAccountService memberAccountService;
 
     private static final String JWT_SECRET = randomBase64Key();
