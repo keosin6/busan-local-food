@@ -42,6 +42,10 @@ echo "== systemd =="
 install -m 644 "$SRC_DIR/systemd/busan-local-food.service" /etc/systemd/system/busan-local-food.service
 install -m 644 "$SRC_DIR/systemd/busan-mysql-backup.service" /etc/systemd/system/busan-mysql-backup.service
 install -m 644 "$SRC_DIR/systemd/busan-mysql-backup.timer" /etc/systemd/system/busan-mysql-backup.timer
+# MySQL은 EBS(/data) 마운트가 끝나야 시작한다. drop-in만 추가하며 기존 mysql.service는 덮어쓰지 않는다.
+# 상세: deploy/systemd/mysql.service.d/ebs-data-mount.conf, docs/DEPLOYMENT.md 4.4절.
+install -d -m 755 /etc/systemd/system/mysql.service.d
+install -m 644 "$SRC_DIR/systemd/mysql.service.d/ebs-data-mount.conf" /etc/systemd/system/mysql.service.d/ebs-data-mount.conf
 systemctl daemon-reload
 systemctl enable busan-local-food.service
 # 타이머는 활성화만 한다. 백업 설정 파일을 만든 뒤 시작한다 (docs/DEPLOYMENT.md 6절).

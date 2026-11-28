@@ -126,9 +126,11 @@ sudo bash deploy/scripts/setup-ec2.sh
    sudo systemctl stop mysql
    ```
 
-2. `/data/mysql` 디렉터리를 만들고 권한을 준다. (이 단계는 파일을 만들거나 지우지 않는다.)
+2. `/data`가 실제로 마운트되어 있는지 확인한 뒤 `/data/mysql` 디렉터리를 만들고 권한을 준다. (이 단계는 파일을 만들거나 지우지 않는다.)
 
    ```bash
+   # EBS가 마운트되지 않았다면 여기서 멈춘다. 마운트 전에 만들면 루트 볼륨에 빈 디렉터리가 생긴다.
+   mountpoint -q /data || { echo "/data 가 마운트되어 있지 않습니다. 4.2절을 먼저 끝내세요." >&2; exit 1; }
    sudo install -d -o mysql -g mysql -m 750 /data/mysql
    ```
 
@@ -187,6 +189,31 @@ sudo bash deploy/scripts/setup-ec2.sh
 
 - 데이터 디렉터리 권한은 `mysql:mysql`, 750이어야 한다.
 - 기동 실패 시 `sudo journalctl -u mysql -n 100`과 `sudo dmesg | grep -i apparmor`로 원인을 찾는다.
+
+#### MySQL의 EBS 마운트 의존성
+
+`setup-ec2.sh`는 `/etc/systemd/system/mysql.service.d/ebs-data-mount.conf`를 설치한다. 원본은 `deploy/systemd/mysql.service.d/ebs-data-mount.conf`다. 기존 `mysql.service` 파일은 덮어쓰지 않는다. 이 파일만 추가한다.
+
+```ini
+[Unit]
+RequiresMountsFor=/data/mysql
+AssertPathIsMountPoint=/data
+```
+
+- MySQL은 `/data`(EBS) 마운트가 완료된 뒤에만 시작한다. `RequiresMountsFor`는 마운트 유닛에 대한 의존성을 만든다. 마운트가 실패하면 MySQL 시작이 실패하고, 마운트가 나중에 멈추면 MySQL도 함께 멈춘다.
+- `AssertPathIsMountPoint=/data`는 마지막 방어선이다. `/data`가 마운트 지점이 아니면 시작을 거부하고 이유를 남긴다. fstab 항목이 빠졌거나 `nofail`로 마운트가 조용히 빠진 경우에도 루트 볼륨의 빈 `/data/mysql`에 데이터가 쓰이지 않게 한다.
+- 설치 뒤 `systemctl daemon-reload`가 실행된다. 이미 떠 있는 MySQL에는 다음 시작부터 적용된다.
+
+확인 명령 (EC2에서):
+
+```bash
+systemctl cat mysql                                   # 기본 유닛 뒤에 drop-in(ebs-data-mount.conf)이 보여야 한다
+systemctl show mysql -p RequiresMountsFor -p AssertPathIsMountPoint
+systemctl list-dependencies mysql | grep -i data      # /data 관련 마운트 유닛이 보여야 한다
+sudo findmnt /data                                    # 마운트 상태 확인
+```
+
+> 미검증: 실제 systemd 부팅 순서, EBS 분리 시 MySQL 거부 동작, 재부팅 후 자동 마운트와 MySQL 기동 순서는 EC2에서 확인하지 않았다. 로컬에서는 drop-in의 구문과 설치 동작만 검사했다 (`deploy/tests/test-mysql-dropin.sh`).
 
 > 미검증: 위 AppArmor 규칙, alias 문법, `apparmor_parser -r`, `mysqld --initialize-insecure` 경로는 실제 Ubuntu 24.04 EC2에서 확인하지 않았다. 검증 완료로 기록하지 않는다.
 
@@ -496,7 +523,7 @@ echo 'DEPLOY_ARTIFACT_BUCKET=<DEPLOY_ARTIFACT_BUCKET>' | sudo tee /etc/busan-loc
 6. `./gradlew bootJar`를 실행하고 JAR의 SHA-256을 계산한다. OIDC로 임시 자격 증명을 받는다.
 7. `releases/<커밋 SHA>.jar`를 배포 버킷에 올린다.
 8. SSM Run Command로 `/opt/busan-local-food/bin/deploy.sh <SHA> <sha256>`을 실행한다.
-9. 워크플로는 SSM 명령이 끝날 때까지 기다리고 결과를 출력한다.
+9. 워크플로는 명시적 대기 한도 1080초(SSM 명령 제한 900초 + 여유 180초)로 결과를 기다리고, 상태와 출력을 보여 준다. 한도를 넘으면 실패로 끝내고 명령 ID를 안내한다. 이때 배포가 계속 진행 중일 수 있으므로 서버 상태를 직접 확인한다.
 
 ### 11.2 `deploy.sh` 동작
 
@@ -515,6 +542,8 @@ echo 'DEPLOY_ARTIFACT_BUCKET=<DEPLOY_ARTIFACT_BUCKET>' | sudo tee /etc/busan-loc
 | 2 | 새 버전 실패, 이전 버전으로 복구 성공 | 실패 원인 확인 후 수정 |
 | 3 | 새 버전 실패, 이전 버전 복구도 실패 | 즉시 서비스 확인 (`journalctl -u busan-local-food -n 200`) |
 | 4 | 최초 배포 실패, 이전 JAR 없음 | 서비스가 비정상일 수 있음. 원인 확인 후 재배포 |
+
+시간 예산 (SSM 명령 제한 900초 안에 끝나야 한다): 아티팩트 내려받기 최대 약 60초, 새 버전 재시작 최대 120초(`TimeoutStartSec`) + 헬스 체크 최대 약 150초(30회, 각 3초 제한과 2초 간격), 복구 재시작과 헬스 체크도 같은 상한. 최악의 경우 약 600초로 900초 안에 든다. 헬스 체크 횟수나 간격을 늘리면 이 예산을 다시 계산하고 `--timeout-seconds`와 워크플로 대기 한도를 함께 올린다.
 
 `deploy/tests/test-deploy-rollback.sh`가 이 분기를 가짜 `systemctl`, `curl`, `aws`로 검사한다 (새 버전 재시작 실패, 헬스 실패, 이전 버전 재시작 실패, 최초 배포 실패, SHA 불일치).
 
@@ -600,7 +629,9 @@ Nginx 설정은 IPv4 전용이다. 검증 기록 (PR #49 후속, 로컬 호스�
 - `./gradlew bootJar`: 성공.
 - `bash -n`: `deploy/scripts/*.sh`, `deploy/tests/*.sh` 전부 통과.
 - `deploy/tests/test-deploy-rollback.sh`: 22개 검사 통과. 가짜 `systemctl`, `curl`, `aws`, `id`를 쓴다. 케이스: SHA 불일치, 새 버전 재시작 실패 → 복구, 헬스 실패 → 복구, 기동 실패(active 아님) → 복구, 이전 버전 재시작도 실패 → 복구 실패 보고(코드 3), 최초 배포 헬스 실패와 재시작 실패 → 이전 버전 없음 보고(코드 4), 최초 배포 성공, `rollback.sh` 재시작 실패 보고, `rollback.sh` 정상 롤백.
-- `deploy/tests/test-mount-data-volume.sh`: 9개 검사 통과. 파일 시스템 분기(서명 없음·옵션 없음 중단, 서명 없음·옵션 포맷, ext4 마운트만, ext4 + 포맷 옵션 무시, xfs·btrfs 중단), fstab 줄 형식, `mkfs.ext4`가 포맷 분기 안에서만 호출되는지.
+- `deploy/tests/test-mount-data-volume.sh`: 9개 검사 통과.
+- `deploy/tests/test-mysql-dropin.sh`: MySQL drop-in 내용, 설치 경로, `setup-ec2.sh`의 설치와 daemon-reload 순서, `systemd-analyze verify` 구문 검사 (대조군으로 잘못된 키 검출 확인). 실제 systemd 부팅 순서는 검사하지 않았다.
+- `deploy/tests/test-ssm-wait.sh`: 워크플로 대기 단계 스크립트를 가짜 `aws`·`sleep`·`date`로 실행. Pending→Success, Failed, TimedOut, 한도 초과 케이스 통과. 대기 한도 1080초와 SSM 명령 제한 900초 확인. 파일 시스템 분기(서명 없음·옵션 없음 중단, 서명 없음·옵션 포맷, ext4 마운트만, ext4 + 포맷 옵션 무시, xfs·btrfs 중단), fstab 줄 형식, `mkfs.ext4`가 포맷 분기 안에서만 호출되는지.
 - 이전 작성 검사: 백업 스크립트 가짜 명령 시험(업로드 실패 시 로컬 보존, 성공 시 삭제), systemd 유닛 `systemd-analyze verify`, S3 수명 규칙 JSON, 워크플로 YAML 파싱.
 - `git diff --check`: 통과 (결과는 PR 보고 참고).
 
@@ -611,6 +642,8 @@ Nginx 설정은 IPv4 전용이다. 검증 기록 (PR #49 후속, 로컬 호스�
 - 실제 EC2 생성, EBS 마운트, 재부팅 후 자동 마운트
 - MySQL 설치, AppArmor 규칙(alias, 로컬 규칙, `apparmor_parser -r`), 데이터 디렉터리 이동, `mysqld --initialize-insecure`, SQL 001~008 적용
 - EC2에서의 `nginx -t`와 `ss -ltn`에 의한 리스닝 확인
+- MySQL drop-in(`RequiresMountsFor`, `AssertPathIsMountPoint`)의 실제 systemd 부팅 순서, EBS 분리 시 MySQL 시작 거부
+- GitHub Actions 러너에서 워크플로 대기 단계 실행 (가짜 명령 테스트만 함)
 - 실제 S3 업로드·다운로드, 이미지 표시
 - 실제 IAM 권한, GitHub OIDC 인증, SSM 배포
 - 백업 실행, S3 업로드 검증, 복구

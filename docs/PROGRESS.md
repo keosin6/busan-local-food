@@ -1133,6 +1133,14 @@
 - Nginx IPv6: `deploy/nginx/busan-local-food.conf`에서 `listen [::]:80 default_server;`를 뺐다. 기본 구성은 IPv4 80 전용이며 HTTPS 예시도 IPv4 전용이다. IPv6 지원은 확인하지 않았으므로 문서에 지원된다고 쓰지 않는다. 이 호스트(IPv6 없음)에서 이전 설정은 `nginx -t`가 실패했고, 새 설정은 통과했다.
 - 검증 범위: 위 세 항목 중 EBS 실제 마운트, AppArmor 규칙 적용, MySQL 초기화와 기동, EC2에서의 `nginx -t`는 실제 Ubuntu 24.04 EC2에서 확인하지 않았다. 미검증으로 유지한다.
 
+### 6.47 MySQL의 EBS 마운트 의존성과 워크플로 대기 정책 (PR #49, 2026-11-28)
+
+- 발견: `busan-local-food.service`에만 `RequiresMountsFor=/data/mysql`이 있었고 `mysql.service`에는 없었다. EBS가 분리되거나 마운트에 실패하면 MySQL이 루트 볼륨의 빈 `/data/mysql`에 기동할 수 있었다.
+- 조치: `deploy/systemd/mysql.service.d/ebs-data-mount.conf`를 추가했다. 내용은 `RequiresMountsFor=/data/mysql`과 `AssertPathIsMountPoint=/data`. 후자는 요청 사항 외 방어선이다. `setup-ec2.sh`가 `/etc/systemd/system/mysql.service.d/`에 설치하고 `daemon-reload`를 실행한다. 기존 `mysql.service`는 건드리지 않는다. 문서 4.4절에 설명과 확인 명령을 넣었고, 4.4 2단계에 `mountpoint -q /data` 확인을 추가했다.
+- 워크플로 대기: `aws ssm wait`의 기본 한도(약 1500초)에 기대지 않고, 1080초(SSM 명령 제한 900초 + 180초) 한도로 직접 폴링한다. 배포 스크립트 최악의 시간 예산은 약 600초로 계산했고 문서 11.2절에 적었다.
+- 테스트: `test-mysql-dropin.sh` (12개 통과, 대조군 포함), `test-ssm-wait.sh` (6개 통과, 가짜 명령). 두 테스트는 CI 워크플로의 테스트 단계에 추가했다.
+- 미검증: 실제 systemd 부팅 순서, EBS 분리 시 MySQL 거부 동작, 재부팅 후 기동 순서, GitHub Actions 러너의 대기 단계 실행. EC2에서 확인하지 않았다.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
