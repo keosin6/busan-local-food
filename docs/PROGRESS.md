@@ -17,7 +17,7 @@
 | Stage 3 F1-03 맛집 이미지 | `main` 병합 완료 — PR #39 (merge commit `123db18`, 6.30·6.31). S3 업로드·삭제, 이미지 메타데이터(SQL 005), `storage_delete_task`, 목록 썸네일, 상세 갤러리, 수정 화면 사진 관리, 삭제·업로드 동시성 잠금. 실제 AWS 버킷 검증은 배포 단계. 자동 재시도는 없고, 관리자 수동 재시도는 F1-09에서 구현(PR #48 `main` 병합 완료, merge commit `4a2a11c`) |
 | Stage 5 F1-04 리뷰 | `main` 병합 완료 — PR #41 (merge commit `0f8b1f8`, 6.32·6.33). 작성(평점 1~5, 맛집당 한 번), 최신순 목록, 본인 삭제, 평균 평점과 리뷰 수의 잠금 기반 동기화, 맛집 삭제 시 리뷰 정리. AI 요약 캐시 무효화는 F1-05 |
 | Stage 6 F1-05 AI 리뷰 요약 | `main` 병합 완료 — PR #43 (merge commit `39532fa`, 6.34·6.35). Spring AI 1.1.8 OpenAI 스타터로 OpenRouter 호출. 3개 이상 맛집만 OpenRouter 요약, `ai_review_summary` 캐싱, 리뷰 작성·삭제 시 무효화, 동시 요청 공유, 실패는 UNAVAILABLE. 실제 OpenRouter 호출과 운영 설정은 미검증 |
-| **다음 개발 단계** | Stage 11 배포 기반(파일·문서)은 `feat/stage11-deployment-foundation`에서 PR로 올린다(6.42). 병합 뒤 사용자가 AWS에서 EC2·EBS·MySQL·S3·IAM·OIDC를 설정하고, 그 뒤 실제 배포와 백업·복구를 검증한다. 기능 단계 F1-01~F1-09의 구현은 끝났다. F1-09 관리자 기능은 `main` 병합 완료(PR #48, merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴는 이번 범위에서 제외(T1). F1-08 메인 홈페이지는 `main` 병합 완료(PR #47, `7b20233`, 6.40). F1-07 AI 맛집 추천은 `main` 병합 완료(PR #46, `9206026`, 6.39). F1-06 찜하기·찜 목록은 `main` 병합 완료(PR #45, `c9cb668`, 6.37·6.38). F1-02(PR #37), F1-03(PR #39), F1-04(PR #41), F1-05(PR #43)은 `main` 병합 완료. 상세는 7절 |
+| **다음 개발 단계** | AWS 리소스 생성 및 실환경 배포 검증. Stage 11 배포 기반 파일·문서는 PR #49로 `main` 병합 완료(merge commit `ab39f1d`, 6.49). 다음은 EC2·EBS·MySQL·S3·IAM·OIDC·GitHub Variables 설정과 실제 배포·롤백·백업·복구 확인이다. 기능 단계 F1-01~F1-09의 구현은 끝났다. F1-09 관리자 기능은 `main` 병합 완료(PR #48, merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴는 이번 범위에서 제외(T1). F1-08 메인 홈페이지는 `main` 병합 완료(PR #47, `7b20233`, 6.40). F1-07 AI 맛집 추천은 `main` 병합 완료(PR #46, `9206026`, 6.39). F1-06 찜하기·찜 목록은 `main` 병합 완료(PR #45, `c9cb668`, 6.37·6.38). F1-02(PR #37), F1-03(PR #39), F1-04(PR #41), F1-05(PR #43)은 `main` 병합 완료. 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -34,7 +34,7 @@
 | 8 | F1-07 AI 맛집 추천 | `main` 병합 완료 — PR #46 (`9206026`, 6.39). `/recommend` 세션 인증 보호 | 의존: F1-02, F1-05 (AI 연동). T10 (모델 설정) |
 | 9 | F1-08 메인 페이지 완성 (최신 맛집, 카테고리 연결) | `main` 병합 완료 — PR #47 (`7b20233`, 6.40) | 의존: F1-02 |
 | 10 | F1-09 관리자 기능 (role, `/admin/**`, `/api/admin/**`, 대시보드, S3 재시도) | `main` 병합 완료 — PR #48 (merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴·권한 변경은 이번 범위 제외(T1, T2) | 의존: F1-01, F1-02, F1-03, F1-04. T1 범위 제외 |
-| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 배포 기반 파일·문서 작성 완료, PR #49 병합 대기 (6.42, 후속 수정 6.43). 실제 AWS 리소스 생성·배포·백업 복구는 미검증 | T4, T5, T22 결정 (6.42·6.43). 이미지 공개 방식 T21은 권장안 검토 중. 상세는 `docs/DEPLOYMENT.md` |
+| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 배포 기반 파일·문서 main 병합 완료 (PR #49, merge commit `ab39f1d`, 6.42·6.43·6.44~6.48·6.49), 실제 AWS 구성 및 배포 검증 진행 전. 실제 AWS 리소스 생성·배포·백업 복구는 미검증 | T4, T5, T22 결정 (6.42·6.43). 이미지 공개 방식 T21은 권장안 검토 중. 상세는 `docs/DEPLOYMENT.md` |
 
 ## 2. 기능별 상태
 
@@ -1147,6 +1147,17 @@
 - 문서: 4.4절에 적용 대상을 나눠 적었다. 신규 EC2의 빈 MySQL 데이터 디렉터리가 기본 대상이다. 기존 데이터가 있는 서버에서는 이 절차를 그대로 실행하면 안 되며, 데이터 이전·검증·롤백 계획을 먼저 세워야 한다. 6단계에 기존 서버 실행 금지 경고를 추가했다. drop-in, `setup-ec2.sh`, 앱 서비스 의존성은 제거하지 않았다.
 - 미검증: 실제 블록 장치 마운트, 실제 `findmnt` 출력, 실제 systemd 부팅과 drop-in 동작, 기존 데이터 서버의 이전.
 
+### 6.49 PR #49 병합 기록: Stage 11 배포 기반 구축 (2026-11-28)
+
+- 병합: PR #49 `feat: Stage 11 운영 배포 기반 구축 (#49)`, `main` merge commit `ab39f1d`. 이 저장소의 PR 병합은 squash 방식으로 기록되었다. 병합 전 PR 브랜치의 마지막 커밋은 `9433fa5`이다.
+- 병합에 포함된 변경 범위 (문서와 배포 파일, 애플리케이션 기능 변경 없음):
+  - 배포 문서 `docs/DEPLOYMENT.md`, 배포 파일 `deploy/`(환경변수 예시, systemd 유닛과 drop-in, Nginx 설정, MySQL 설정·계정 예시, S3 수명 규칙, 운영 스크립트와 가짜 명령 테스트), GitHub Actions `.github/workflows/deploy.yml`.
+  - 애플리케이션 설정: 운영 프로필의 웹 바인딩 `server.address: 127.0.0.1` (`application-prod.yml`)과 이를 검사하는 테스트 1개. 기능 코드는 바꾸지 않았다.
+  - 주요 수정: 배포 롤백 단계 분리와 종료 코드, CI DB 테스트 서비스 컨테이너와 결과 검사, EBS 마운트 UUID 검증과 파일 시스템 검사, 백업 계정 `SHOW_ROUTINE` 전역 권한, MySQL `RequiresMountsFor`·`AssertPathIsMountPoint` drop-in, SSM 대기 한도 1080초, Nginx IPv4 전용 설정.
+- 결정 상태: T4(DB 백업)와 T5(MySQL·영속 저장소)는 6.42에서 결정됨. T22(배포 아티팩트 전용 버킷)는 6.43의 결정 내용을 유지한다. T21(이미지 공개 방식)은 **사용자 미확정 상태를 유지한다.** CloudFront OAC는 권장안이며 확정 결정이 아니다.
+- 검증 범위: 로컬 단위·가짜 명령 테스트, 격리 MySQL 8.0.46 기반 `./gradlew clean test`(915개, 건너뜀 0, 실패 0), `bootJar`, `nginx -t`(이 호스트). 실제 AWS와 EC2에서는 검증하지 않았다 (EBS 마운트, AppArmor와 MySQL 기동, systemd 부팅 순서, SSM 배포, S3·IAM·OIDC, 백업과 복구, 이미지 표시, Google 운영 콜백, HTTPS).
+- 다음: AWS 리소스 생성과 실환경 배포 검증 (7절).
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
@@ -1172,10 +1183,10 @@
    - F1-07 AI 맛집 추천: `main` 병합 완료 (PR #46, merge commit `9206026`, 6.39). 실제 OpenRouter 호출은 아직 검증하지 않았다.
    - F1-08 메인 홈페이지: `main` 병합 완료 (PR #47, merge commit `7b20233`, 6.40). 실제 브라우저 화면과 운영 데이터는 아직 검증하지 않았다.
    - F1-09 관리자 기능: `main` 병합 완료 (PR #48, merge commit `4a2a11c`, 6.41). 실제 AWS S3 재시도와 브라우저 화면은 아직 검증하지 않았다.
-   - Stage 11 배포 기반: PR 병합 대기 (6.42, `docs/DEPLOYMENT.md`). 실제 AWS 리소스 생성, 배포, 백업·복구는 사용자 설정 뒤에 검증한다.
-   - **다음 개발 단계: Stage 11 배포 기반 PR 병합 → 사용자가 AWS 설정(EC2·EBS·MySQL·S3·IAM·OIDC·Variables) → 실제 배포와 백업·복구 검증.** 회원 탈퇴(T1)는 A안으로 결정되어 이번 F1-09 범위에서 제외했다.
+   - Stage 11 배포 기반: PR #49 `main` 병합 완료 (merge commit `ab39f1d`, 6.42·6.49). 실제 AWS 리소스 생성, 배포, 백업·복구는 아직 시작하지 않았고 검증되지 않았다.
+   - **다음 개발 단계: AWS 리소스 생성 및 실환경 배포 검증** (EC2·EBS·MySQL·S3·IAM·OIDC·GitHub Variables 설정, 배포·롤백·백업·복구 실제 확인). 회원 탈퇴(T1)는 A안으로 결정되어 이번 F1-09 범위에서 제외했다.
    - F1-02 구현 차이는 API_SPEC 4절과 FUNCTION_SPEC F1-02의 구현 상태 메모에 있다 (`thumbnailUrl`, `storageDeleted`, 이미지·찜 자리표시, 오류 `details`).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
    - Google 액세스 토큰의 HttpSession 저장 정책 검토 (6.21 위험 항목)
-5. 미확정 항목(T6, T10, T21)은 각 단계 시작 전에 결정합니다. T21은 이미지 공개 방식(권장안 검토 중), T6은 S3 삭제 자동 재시도, T10은 OpenRouter 모델 ID다.
+5. 미확정 항목(T6, T10, T21)은 각 단계 시작 전에 결정합니다. T21은 이미지 공개 방식으로 사용자 미확정 상태이며 CloudFront OAC는 권장안이다. T6은 S3 삭제 자동 재시도, T10은 OpenRouter 모델 ID다.
 6. 실제 MySQL 스키마 적용은 사용자가 `db/manual/`의 SQL 파일을 직접 실행합니다. 이번 작업에서는 실행하지 않았습니다.
