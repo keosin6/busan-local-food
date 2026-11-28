@@ -98,7 +98,8 @@ sudo bash deploy/scripts/mount-data-volume.sh /dev/nvme1n1
   - 이미 ext4가 있는 장치: 포맷하지 않고 마운트만 한다. `--format-new-volume`은 무시한다.
   - ext4가 아닌 파일 시스템(xfs, btrfs 등): 포맷하지 않고, fstab을 쓰지 않고, 종료 코드 1로 중단한다. 데이터를 확인한 뒤 사람이 직접 결정한다.
   - 장치에 서명이 없는데 옵션도 없으면 중단한다.
-- 마운트 뒤 `findmnt`로 실제 파일 시스템이 ext4인지 한 번 더 확인한다.
+- 마운트 UUID 검증 (PR #49 후속): `/data`가 이미 마운트되어 있으면, 그 마운트의 UUID가 입력 장치의 UUID와 같을 때만 성공한다. 다른 UUID가 마운트되어 있으면 fstab과 기존 마운트를 건드리지 않고 즉시 실패한다.
+- `/data`가 마운트되어 있지 않으면 fstab에 항목을 추가하고 마운트한 뒤, `findmnt`로 실제 마운트의 UUID와 파일 시스템(ext4)을 모두 확인한다. 하나라도 다르면 실패한다.
 - `/etc/fstab`은 `UUID=... /data ext4 defaults,nofail 0 2` 형식이다. `nofail`이므로 볼륨이 없어도 부팅은 멈추지 않으며, MySQL 유닛은 `RequiresMountsFor=/data/mysql`로 마운트를 기다린다.
 - 재부팅 후 확인: `findmnt /data` 와 `sudo mount -a`.
 
@@ -114,9 +115,17 @@ sudo bash deploy/scripts/setup-ec2.sh
 설치되는 것: Nginx, OpenJDK 21 JRE(headless), MySQL 8(Ubuntu 패키지), AWS CLI v2, systemd 유닛, journald 크기 제한(500MB, 30일).
 스크립트는 MySQL 데이터 경로를 옮기지 않으며, 계정과 스키마도 만들지 않는다.
 
-### 4.4 MySQL 데이터 디렉터리를 `/data/mysql`로 옮기기 (최초 1회)
+### 4.4 MySQL 데이터 디렉터리를 `/data/mysql`로 옮기기 (신규 EC2 최초 1회)
 
-전제: 4.3(`setup-ec2.sh`)으로 MySQL 패키지가 설치되어 있다. 패키지는 `/var/lib/mysql`에 기본 데이터를 만들고 기동했을 수 있다. 아래 순서를 지킨다. **이미 데이터가 있는 서버라면 이 절차를 건너뛰고 기존 경로를 유지한다.**
+> **적용 대상 구분 (반드시 먼저 읽는다)**
+>
+> - **이 절차는 신규 EC2의 빈 MySQL 데이터 디렉터리를 대상으로 한다.** 이번 배포 절차의 기본 경로다. 6번 단계는 `/data/mysql`이 비어 있을 때만 초기화하고, 파일이 하나라도 있으면 아무것도 하지 않고 멈춘다.
+> - **기존 데이터가 있는 MySQL 서버에서는 이 절차를 그대로 실행하면 안 된다.** 기존 데이터가 `/var/lib/mysql`에 있으면, 이 경로를 그대로 두는 것은 안전하지 않다. `setup-ec2.sh`가 설치하는 drop-in(`RequiresMountsFor=/data/mysql`, `AssertPathIsMountPoint=/data`)과 애플리케이션 서비스의 `/data/mysql` 의존성 때문에 MySQL이 시작하지 않을 수 있다. 기존 경로를 "유지"한다는 말은 이 배포 구조에서는 성립하지 않는다.
+> - **기존 데이터 서버는 별도의 데이터 이전·검증·롤백 계획을 먼저 세운다.** 최소한 다음을 정한다: (1) 이전 전 전체 백업과 복구 검증 (6.5절), (2) 이전 방식과 쓰기 중지 시점, (3) 이전 후 행 수와 주요 테이블 검증, (4) 실패 시 원래 경로와 서비스 설정으로 되돌리는 롤백 절차, (5) 승인자. 계획이 확정되기 전에는 이 절차의 어떤 명령도 기존 서버에서 실행하지 않는다.
+> - **기존 데이터 서버에서 `mysqld --initialize-insecure`, 디렉터리 초기화, `rm`, `install -d`로 데이터 경로를 바꾸는 명령을 실행하지 않는다.**
+> - `setup-ec2.sh`, MySQL drop-in, 애플리케이션 서비스의 EBS 의존성은 기존 서버에서도 제거하지 않는다. 계획에 따라 데이터를 옮긴 뒤 그대로 적용한다.
+
+전제: 4.3(`setup-ec2.sh`)으로 MySQL 패키지가 설치되어 있다. 패키지는 `/var/lib/mysql`에 기본 데이터를 만들고 기동했을 수 있다. 아래 순서를 지킨다.
 
 순서가 중요하다. AppArmor 규칙을 먼저 넣고 프로필을 다시 읽힌 뒤에야 `/data/mysql`에서 초기화하고 기동한다.
 
@@ -159,7 +168,7 @@ sudo bash deploy/scripts/setup-ec2.sh
    sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.mysqld
    ```
 
-6. **빈 디렉터리일 때만** 초기화한다. 파일이 하나라도 있으면 아무것도 하지 않고 멈춘다.
+6. **빈 디렉터리일 때만** 초기화한다. 파일이 하나라도 있으면 아무것도 하지 않고 멈춘다. **기존 데이터가 있는 서버에서는 이 단계를 실행하지 않는다.** 위의 적용 대상 구분을 따른다.
 
    ```bash
    if [ -z "$(sudo ls -A /data/mysql)" ]; then
@@ -629,7 +638,7 @@ Nginx 설정은 IPv4 전용이다. 검증 기록 (PR #49 후속, 로컬 호스�
 - `./gradlew bootJar`: 성공.
 - `bash -n`: `deploy/scripts/*.sh`, `deploy/tests/*.sh` 전부 통과.
 - `deploy/tests/test-deploy-rollback.sh`: 22개 검사 통과. 가짜 `systemctl`, `curl`, `aws`, `id`를 쓴다. 케이스: SHA 불일치, 새 버전 재시작 실패 → 복구, 헬스 실패 → 복구, 기동 실패(active 아님) → 복구, 이전 버전 재시작도 실패 → 복구 실패 보고(코드 3), 최초 배포 헬스 실패와 재시작 실패 → 이전 버전 없음 보고(코드 4), 최초 배포 성공, `rollback.sh` 재시작 실패 보고, `rollback.sh` 정상 롤백.
-- `deploy/tests/test-mount-data-volume.sh`: 9개 검사 통과.
+- `deploy/tests/test-mount-data-volume.sh`: 30개 검사 통과. 파일 시스템 분기와 fstab 줄(9개), 가짜 명령으로 마운트 UUID 검증 (이미 올바른 UUID가 마운트됨 → 성공, 다른 UUID의 ext4가 마운트됨 → 실패와 fstab 불변, 마운트되지 않음 → 마운트 후 UUID 검증, 마운트 후 UUID 불일치와 비 ext4 → 실패, 마운트 명령 실패, 포맷 후 마운트와 검증, 포맷 옵션 없음 중단).
 - `deploy/tests/test-mysql-dropin.sh`: MySQL drop-in 내용, 설치 경로, `setup-ec2.sh`의 설치와 daemon-reload 순서, `systemd-analyze verify` 구문 검사 (대조군으로 잘못된 키 검출 확인). 실제 systemd 부팅 순서는 검사하지 않았다.
 - `deploy/tests/test-ssm-wait.sh`: 워크플로 대기 단계 스크립트를 가짜 `aws`·`sleep`·`date`로 실행. Pending→Success, Failed, TimedOut, 한도 초과 케이스 통과. 대기 한도 1080초와 SSM 명령 제한 900초 확인. 파일 시스템 분기(서명 없음·옵션 없음 중단, 서명 없음·옵션 포맷, ext4 마운트만, ext4 + 포맷 옵션 무시, xfs·btrfs 중단), fstab 줄 형식, `mkfs.ext4`가 포맷 분기 안에서만 호출되는지.
 - 이전 작성 검사: 백업 스크립트 가짜 명령 시험(업로드 실패 시 로컬 보존, 성공 시 삭제), systemd 유닛 `systemd-analyze verify`, S3 수명 규칙 JSON, 워크플로 YAML 파싱.

@@ -7,6 +7,10 @@
 #   - ext4가 있는 장치: 포맷하지 않고 마운트한다. --format-new-volume 은 무시한다.
 #   - 그 밖의 파일 시스템(xfs, btrfs 등): 포맷하지 않고, fstab도 쓰지 않고 중단한다.
 #     앱과 MySQL 설정은 ext4를 전제로 한다. 다른 파일 시스템이 필요하면 사람이 판단한다.
+# 마운트 UUID 검증 (PR #49 후속):
+#   - /data 가 이미 마운트되어 있으면, 그 마운트의 UUID가 입력 장치의 UUID와 같을 때만 성공한다.
+#     다르면 fstab과 기존 마운트를 건드리지 않고 즉시 실패한다.
+#   - /data 가 마운트되어 있지 않으면 fstab에 UUID 항목을 추가하고 마운트한 뒤, 실제 마운트의 UUID와 파일 시스템(ext4)을 확인한다.
 # fstab은 UUID 기반이며 nofail을 붙인다. 볼륨이 없어도 부팅은 멈추지 않는다 (MySQL 유닛은 RequiresMountsFor로 기다린다).
 #
 # 함수 모음은 source 해서 테스트할 수 있다. 직접 실행할 때만 main을 호출한다.
@@ -42,11 +46,60 @@ build_fstab_line() {
   echo "UUID=$1 $MOUNT_POINT $REQUIRED_FS defaults,nofail 0 2"
 }
 
+# 장치가 블록 장치인지 확인한다. 테스트에서는 이 함수를 바꿔 쓴다.
+is_block_device() {
+  [ -b "$1" ]
+}
+
+# 현재 MOUNT_POINT에 마운트된 파일 시스템의 UUID (마운트되지 않았거나 UUID가 없으면 빈 문자열).
+mounted_uuid() {
+  findmnt -no UUID "$MOUNT_POINT" 2>/dev/null || true
+}
+
+# 현재 MOUNT_POINT에 마운트된 파일 시스템 종류 (없으면 빈 문자열).
+mounted_fstype() {
+  findmnt -no FSTYPE "$MOUNT_POINT" 2>/dev/null || true
+}
+
+# /data 의 마운트 상태를 장치 UUID와 대조해 다음 중 하나를 출력한다.
+#   mount    : 마운트되어 있지 않다. 이 스크립트가 마운트해야 한다. (종료 코드 0)
+#   already  : 이미 마운트되어 있고 UUID가 장치와 같다. 마운트하지 않는다. (종료 코드 0)
+#   mismatch : 다른 것이 마운트되어 있다. 아무것도 바꾸지 않고 실패해야 한다. (종료 코드 20)
+# 인자: 장치 UUID
+decide_mount_state() {
+  local device_uuid="$1"
+  if ! mountpoint -q "$MOUNT_POINT"; then
+    echo "mount"; return 0
+  fi
+  if [ -n "$device_uuid" ] && [ "$(mounted_uuid)" = "$device_uuid" ]; then
+    echo "already"; return 0
+  fi
+  echo "mismatch"; return 20
+}
+
+# 실제 마운트를 검증한다. 장치 UUID와 파일 시스템 종류(ext4)가 모두 맞아야 통과한다.
+# 인자: 장치 UUID. 통과하면 종료 코드 0, 아니면 1과 이유를 출력한다.
+verify_mounted_volume() {
+  local device_uuid="$1" actual_uuid actual_fs
+  if ! mountpoint -q "$MOUNT_POINT"; then
+    echo "검증 실패: $MOUNT_POINT 이 마운트되어 있지 않습니다." >&2; return 1
+  fi
+  actual_uuid="$(mounted_uuid)"
+  actual_fs="$(mounted_fstype)"
+  if [ "$actual_uuid" != "$device_uuid" ]; then
+    echo "검증 실패: $MOUNT_POINT 의 UUID(${actual_uuid:-없음})가 장치 UUID(${device_uuid})와 다릅니다." >&2; return 1
+  fi
+  if [ "$actual_fs" != "$REQUIRED_FS" ]; then
+    echo "검증 실패: $MOUNT_POINT 의 파일 시스템이 ${REQUIRED_FS}가 아닙니다 (${actual_fs:-없음})." >&2; return 1
+  fi
+  return 0
+}
+
 main() {
   [ "$(id -u)" -eq 0 ] || { echo "root로 실행해야 합니다." >&2; exit 1; }
   local device="${1:-}" format_flag="${2:-}"
   [ -n "$device" ] || { echo "사용법: $0 <장치 경로> [--format-new-volume]" >&2; exit 1; }
-  [ -b "$device" ] || { echo "블록 장치가 아닙니다: $device" >&2; exit 1; }
+  is_block_device "$device" || { echo "블록 장치가 아닙니다: $device" >&2; exit 1; }
 
   local existing action rc
   existing="$(detect_fs_type "$device")"
@@ -75,6 +128,19 @@ main() {
   [ -n "$uuid" ] || { echo "UUID를 읽을 수 없습니다." >&2; exit 1; }
 
   mkdir -p "$MOUNT_POINT"
+
+  # 마운트 상태를 먼저 판정한다. 불일치면 fstab도 마운트도 건드리지 않고 실패한다.
+  set +e
+  local mount_state
+  mount_state="$(decide_mount_state "$uuid")"
+  rc=$?
+  set -e
+  if [ "$rc" -eq 20 ]; then
+    echo "중단: $MOUNT_POINT 에 다른 마운트가 있습니다 (UUID $(mounted_uuid), 장치 UUID ${uuid}). fstab과 기존 마운트를 바꾸지 않았습니다. 마운트 상태를 확인하세요: findmnt $MOUNT_POINT" >&2
+    exit 1
+  fi
+
+  # fstab 항목 추가는 판정이 통과한 뒤에만 한다.
   local fstab_line
   fstab_line="$(build_fstab_line "$uuid")"
   if ! grep -q "UUID=${uuid} " "$FSTAB_PATH"; then
@@ -83,21 +149,25 @@ main() {
     echo "fstab 추가: $fstab_line"
   fi
 
-  mountpoint -q "$MOUNT_POINT" || mount "$MOUNT_POINT"
-  systemctl daemon-reload
-  mount -a
-  mountpoint -q "$MOUNT_POINT" || { echo "마운트 확인 실패" >&2; exit 1; }
-
-  # 마운트된 실제 파일 시스템도 ext4인지 확인한다.
-  local mounted_fs
-  mounted_fs="$(findmnt -no FSTYPE "$MOUNT_POINT")"
-  [ "$mounted_fs" = "$REQUIRED_FS" ] || { echo "마운트된 파일 시스템이 ext4가 아닙니다: $mounted_fs" >&2; exit 1; }
+  if [ "$mount_state" = "mount" ]; then
+    systemctl daemon-reload
+    mount "$MOUNT_POINT"
+    if ! verify_mounted_volume "$uuid"; then
+      echo "마운트 후 검증에 실패했습니다. 장치와 fstab을 확인하세요. 데이터는 건드리지 않았습니다." >&2
+      exit 1
+    fi
+    echo "새로 마운트했고 검증했습니다: $device (UUID=$uuid, $REQUIRED_FS) -> $MOUNT_POINT"
+  else
+    if ! verify_mounted_volume "$uuid"; then
+      exit 1
+    fi
+    echo "이미 같은 볼륨이 마운트되어 있습니다: $device (UUID=$uuid, $REQUIRED_FS) -> $MOUNT_POINT"
+  fi
 
   if id mysql >/dev/null 2>&1 && [ -d "$MOUNT_POINT/mysql" ]; then
     chown -R mysql:mysql "$MOUNT_POINT/mysql"
     chmod 750 "$MOUNT_POINT/mysql"
   fi
-  echo "마운트 완료: $device (UUID=$uuid, $mounted_fs) -> $MOUNT_POINT"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
