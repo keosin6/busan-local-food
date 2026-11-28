@@ -79,15 +79,18 @@ EC2 설치 경로와 역할:
 | 인바운드 | 3306 | 없음 | MySQL 외부 공개 금지 |
 | 인바운드 | 8080 | 없음 | 앱 직접 공개 금지 (Nginx만 접근) |
 
-### 4.2 EBS 마운트 (MySQL 설치 전에 먼저)
+### 4.2 EBS 마운트 (EC2 초기 설정 4.3보다 먼저)
+
+사전 조건: 저장소를 EC2에 복사해 `deploy/` 디렉터리가 있어야 한다 (예: `git clone` 또는 `scp`). 마운트 스크립트는 설치된 사본이 아니라 저장소 안의 파일을 직접 실행한다. `/opt/busan-local-food/bin/`에는 아직 아무것도 없다 (4.3에서 설치).
 
 ```bash
-# 장치 이름 확인 (볼륨 크기로 구분)
+# 저장소 루트(deploy/ 가 보이는 디렉터리)에서 실행한다.
+# 장치 이름 확인 (볼륨 크기로 구분). 실제 장치 경로는 lsblk 결과로 정하고, 아래 예시 이름을 그대로 쓰지 않는다.
 lsblk
-# 새 볼륨인 경우에만 포맷 옵션을 준다. 기존 데이터가 있는 볼륨에는 옵션을 주지 않는다.
-sudo /opt/busan-local-food/bin/mount-data-volume.sh /dev/nvme1n1 --format-new-volume
-# 이미 포맷된 볼륨(재부팅·재연결)이면 옵션 없이 실행한다.
-sudo /opt/busan-local-food/bin/mount-data-volume.sh /dev/nvme1n1
+# 새 볼륨(서명 없음)인 경우에만 포맷 옵션을 준다. 기존 데이터가 있는 볼륨에는 옵션을 주지 않는다.
+sudo bash deploy/scripts/mount-data-volume.sh /dev/nvme1n1 --format-new-volume
+# 이미 ext4로 포맷된 볼륨(재부팅·재연결 등)이면 포맷 옵션 없이 실행한다. 옵션이 있어도 ext4 볼륨은 포맷하지 않는다.
+sudo bash deploy/scripts/mount-data-volume.sh /dev/nvme1n1
 ```
 
 - 파일 시스템 분기 (기존 데이터 보호 우선):
@@ -113,38 +116,79 @@ sudo bash deploy/scripts/setup-ec2.sh
 
 ### 4.4 MySQL 데이터 디렉터리를 `/data/mysql`로 옮기기 (최초 1회)
 
-Ubuntu 패키지는 `/var/lib/mysql`에 초기화된다. 아래 순서로 옮긴다. 이미 데이터가 있는 서버라면 이 절차를 건너뛰고 기존 경로를 유지한다.
+전제: 4.3(`setup-ec2.sh`)으로 MySQL 패키지가 설치되어 있다. 패키지는 `/var/lib/mysql`에 기본 데이터를 만들고 기동했을 수 있다. 아래 순서를 지킨다. **이미 데이터가 있는 서버라면 이 절차를 건너뛰고 기존 경로를 유지한다.**
 
-```bash
-sudo systemctl stop mysql
-sudo install -d -o mysql -g mysql -m 750 /data/mysql
-# 빈 디렉터리일 때만 초기화한다. 기존 데이터가 있으면 아래 조건이 실패해 여기서 멈춘다.
-if [ -z "$(ls -A /data/mysql)" ]; then
-  sudo mysqld --initialize-insecure --datadir=/data/mysql --user=mysql
-else
-  echo "/data/mysql 에 파일이 있습니다. 초기화하지 않고 중단합니다." >&2
-  exit 1
-fi
-sudo cp deploy/mysql/busan-mysql-datadir.cnf /etc/mysql/mysql.conf.d/99-busan.cnf
-```
+순서가 중요하다. AppArmor 규칙을 먼저 넣고 프로필을 다시 읽힌 뒤에야 `/data/mysql`에서 초기화하고 기동한다.
 
-AppArmor가 `/data/mysql`을 허용하도록 두 곳을 고친다.
+1. MySQL 서비스를 멈춘다.
 
-```bash
-# /etc/apparmor.d/tunables/alias 에 한 줄 추가:
-#   alias /var/lib/mysql/ -> /data/mysql/,
-# /etc/apparmor.d/local/usr.sbin.mysqld 에 추가:
-#   /data/mysql/ r,
-#   /data/mysql/** rwk,
-sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.mysqld
-sudo systemctl start mysql
-sudo systemctl enable mysql
-```
+   ```bash
+   sudo systemctl stop mysql
+   ```
 
-- `sudo systemctl status mysql`로 기동을 확인하고, `SELECT @@datadir;`이 `/data/mysql/`인지 확인한다.
+2. `/data/mysql` 디렉터리를 만들고 권한을 준다. (이 단계는 파일을 만들거나 지우지 않는다.)
+
+   ```bash
+   sudo install -d -o mysql -g mysql -m 750 /data/mysql
+   ```
+
+3. AppArmor alias를 추가한다. 같은 줄이 이미 있으면 추가하지 않는다 (반복 실행해도 중복되지 않는다).
+
+   ```bash
+   ALIAS_FILE=/etc/apparmor.d/tunables/alias
+   ALIAS_LINE='alias /var/lib/mysql/ -> /data/mysql/,'
+   sudo grep -qxF "$ALIAS_LINE" "$ALIAS_FILE" || echo "$ALIAS_LINE" | sudo tee -a "$ALIAS_FILE" >/dev/null
+   ```
+
+4. mysqld 로컬 규칙을 추가한다. 역시 같은 줄이 있으면 건너뛴다.
+
+   ```bash
+   LOCAL_FILE=/etc/apparmor.d/local/usr.sbin.mysqld
+   sudo install -d -m 755 /etc/apparmor.d/local
+   sudo touch "$LOCAL_FILE"
+   for RULE in '/data/mysql/ r,' '/data/mysql/** rwk,'; do
+     sudo grep -qxF "$RULE" "$LOCAL_FILE" || echo "$RULE" | sudo tee -a "$LOCAL_FILE" >/dev/null
+   done
+   ```
+
+5. AppArmor 프로필을 다시 읽힌다.
+
+   ```bash
+   sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.mysqld
+   ```
+
+6. **빈 디렉터리일 때만** 초기화한다. 파일이 하나라도 있으면 아무것도 하지 않고 멈춘다.
+
+   ```bash
+   if [ -z "$(sudo ls -A /data/mysql)" ]; then
+     sudo mysqld --initialize-insecure --datadir=/data/mysql --user=mysql
+   else
+     echo "/data/mysql 에 파일이 있습니다. 초기화하지 않고 중단합니다. 기존 데이터를 확인하세요." >&2
+     exit 1
+   fi
+   ```
+
+   `--initialize-insecure`는 root 비밀번호를 비워 둔다. 기동 직후 계정 설정 전까지 root는 소켓 접속(`sudo mysql`)으로만 관리한다.
+
+7. 데이터 경로 설정 파일을 적용하고 MySQL을 기동한다.
+
+   ```bash
+   sudo cp deploy/mysql/busan-mysql-datadir.cnf /etc/mysql/mysql.conf.d/99-busan.cnf
+   sudo systemctl start mysql
+   sudo systemctl enable mysql
+   sudo systemctl status mysql --no-pager
+   ```
+
+8. 실제 데이터 경로를 확인한다. `/data/mysql/`이어야 한다.
+
+   ```bash
+   sudo mysql -e 'SELECT @@datadir;'
+   ```
+
 - 데이터 디렉터리 권한은 `mysql:mysql`, 750이어야 한다.
+- 기동 실패 시 `sudo journalctl -u mysql -n 100`과 `sudo dmesg | grep -i apparmor`로 원인을 찾는다.
 
-> 검증 필요: AppArmor 규칙과 `mysqld --initialize-insecure` 경로는 실제 Ubuntu 24.04에서 확인하지 않았다. 실패하면 `journalctl -u mysql`과 `dmesg | grep -i apparmor`로 원인을 찾는다.
+> 미검증: 위 AppArmor 규칙, alias 문법, `apparmor_parser -r`, `mysqld --initialize-insecure` 경로는 실제 Ubuntu 24.04 EC2에서 확인하지 않았다. 검증 완료로 기록하지 않는다.
 
 ### 4.5 DB와 계정 생성 (최초 1회)
 
@@ -515,7 +559,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1/            # Nginx �
 curl -s -o /dev/null -m 5 -w '%{http_code}\n' http://<EC2 사설 IP>:8080/   # 000이어야 한다 (연결 거부)
 ```
 
-검증 기록 (PR #49 후속, 로컬 호스트, EC2 아님): 바인딩 수정 전 jar는 `0.0.0.0:8080`(모든 주소)에 떴다. 수정 후 jar는 `127.0.0.1:8080`만 열고, 사설 IP 접속은 거부되었다. 저장소의 Nginx 설정(IPv6 줄 제외 사본)으로 `:80` 요청이 앱까지 전달되어 200을 받았다. 7MB 업로드는 Nginx에서 413, 3KB 요청은 앱까지 전달되었다 (403: CSRF 토큰 없음). **EC2에서의 확인은 아직 하지 않았다.**
+Nginx 설정은 IPv4 전용이다. 검증 기록 (PR #49 후속, 로컬 호스트, EC2 아님): 바인딩 수정 전 jar는 `0.0.0.0:8080`(모든 주소)에 떴다. 수정 후 jar는 `127.0.0.1:8080`만 열고, 사설 IP 접속은 거부되었다. 저장소의 Nginx 설정(IPv6 줄 제외 사본)으로 `:80` 요청이 앱까지 전달되어 200을 받았다. 7MB 업로드는 Nginx에서 413, 3KB 요청은 앱까지 전달되었다 (403: CSRF 토큰 없음). **EC2에서의 확인은 아직 하지 않았다.**
 
 ## 12. 로그와 임시 파일 관리
 
@@ -560,10 +604,13 @@ curl -s -o /dev/null -m 5 -w '%{http_code}\n' http://<EC2 사설 IP>:8080/   # 0
 - 이전 작성 검사: 백업 스크립트 가짜 명령 시험(업로드 실패 시 로컬 보존, 성공 시 삭제), systemd 유닛 `systemd-analyze verify`, S3 수명 규칙 JSON, 워크플로 YAML 파싱.
 - `git diff --check`: 통과 (결과는 PR 보고 참고).
 
+- 배포 사전 점검 (PR #49, 2026-11-28, 로컬 호스트): Nginx 저장소 설정을 직접 `nginx -t`로 검사했다. 이 호스트에는 IPv6가 없다. 이전 설정(`listen [::]:80`)은 실패, 새 설정(IPv4 전용)은 통과. EBS 장치 경로 점검은 입력만 확인했다 (`/dev/null`과 인자 없음은 종료 코드 1로 거부). 실제 장치는 건드리지 않았다. AppArmor와 MySQL 기동 순서는 로컬 MySQL로 재현하지 않았다.
+
 ### 14.2 실행하지 않은 것 (미검증)
 
 - 실제 EC2 생성, EBS 마운트, 재부팅 후 자동 마운트
-- MySQL 설치, AppArmor 규칙, 데이터 디렉터리 이동, SQL 001~008 적용
+- MySQL 설치, AppArmor 규칙(alias, 로컬 규칙, `apparmor_parser -r`), 데이터 디렉터리 이동, `mysqld --initialize-insecure`, SQL 001~008 적용
+- EC2에서의 `nginx -t`와 `ss -ltn`에 의한 리스닝 확인
 - 실제 S3 업로드·다운로드, 이미지 표시
 - 실제 IAM 권한, GitHub OIDC 인증, SSM 배포
 - 백업 실행, S3 업로드 검증, 복구
@@ -586,7 +633,7 @@ curl -s -o /dev/null -m 5 -w '%{http_code}\n' http://<EC2 사설 IP>:8080/   # 0
 | 신규 | 도메인 없는 동안 로그인 불가 (8절) | 도메인 연결 시 해소 |
 | 신규 | Google OAuth 운영 값 필요 (8절) | Google Console 설정 필요 |
 | 해결 | CI DB 테스트 | 워크플로에 MySQL 8 서비스 컨테이너를 추가해 DB 테스트를 실행하고, 건너뜀이 있으면 실패한다 (이 PR) |
-| 확인 필요 | Nginx 설정의 `listen [::]:80`은 IPv6가 꺼진 호스트에서 `nginx -t`를 실패시킨다. 그러면 `setup-ec2.sh`가 중단된다. 조건부 설정 또는 확인 후 제거를 검토한다 (후속) |
+| 해결 | Nginx IPv6 | 저장소 Nginx 설정을 IPv4 전용(`listen 80 default_server`)으로 바꿨다. IPv6 listen은 두지 않는다. 이 호스트(IPv6 없음)에서 이전 설정은 `nginx -t` 실패, 새 설정은 통과를 확인했다. EC2의 IPv6 상태와 무관하게 동작해야 한다는 점은 EC2에서 `nginx -t`로 확인한다 |
 | 기존 | 여러 인스턴스 사이의 S3 재시도 동시 실행 미방지 | 단일 인스턴스 운영 전제 |
 | 기존 | `GlobalExceptionHandlerTest` 시간 의존 간헐 실패 | 별도 수정 필요 |
 | 기존 | 공개 요약 API 요청 제한 없음 | 후속 과제 |

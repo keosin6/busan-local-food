@@ -1126,6 +1126,13 @@
 - Nginx: 저장소 설정의 IPv6 줄을 뺀 사본으로 `:80` → 앱 프록시 200, 7MB 업로드 413 확인. 저장소 파일 자체는 IPv6가 없는 호스트에서 `nginx -t`가 실패할 수 있다 (15절 후속 항목).
 - 미검증: EC2에서의 `ss` 결과와 Nginx 연결. 실제 Ubuntu 24.04 EC2 확인은 하지 않았다.
 
+### 6.46 Stage 11 배포 사전 점검 수정 (PR #49, 2026-11-28)
+
+- EBS 마운트 실행 경로: 문서가 설치되지 않은 `/opt/busan-local-food/bin/mount-data-volume.sh`를 가리키던 문제를 고쳤다. 이제 저장소의 `deploy/`를 EC2에 복사한 뒤 `sudo bash deploy/scripts/mount-data-volume.sh <장치> [--format-new-volume]`로 실행한다. EC2 초기 설정(4.3)보다 먼저 실행한다. 장치 경로는 `lsblk`로 확인한다. 설치 경로 참조가 남지 않았는지 문서 전체를 검색했다.
+- MySQL AppArmor 순서: 문서 4.4절을 다음 순서로 바꿨다. MySQL 중지, `/data/mysql` 생성, alias 추가, 로컬 규칙 추가, `apparmor_parser -r`, 빈 디렉터리 확인 뒤 초기화, 설정 적용과 기동, `SELECT @@datadir`. alias와 규칙 추가는 같은 줄이 있으면 건너뛰어 반복 실행해도 중복되지 않는다. 기존 데이터가 있는 `/data/mysql`은 초기화하지 않는다.
+- Nginx IPv6: `deploy/nginx/busan-local-food.conf`에서 `listen [::]:80 default_server;`를 뺐다. 기본 구성은 IPv4 80 전용이며 HTTPS 예시도 IPv4 전용이다. IPv6 지원은 확인하지 않았으므로 문서에 지원된다고 쓰지 않는다. 이 호스트(IPv6 없음)에서 이전 설정은 `nginx -t`가 실패했고, 새 설정은 통과했다.
+- 검증 범위: 위 세 항목 중 EBS 실제 마운트, AppArmor 규칙 적용, MySQL 초기화와 기동, EC2에서의 `nginx -t`는 실제 Ubuntu 24.04 EC2에서 확인하지 않았다. 미검증으로 유지한다.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
