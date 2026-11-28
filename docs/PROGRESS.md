@@ -12,12 +12,12 @@
 | Q1~Q6 문서 반영 | 완료 — PR #2로 main 병합 |
 | 인증 구조 보완 (JWT 기본 인증과 OAuth2 임시 세션 구분) | 완료 — PR #2에 포함되어 main 병합. Q1 결정 변경 없음 |
 | Stage 1 프로젝트 기본 구조 | 완료 — 기본 골격 구현과 검증 완료, PR #3으로 `main` 병합 (2026-11-09). 기능 코드는 포함하지 않음 |
-| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR #30(`main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지 `/rate-limited`. **PR #35(`main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호(JWT 쿠키 단독 인증 불가, CSRF 유지). **보호 화면**: 찜 목록·찜 제출(PR #45, `main` 병합 완료), `/recommend`(PR #46, `main` 병합 완료)도 세션 인증으로 보호된다. **남은 작업**: 회원 탈퇴 기능은 이번 F1-09 범위에서 제외(T1, API 없음). 관리자 화면 `/admin/**`(F1-09)은 ADMIN 권한으로 보호되며 PR #48 병합 대기 상태다. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 나머지는 아래 7절 |
+| Stage 2 F1-01 회원·인증 | 진행 중. **`main` 병합 완료 (PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`)**: 회원·Refresh Token 엔티티와 수동 SQL 001~003, 회원가입·로그인 검증 서비스, JWT Access Token 발급·검증, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API JWT 인증 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종과 JWT 쿠키 처리, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃과 화면 세션, 세션 고정 방어, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백, Google 신규 가입과 닉네임 설정, Google 로그인·닉네임 제출 요청 제한. **PR #30(`main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22)**: Google 계정 연결·해제, 로컬 비밀번호 설정, `/mypage`, 화면용 429 안내 페이지 `/rate-limited`. **PR #35(`main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호(JWT 쿠키 단독 인증 불가, CSRF 유지). **보호 화면**: 찜 목록·찜 제출(PR #45, `main` 병합 완료), `/recommend`(PR #46, `main` 병합 완료)도 세션 인증으로 보호된다. **남은 작업**: 회원 탈퇴 기능은 이번 F1-09 범위에서 제외(T1, API 없음). 관리자 화면 `/admin/**`(F1-09)은 ADMIN 권한으로 보호되며 PR #48로 `main` 병합 완료 상태다 (merge commit `4a2a11c`). T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 나머지는 아래 7절 |
 | Stage 2 F1-02 맛집 관리 | 완료 — `main` 병합 (PR #37, merge commit `1f885dd`, 6.27·6.28). 카테고리 시드, 맛집 등록·수정·삭제, 목록·검색·정렬·페이지, 상세, 작성자 소유권 검사, 위도·경도 쌍 검증, 페이지 이동 시 검색 조건 유지. 이미지·리뷰·찜 연동은 아직 없음 |
-| Stage 3 F1-03 맛집 이미지 | `main` 병합 완료 — PR #39 (merge commit `123db18`, 6.30·6.31). S3 업로드·삭제, 이미지 메타데이터(SQL 005), `storage_delete_task`, 목록 썸네일, 상세 갤러리, 수정 화면 사진 관리, 삭제·업로드 동시성 잠금. 실제 AWS 버킷 검증은 배포 단계. 자동 재시도는 없고, 관리자 수동 재시도는 F1-09에서 구현(PR #48 병합 대기) |
+| Stage 3 F1-03 맛집 이미지 | `main` 병합 완료 — PR #39 (merge commit `123db18`, 6.30·6.31). S3 업로드·삭제, 이미지 메타데이터(SQL 005), `storage_delete_task`, 목록 썸네일, 상세 갤러리, 수정 화면 사진 관리, 삭제·업로드 동시성 잠금. 실제 AWS 버킷 검증은 배포 단계. 자동 재시도는 없고, 관리자 수동 재시도는 F1-09에서 구현(PR #48 `main` 병합 완료, merge commit `4a2a11c`) |
 | Stage 5 F1-04 리뷰 | `main` 병합 완료 — PR #41 (merge commit `0f8b1f8`, 6.32·6.33). 작성(평점 1~5, 맛집당 한 번), 최신순 목록, 본인 삭제, 평균 평점과 리뷰 수의 잠금 기반 동기화, 맛집 삭제 시 리뷰 정리. AI 요약 캐시 무효화는 F1-05 |
 | Stage 6 F1-05 AI 리뷰 요약 | `main` 병합 완료 — PR #43 (merge commit `39532fa`, 6.34·6.35). Spring AI 1.1.8 OpenAI 스타터로 OpenRouter 호출. 3개 이상 맛집만 OpenRouter 요약, `ai_review_summary` 캐싱, 리뷰 작성·삭제 시 무효화, 동시 요청 공유, 실패는 UNAVAILABLE. 실제 OpenRouter 호출과 운영 설정은 미검증 |
-| **다음 개발 단계** | PR #48(F1-09) 병합 확인 후 배포 준비(Stage 11, EC2·MySQL·GitHub Actions)로 넘어간다. 기능 단계 F1-01~F1-09의 구현은 끝났다. F1-09 관리자 기능은 구현 완료, PR #48 병합 대기(6.41). 회원 정지·탈퇴는 이번 범위에서 제외(T1). F1-08 메인 홈페이지는 `main` 병합 완료(PR #47, `7b20233`, 6.40). F1-07 AI 맛집 추천은 `main` 병합 완료(PR #46, `9206026`, 6.39). F1-06 찜하기·찜 목록은 `main` 병합 완료(PR #45, `c9cb668`, 6.37·6.38). F1-02(PR #37), F1-03(PR #39), F1-04(PR #41), F1-05(PR #43)은 `main` 병합 완료. 상세는 7절 |
+| **다음 개발 단계** | Stage 11 배포 기반(파일·문서)은 `feat/stage11-deployment-foundation`에서 PR로 올린다(6.42). 병합 뒤 사용자가 AWS에서 EC2·EBS·MySQL·S3·IAM·OIDC를 설정하고, 그 뒤 실제 배포와 백업·복구를 검증한다. 기능 단계 F1-01~F1-09의 구현은 끝났다. F1-09 관리자 기능은 `main` 병합 완료(PR #48, merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴는 이번 범위에서 제외(T1). F1-08 메인 홈페이지는 `main` 병합 완료(PR #47, `7b20233`, 6.40). F1-07 AI 맛집 추천은 `main` 병합 완료(PR #46, `9206026`, 6.39). F1-06 찜하기·찜 목록은 `main` 병합 완료(PR #45, `c9cb668`, 6.37·6.38). F1-02(PR #37), F1-03(PR #39), F1-04(PR #41), F1-05(PR #43)은 `main` 병합 완료. 상세는 7절 |
 
 ## 1. 단계 요약
 
@@ -25,7 +25,7 @@
 |------|------|------|------|
 | 0 | 문서 기획 (기초 구조 + Q1~Q6 의사결정 반영) | 완료 | 2026-11-06 |
 | 1 | 프로젝트 기본 구조 (Gradle, Spring Boot 3.5.16, Java 21, 설정 프로필 local/prod, 공통 오류 응답, Security 기본 설정, Bootstrap 5 홈 화면) | 완료 | CI 파이프라인은 Stage 11로 이월. T9 확정 (Testcontainers 미도입) |
-| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **PR #35(6.26, `main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호. **보호 화면**: 찜 목록·찜 제출(PR #45, `main` 병합 완료), `/recommend`(PR #46, `main` 병합 완료)도 세션 인증으로 보호된다. **남은 작업**: 회원 탈퇴 기능은 이번 F1-09 범위에서 제외(T1, API 없음). 관리자 화면 `/admin/**`(F1-09)은 ADMIN 권한으로 보호되며 PR #48 병합 대기 상태다. T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
+| 2 | F1-01 회원·인증 (화면 세션 로그인, API JWT, Refresh Token 로테이션, Google 로그인·수동 연동/해제, 로그아웃) | 진행 중. `main` 병합 완료(PR #17 `9f881a0`, PR #19 `dd147e3`, PR #23 `56faff2`, PR #25 `d1b9e1d`, PR #28 `37df8e0`, PR #30 `05778895`): 회원·DB 기반, 회원가입·로그인 검증 서비스, JWT Access Token, Refresh Token 발급·회전·재사용 탐지·로그아웃 폐기, 요청 제한 서비스 R1~R10, 공통 429와 `Retry-After`, 회원가입 집계 필터, API·화면 SecurityFilterChain 분리, Bearer·쿠키 인증, API CSRF 정책, API 인증 HTTP 5종, 로그인·재발급 요청 제한 HTTP 연결, 화면 회원가입·로그인·로그아웃, T12 서버 측 로그아웃 승인, Google 로그인 시작·콜백과 Google 신규 가입·닉네임 설정. **PR #30(6.22, `main` 병합 완료, merge commit `05778895c03da90ad56570e5ddae3485acc97ba9`)**: Google 계정 연결·해제(2.6, 2.6.1, 2.7), 로컬 비밀번호 설정(2.7.1), `/mypage`, 화면용 429 안내. **PR #35(6.26, `main` 병합 완료, merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`)**: `/restaurants/new`·`/restaurants/{id}/edit` 화면 세션 인증 보호. **보호 화면**: 찜 목록·찜 제출(PR #45, `main` 병합 완료), `/recommend`(PR #46, `main` 병합 완료)도 세션 인증으로 보호된다. **남은 작업**: 회원 탈퇴 기능은 이번 F1-09 범위에서 제외(T1, API 없음). 관리자 화면 `/admin/**`(F1-09)은 ADMIN 권한으로 보호되며 PR #48로 `main` 병합 완료 상태다 (merge commit `4a2a11c`). T13 프런트엔드 자동 갱신은 PR #32로 `main` 병합 완료. T20 프런트엔드 429 처리는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`) | 인증 설계 결정 완료 (T3, T7, T8, T11, T12, T13, T14 A안, 2026-11-10). 서비스 계층과 HTTP 연결은 6.2~6.21 |
 | 3 | F1-02 맛집 관리 + F1-08 메인 페이지 기본 | F1-02 완료 (PR #37 병합, `1f885dd`). F1-08 메인 홈 `main` 병합 완료 (PR #47, `7b20233`, 6.40) | 카테고리 시드 포함, 작성자 권한 |
 | 4 | F1-03 맛집 이미지 (S3 업로드, `storage_delete_task` 추적) | `main` 병합 완료 (PR #39, 6.30·6.31). AWS 버킷 검증은 배포 단계 | 의존: F1-02 (완료). T6 확인 |
 | 5 | F1-04 리뷰 | `main` 병합 완료 — PR #41 (6.32·6.33) | 평균 평점 포함 |
@@ -33,8 +33,8 @@
 | 7 | F1-06 찜 | `main` 병합 완료 — PR #45 (`c9cb668`, 6.37·6.38) | |
 | 8 | F1-07 AI 맛집 추천 | `main` 병합 완료 — PR #46 (`9206026`, 6.39). `/recommend` 세션 인증 보호 | 의존: F1-02, F1-05 (AI 연동). T10 (모델 설정) |
 | 9 | F1-08 메인 페이지 완성 (최신 맛집, 카테고리 연결) | `main` 병합 완료 — PR #47 (`7b20233`, 6.40) | 의존: F1-02 |
-| 10 | F1-09 관리자 기능 (role, `/admin/**`, `/api/admin/**`, 대시보드, S3 재시도) | 구현 완료 — PR #48 병합 대기 (6.41). 회원 정지·탈퇴·권한 변경은 이번 범위 제외(T1, T2) | 의존: F1-01, F1-02, F1-03, F1-04. T1 범위 제외 |
-| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 미착수 | T4, T5 확정 필요 |
+| 10 | F1-09 관리자 기능 (role, `/admin/**`, `/api/admin/**`, 대시보드, S3 재시도) | `main` 병합 완료 — PR #48 (merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴·권한 변경은 이번 범위 제외(T1, T2) | 의존: F1-01, F1-02, F1-03, F1-04. T1 범위 제외 |
+| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 배포 기반 파일·문서 작성 완료, PR #49 병합 대기 (6.42, 후속 수정 6.43). 실제 AWS 리소스 생성·배포·백업 복구는 미검증 | T4, T5, T22 결정 (6.42·6.43). 이미지 공개 방식 T21은 권장안 검토 중. 상세는 `docs/DEPLOYMENT.md` |
 
 ## 2. 기능별 상태
 
@@ -42,13 +42,13 @@
 |----|------|------|--------|----------------|
 | F1-01 | 회원가입, 이메일 로그인, 로그아웃, 화면 세션 + API JWT(Refresh Token 로테이션), Google 로그인, Google 계정 수동 연동·해제 | 진행 중 | 아래 수치는 작업 당시 보고값이며 현재 `main`에서 이번 문서 작업으로 새로 실행한 결과가 아닙니다. (1) PR #19 (커밋 `eceb2e8`): DB 연결 340/340, DB 미설정 288 통과·52 건너뜀. (2) PR #23 (커밋 `e7c5059`): DB 연결 382/382, DB 미설정 323 통과·59 건너뜀. (3) PR #26 보완 HEAD (`8e3df87`): DB 연결 429/429, DB 미설정 362 통과·67 건너뜀. (4) PR #28 (병합 커밋 `37df8e0`): DB 연결 484/484 통과, DB 미설정 408 통과·76 건너뜀, 실패 0, bootJar 성공. (5) PR #30 (`feat/stage2-4-google-account-linking`, `main` 병합 커밋 `05778895c03da90ad56570e5ddae3485acc97ba9`, 6.22, **PR #30 최종 HEAD 기준 보고값. 이번 문서 PR에서 재실행하지 않음**): `./gradlew clean test` 테스트 DB 연결 시 536개 실행, 건너뜀 0, 실패 0. 테스트 DB 미설정 시 536개 중 453 통과·83 건너뜀·실패 0. `bootJar` 성공. `git diff --check` 통과. 요청 제한 집계 필터 12개와 공통 429·fail-closed 2개 포함 (6.15). 웹 계층 테스트(MockMvc)는 화면·API 인증과 Google OAuth2 엔드포인트 포함. (6) PR #35 (`feat/stage2-4-protected-restaurant-screens`, `main` 병합 커밋 `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26, **PR #35 당시 보고값. 이번 문서 PR에서 재실행하지 않음**): DB 미설정 `./gradlew clean test` 551개 중 83 건너뜀, 실패 0. 테스트 DB 설정(MySQL 8.0.46) 551개 실행, 실패 0. `bootJar` 성공. | 명세 반영 완료. 인증 설계 확정(T3, T7, T8, T11, T12, T13, T14 A안). API 인증 HTTP 5종, 화면 인증, T12 승인, Google 로그인 시작·콜백과 신규 가입·닉네임 설정은 `main` 병합 완료(PR #23, #25, #26, #28). Google 계정 연동·해제와 로컬 비밀번호 설정은 PR #30(6.22, `main` 병합 완료)로 구현. 프런트엔드 Access Token 자동 갱신(T13)은 PR #32로 `main` 병합 완료, 프런트엔드 429 처리(T20)는 PR #33으로 `main` 병합 완료(merge commit `d861d808f930d42519bb717ef978804460c7f24e`, 6.25). 맛집 등록·수정 화면 세션 인증 보호는 PR #35로 `main` 병합 완료(merge commit `57a1bcef6c33779a351f053a0bce9d19c67aa00c`, 6.26). |
 | F1-02 | 맛집 등록, 수정, 삭제(완전 삭제), 목록, 카테고리, 검색 | 구현 완료 (`main` 병합 PR #37, `1f885dd`). 삭제 흐름의 이미지·S3·자식 행 처리는 F1-03 이후 | PR #37 당시 실행값: DB 미설정 610개 중 93 건너뜀, 실패 0. 테스트 DB 설정 610개 실행, 실패 0 (6.27, 6.28) | 명세 반영 완료 (Q2, Q5). 구현 차이는 API_SPEC 4절, FUNCTION_SPEC F1-02에 기록 |
-| F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적 | `main` 병합 완료 (PR #39). 자동 재시도 없음. 관리자 수동 재시도는 F1-09에서 구현(PR #48 병합 대기) | 기존 실행 기록(6.30 후속): DB 미설정 681개 중 112 건너뜀, 실패 0. 테스트 DB 설정 681개 실행, 실패 0 (이번 문서 작업에서 새로 실행하지 않음) | 명세 반영 완료 (Q2). 구현 차이는 API_SPEC 5절, FUNCTION_SPEC F1-03 |
+| F1-03 | 맛집 이미지 AWS S3 업로드, 삭제 실패 추적 | `main` 병합 완료 (PR #39). 자동 재시도 없음. 관리자 수동 재시도는 F1-09에서 구현(PR #48 `main` 병합 완료, merge commit `4a2a11c`) | 기존 실행 기록(6.30 후속): DB 미설정 681개 중 112 건너뜀, 실패 0. 테스트 DB 설정 681개 실행, 실패 0 (이번 문서 작업에서 새로 실행하지 않음) | 명세 반영 완료 (Q2). 구현 차이는 API_SPEC 5절, FUNCTION_SPEC F1-03 |
 | F1-04 | 리뷰 작성 및 삭제 (본인만), 평점, 평균 평점 | `main` 병합 완료 (PR #41, 6.32·6.33) | 6.32 참조: DB 미설정 727개 중 133 건너뜀, 실패 0. 테스트 DB 설정 727개 실행, 실패 0 | 명세 반영 완료 (Q5). 구현 차이는 API_SPEC 6절, FUNCTION_SPEC F1-04 |
 | F1-05 | 리뷰 3개 이상 AI 요약 및 DB 캐싱 | `main` 병합 완료 (PR #43, `39532fa`, 6.34·6.35). 실제 OpenRouter 호출은 미검증 | PR #43 보고값(6.35 최종, 이번 문서 작업에서 새로 실행하지 않음): DB 미설정 767개 중 145 건너뜀, 실패 0. 테스트 DB 설정 767개 실행, 실패 0 | 명세 반영 완료 (Q6). 구현 차이는 API_SPEC 7절, FUNCTION_SPEC F1-05 |
 | F1-06 | 찜하기 및 찜 목록 | `main` 병합 완료 — PR #45 (`c9cb668`, 6.37·6.38). 맛집 목록 카드의 찜 버튼 포함 | PR #45 보고값(이번 문서 작업에서 새로 실행하지 않음): 테스트 DB 설정 820개 실행, 건너뜀 0, 실패 0. DB 미설정 820개 중 165 건너뜀, 실패 0 | 명세 반영 완료. 구현 차이는 API_SPEC 8절, FUNCTION_SPEC F1-06 |
 | F1-07 | DB 등록 맛집 대상 AI 추천 | `main` 병합 완료 — PR #46 (`9206026`, 6.39). 추천 화면 `/recommend`와 API `POST /api/recommendations` | 6.39 실행값: DB 미설정 853개 중 167 건너뜀, 실패 0. 테스트 DB 설정 853개 실행, 건너뜀 0, 실패 0. F1-07 신규 33개(서비스 15, API 7, 화면 9, DB 2) | 명세 반영 완료 (Q6). 구현 차이는 API_SPEC 9절, FUNCTION_SPEC F1-07 |
 | F1-08 | 메인 페이지, 카테고리 및 최신 맛집 | `main` 병합 완료 — PR #47 (`7b20233`, 6.40). 홈 API 변경 없음 | 6.40 실행값: 테스트 DB 설정 865개 실행, 건너뜀 0, 실패 0. DB 미설정 865개 중 170 건너뜀, 실패 0. F1-08 신규 12개(HTTP 9, DB 3) | 명세 반영 완료. 구현 차이는 6.40 |
-| F1-09 | 관리자 기능 (USER/ADMIN, 관리자 화면·API, 대시보드, S3 재시도) | 구현 완료 — PR #48 병합 대기 (6.41). T1 회원 정지·탈퇴는 이번 범위 제외, T2 역할 변경 경로 없음(A안) | 6.41 실행값: 테스트 DB 설정 913개 실행, 건너뜀 0, 실패 0. DB 미설정 913개 중 191 건너뜀, 실패 0. 신규 48개(DB 21, 비DB 27) | 명세 반영 완료 (Q5). 구현 차이는 FUNCTION_SPEC F1-09 |
+| F1-09 | 관리자 기능 (USER/ADMIN, 관리자 화면·API, 대시보드, S3 재시도) | `main` 병합 완료 — PR #48 (merge commit `4a2a11c`, 6.41). T1 회원 정지·탈퇴는 이번 범위 제외, T2 역할 변경 경로 없음(A안) | 6.41 실행값: 테스트 DB 설정 913개 실행, 건너뜀 0, 실패 0. DB 미설정 913개 중 191 건너뜀, 실패 0. 신규 48개(DB 21, 비DB 27) | 명세 반영 완료 (Q5). 구현 차이는 FUNCTION_SPEC F1-09 |
 
 ## 3. 결정 현황 (Q1~Q6, T3, T7, T8, T11~T18, T20)
 
@@ -79,9 +79,11 @@
 |------|------|-----------|
 | T1 | 회원 정지·탈퇴 정책 | 결정됨 (A안, 2026-11-27). 이번 F1-09 범위에서 제외. 회원 정지·탈퇴 기능과 API는 구현하지 않음 |
 | T2 | 관리자 권한 부여·변경 방식, 최초 관리자 생성 방법 | 결정됨 (A안, 2026-11-27). 관리자 화면·API에 역할 변경 없음. 최초 관리자는 MySQL에서 직접 지정 |
-| T4 | DB 백업 주기, 보관 기간, 저장 위치, 복구 절차 | Stage 11 전 |
-| T5 | MySQL 설치 방식과 영속 저장소 구성 | Stage 11 전 |
-| T6 | S3 삭제 재시도 자동화 여부 | Stage 4 이후 |
+| T4 | DB 백업 주기, 보관 기간, 저장 위치, 복구 절차 | 결정됨 (Stage 11, 6.42). 매일 KST 03:20 백업, 일일 7일, 주간 4주(일요일), 백업 전용 S3 버킷, SSE-S3, 공개 차단. 스크립트·문서 작성, 실제 실행과 복구는 미검증 |
+| T5 | MySQL 설치 방식과 영속 저장소 구성 | 결정됨 (Stage 11, 6.42). Ubuntu 24.04에 MySQL 8 직접 설치, 별도 EBS를 `/data/mysql`에 마운트(UUID, nofail), 3306 외부 차단. 실제 설치·AppArmor 적용은 미검증 |
+| T21 | 이미지 공개 방식 | 권장안 검토 중, 사용자 확정 전까지 결정 완료로 보지 않는다 (6.43). 권장안: 비공개 S3 + CloudFront OAC. 현재 앱은 공개 S3 URL을 만들어 CloudFront 적용에는 이미지 URL 생성 방식의 후속 코드 변경이 필요하다. CloudFront 적용 전 운영 이미지 표시는 검증할 수 없다. 공개 접근 임시 허용으로 해결하지 않는다 |
+| T22 | 배포 아티팩트 전용 S3 버킷 | 결정됨 (6.43). 이미지·백업 버킷과 분리된 전용 버킷을 사용자가 AWS에서 직접 만든다. 비공개, SSE-S3, GitHub Actions는 `releases/`에만 쓰고 EC2는 `releases/`에서만 읽는다. 실제 이름과 ARN은 문서에 쓰지 않는다 |
+| T6 | S3 삭제 재시도 자동화 여부 | 미확정 유지 (배포 영향: 자동 재시도 없음, 관리자 수동 재시도만 사용) |
 | T10 | OpenRouter 사용 모델 ID 선정 (운영 설정 값) | Stage 8 전 |
 
 ## 5. 설계 변경 이력
@@ -1085,6 +1087,66 @@
 - 미검증: 실제 AWS S3 삭제와 재시도, 실제 브라우저 화면(관리자 메뉴와 확인 대화상자), 운영 DB에서 초기 관리자 지정 SQL 실행, 여러 서버 인스턴스 사이의 재시도 동시 실행, 역할 변경의 실제 반영 시점(재로그인 후 화면 확인).
 
 
+### 6.42 Stage 11 배포 기반 구축 (2026-11-27)
+
+- 브랜치 `feat/stage11-deployment-foundation`, 기준 `main` `4a2a11c` (PR #48 병합 후). 배포 파일과 문서만 추가·수정했다. 애플리케이션 코드, 테스트, API, 보안 설정, DB 구조와 SQL 001~008은 바꾸지 않았다.
+- 추가한 파일: `docs/DEPLOYMENT.md`(운영 가이드), `deploy/`(환경변수 예시, systemd 유닛 2개와 타이머, Nginx 설정, MySQL 설정·계정 예시, S3 수명 규칙, 스크립트 5개: `setup-ec2.sh`, `mount-data-volume.sh`, `deploy.sh`, `rollback.sh`, `backup-mysql.sh`), `.github/workflows/deploy.yml`(저장소의 첫 워크플로).
+- T4(DB 백업)와 T5(MySQL·영속 저장소) 정책을 결정하고 절차를 작성했다. 백업은 `mysqldump --single-transaction` 후 gzip, 백업 전용 S3 버킷에 SSE-S3로 올리고 크기를 확인한다. 업로드 실패 시 로컬 파일을 지우지 않고 종료 코드 1로 끝낸다.
+- 배포는 GitHub OIDC로 임시 자격 증명을 받아 SSM Run Command로 `deploy.sh`를 호출한다. 헬스 체크(GET /) 실패 시 직전 JAR로 자동 롤백한다.
+- 발견한 충돌: (1) 이미지 URL이 공개 읽기를 전제한다. 비공개 원칙과 충돌하므로 T21로 기록하고 코드는 바꾸지 않았다. (2) 운영 프로필의 Secure 쿠키 때문에 도메인·HTTPS 전에는 화면 로그인이 동작하지 않는다. (3) 운영은 Google OAuth 값을 필수로 요구한다. 도메인 전에는 Google 로그인이 동작하지 않는다. (4) 배포 JAR 전달용 버킷이 추가로 필요하다 (T22).
+- 검증: `./gradlew clean test bootJar`(DB 미설정) 성공, 셸 스크립트 `bash -n` 통과, systemd 유닛 `systemd-analyze verify` 통과(백업 스크립트 미설치 경고 외), 워크플로 YAML 파싱 통과, S3 수명 규칙 JSON 파싱 통과.
+- 미검증: 실제 EC2·EBS·MySQL 설치, AppArmor 적용, S3 업로드·이미지 표시, IAM·OIDC·SSM 배포, 백업 실행과 복구, 브라우저 접속, Google 운영 콜백, HTTPS. 14절 참고.
+
+### 6.43 PR #49 리뷰 후속 수정: 배포 롤백, DB 테스트 CI, EBS 파일 시스템 검사, T21·T22 (2026-11-27)
+
+- 브랜치 `feat/stage11-deployment-foundation`에 커밋을 추가했다 (새 브랜치, 새 PR 없음). 애플리케이션 코드, 인증, JWT·Google OAuth, SQL 001~008, 이미지 업로드·삭제 로직은 바꾸지 않았다.
+- 배포 롤백 (`deploy/scripts/deploy.sh`): 재시작 명령 실패(`systemctl restart`)가 `set -e`로 스크립트를 바로 끝내던 문제를 고쳤다. 이제 재시작 명령, `is-active`, 헬스 체크를 각각 확인하고, 실패 사유를 단계별로 남긴 뒤 이전 JAR로 되돌린다. 종료 코드로 결과를 구분한다 (0 성공, 1 배포 전 실패, 2 복구 성공, 3 복구 실패, 4 최초 배포 실패). SHA-256 검증과 원자적 링크 교체는 그대로다.
+- `deploy/scripts/rollback.sh`: 재시작 명령 실패, 기동 실패, 헬스 체크 실패를 각각 다른 메시지로 보고한다.
+- 가짜 명령 테스트 `deploy/tests/test-deploy-rollback.sh` (22개 검사 통과): 새 버전 재시작 실패 → 복구, 헬스 실패 → 복구, 기동 실패 → 복구, 이전 버전도 실패 → 복구 실패 보고, 최초 배포 실패 → 이전 버전 없음 보고, rollback 재시작 실패, rollback 정상.
+- DB 테스트 CI 보완 (`.github/workflows/deploy.yml`): MySQL 8 서비스 컨테이너(테스트 전용)를 띄우고, 수동 SQL 001~008을 순서대로 적용한 뒤 `./gradlew clean test`를 실행한다. `TEST_DB_*`는 그 단계 env에만 있다. 결과 XML을 검사해 실패, 건너뜀, DB 테스트 0개 중 하나라도 있으면 배포 전에 실패한다. 로컬 격리 MySQL 8.0에서 같은 설정으로 `./gradlew clean test`를 돌려 913개 실행, 건너뜀 0, 실패 0, DB 테스트 191개 실행을 확인했다. 워크플로 자체의 러너 실행은 미검증이다.
+- 발견한 사항: MySQL 8 기본 인증(`caching_sha2_password`)은 TLS 없이 CLI로 접속하면 실패한다. 그래서 CI의 스키마 적용 step은 `--ssl-mode=REQUIRED`를 쓴다. JDBC 테스트 URL은 `allowPublicKeyRetrieval=true`로 동작했다.
+- EBS 마운트 (`deploy/scripts/mount-data-volume.sh`): 기존 파일 시스템 종류를 실제로 확인한다. ext4면 마운트만, 서명 없는 새 장치는 `--format-new-volume`이 있을 때만 ext4로 만든다, 그 밖의 파일 시스템(xfs 등)은 포맷도 fstab 기록도 하지 않고 중단한다. 마운트 뒤 `findmnt`로 ext4를 다시 확인한다. 판단 함수 시험 `deploy/tests/test-mount-data-volume.sh` (9개 검사 통과).
+- T21 (이미지 공개 방식): 권장안(비공개 S3 + CloudFront OAC)을 문서화했다. 현재 앱은 공개 S3 URL을 만들므로, CloudFront 적용에는 이미지 URL 생성 방식의 후속 코드 변경이 필요하다. CloudFront 적용 전에는 운영 이미지 표시를 검증할 수 없다. **사용자 확정 전까지 결정 완료로 표시하지 않는다.** 공개 접근을 임시로 허용하는 방법은 쓰지 않는다.
+- T22 (배포 아티팩트 버킷): 전용 버킷을 쓰는 설계를 확정했다. 이미지·백업 버킷과 분리하고, 비공개와 SSE-S3, GitHub Actions는 `releases/`에만 쓰고 EC2는 `releases/`에서만 읽는다. 사용자가 AWS에서 직접 만든다. 실제 이름과 ARN은 문서에 쓰지 않는다.
+- 미검증: 실제 EC2, EBS 장치 마운트와 재부팅, 실제 systemd 롤백, GitHub Actions 러너 실행, SSM 배포, S3, IAM, OIDC, 백업·복구, 이미지 표시.
+
+### 6.44 백업 계정 SHOW_ROUTINE 권한 보완 (PR #49, 2026-11-28)
+
+- 발견: `busan_backup` 계정에 SHOW_ROUTINE이 없으면 `mysqldump --routines`가 프로시저와 함수를 조용히 빼고 종료 코드 0을 낸다. 백업 스크립트도 성공으로 보고한다. 로컬 MySQL 8.0.46에서 재현했다.
+- 조치: `deploy/mysql/bootstrap-accounts.sql.example`에 `GRANT SHOW_ROUTINE ON *.* TO 'busan_backup'@'127.0.0.1';`을 추가했다. 이 권한은 전역 범위만 가능하며 메타데이터 조회만 허용한다. `docs/DEPLOYMENT.md` 6.2.1절에 설명과 확인 방법을 적었다.
+- 검증: 테스트 DB에 프로시저·함수·트리거·이벤트를 하나씩 만들고 백업 스크립트를 실제로 실행했다. 권한이 있으면 모두 덤프에 포함, 없으면 프로시저·함수가 빠짐.
+- 범위 밖 (권고): 백업 스크립트가 덤프 뒤 루틴 개수를 `information_schema`와 비교하도록 하면 이런 조용한 누락을 실패로 잡을 수 있다. 이번 PR에서는 구현하지 않았다.
+- 미검증: 실제 AWS RDS·EC2 환경, 실제 S3 업로드, 실제 복구.
+
+### 6.45 운영 웹 바인딩 127.0.0.1 고정 (PR #49, 2026-11-28)
+
+- 발견: 기존 설정은 운영에서도 8080을 모든 인터페이스에 열었다. 배포 문서와 systemd 주석은 루프백 바인딩을 전제했으므로 불일치였다. 로컬 호스트에서 `0.0.0.0:8080`을 확인했다.
+- 조치: `application-prod.yml`에 `server.address: 127.0.0.1`을 추가했다. 로컬 프로필과 기본 설정은 바꾸지 않았다. 문서(DEPLOYMENT 11.6절, systemd 주석)를 이 설정과 맞췄다.
+- 검증: 수정 전후 jar를 운영 프로필로 실행해 리스닝 주소를 확인했다. 수정 전 `0.0.0.0:8080`, 수정 후 `127.0.0.1:8080`(사설 IP 접속 거부). 테스트 `ServerBindingConfigTest` 2개 추가 (운영은 루프백, 기본·로컬은 미지정). 전체 915개 실행, 건너뜀 0, 실패 0.
+- Nginx: 저장소 설정의 IPv6 줄을 뺀 사본으로 `:80` → 앱 프록시 200, 7MB 업로드 413 확인. 저장소 파일 자체는 IPv6가 없는 호스트에서 `nginx -t`가 실패할 수 있다 (15절 후속 항목).
+- 미검증: EC2에서의 `ss` 결과와 Nginx 연결. 실제 Ubuntu 24.04 EC2 확인은 하지 않았다.
+
+### 6.46 Stage 11 배포 사전 점검 수정 (PR #49, 2026-11-28)
+
+- EBS 마운트 실행 경로: 문서가 설치되지 않은 `/opt/busan-local-food/bin/mount-data-volume.sh`를 가리키던 문제를 고쳤다. 이제 저장소의 `deploy/`를 EC2에 복사한 뒤 `sudo bash deploy/scripts/mount-data-volume.sh <장치> [--format-new-volume]`로 실행한다. EC2 초기 설정(4.3)보다 먼저 실행한다. 장치 경로는 `lsblk`로 확인한다. 설치 경로 참조가 남지 않았는지 문서 전체를 검색했다.
+- MySQL AppArmor 순서: 문서 4.4절을 다음 순서로 바꿨다. MySQL 중지, `/data/mysql` 생성, alias 추가, 로컬 규칙 추가, `apparmor_parser -r`, 빈 디렉터리 확인 뒤 초기화, 설정 적용과 기동, `SELECT @@datadir`. alias와 규칙 추가는 같은 줄이 있으면 건너뛰어 반복 실행해도 중복되지 않는다. 기존 데이터가 있는 `/data/mysql`은 초기화하지 않는다.
+- Nginx IPv6: `deploy/nginx/busan-local-food.conf`에서 `listen [::]:80 default_server;`를 뺐다. 기본 구성은 IPv4 80 전용이며 HTTPS 예시도 IPv4 전용이다. IPv6 지원은 확인하지 않았으므로 문서에 지원된다고 쓰지 않는다. 이 호스트(IPv6 없음)에서 이전 설정은 `nginx -t`가 실패했고, 새 설정은 통과했다.
+- 검증 범위: 위 세 항목 중 EBS 실제 마운트, AppArmor 규칙 적용, MySQL 초기화와 기동, EC2에서의 `nginx -t`는 실제 Ubuntu 24.04 EC2에서 확인하지 않았다. 미검증으로 유지한다.
+
+### 6.47 MySQL의 EBS 마운트 의존성과 워크플로 대기 정책 (PR #49, 2026-11-28)
+
+- 발견: `busan-local-food.service`에만 `RequiresMountsFor=/data/mysql`이 있었고 `mysql.service`에는 없었다. EBS가 분리되거나 마운트에 실패하면 MySQL이 루트 볼륨의 빈 `/data/mysql`에 기동할 수 있었다.
+- 조치: `deploy/systemd/mysql.service.d/ebs-data-mount.conf`를 추가했다. 내용은 `RequiresMountsFor=/data/mysql`과 `AssertPathIsMountPoint=/data`. 후자는 요청 사항 외 방어선이다. `setup-ec2.sh`가 `/etc/systemd/system/mysql.service.d/`에 설치하고 `daemon-reload`를 실행한다. 기존 `mysql.service`는 건드리지 않는다. 문서 4.4절에 설명과 확인 명령을 넣었고, 4.4 2단계에 `mountpoint -q /data` 확인을 추가했다.
+- 워크플로 대기: `aws ssm wait`의 기본 한도(약 1500초)에 기대지 않고, 1080초(SSM 명령 제한 900초 + 180초) 한도로 직접 폴링한다. 배포 스크립트 최악의 시간 예산은 약 600초로 계산했고 문서 11.2절에 적었다.
+- 테스트: `test-mysql-dropin.sh` (12개 통과, 대조군 포함), `test-ssm-wait.sh` (6개 통과, 가짜 명령). 두 테스트는 CI 워크플로의 테스트 단계에 추가했다.
+- 미검증: 실제 systemd 부팅 순서, EBS 분리 시 MySQL 거부 동작, 재부팅 후 기동 순서, GitHub Actions 러너의 대기 단계 실행. EC2에서 확인하지 않았다.
+
+### 6.48 EBS 마운트 UUID 검증과 신규·기존 MySQL 절차 구분 (PR #49, 2026-11-28)
+
+- 마운트 검증: `mount-data-volume.sh`가 `/data`에 이미 마운트된 볼륨의 UUID를 장치 UUID와 대조하지 않았다. 다른 ext4 볼륨이 있어도 성공으로 처리할 수 있었다. 이제 마운트 UUID가 장치 UUID와 같을 때만 성공하고, 다르면 fstab과 기존 마운트를 건드리지 않고 실패한다. 새로 마운트한 경우도 실제 UUID와 ext4를 모두 확인한다. 가짜 명령 테스트 30개 통과 (기존 9개 + 신규 21개).
+- 문서: 4.4절에 적용 대상을 나눠 적었다. 신규 EC2의 빈 MySQL 데이터 디렉터리가 기본 대상이다. 기존 데이터가 있는 서버에서는 이 절차를 그대로 실행하면 안 되며, 데이터 이전·검증·롤백 계획을 먼저 세워야 한다. 6단계에 기존 서버 실행 금지 경고를 추가했다. drop-in, `setup-ec2.sh`, 앱 서비스 의존성은 제거하지 않았다.
+- 미검증: 실제 블록 장치 마운트, 실제 `findmnt` 출력, 실제 systemd 부팅과 drop-in 동작, 기존 데이터 서버의 이전.
+
 ## 7. 다음 작업
 
 1. 완료 (`main` 병합: PR #17 `9f881a0cca892b28f342dec9fc399814b40001a8`, PR #19 `dd147e3f595825047d017ddcbb20df95f55ec40f`, PR #23 `56faff2566743c89911d4d87407fff5ac6c1732e`, PR #25 `d1b9e1d`):
@@ -1109,10 +1171,11 @@
    - F1-06 찜: `main` 병합 완료 (PR #45, merge commit `c9cb668`, 6.37·6.38).
    - F1-07 AI 맛집 추천: `main` 병합 완료 (PR #46, merge commit `9206026`, 6.39). 실제 OpenRouter 호출은 아직 검증하지 않았다.
    - F1-08 메인 홈페이지: `main` 병합 완료 (PR #47, merge commit `7b20233`, 6.40). 실제 브라우저 화면과 운영 데이터는 아직 검증하지 않았다.
-   - F1-09 관리자 기능: 구현 완료, PR #48 병합 대기 (6.41). 실제 AWS S3 재시도와 브라우저 화면은 아직 검증하지 않았다.
-   - **다음 개발 단계: PR #48 병합 확인 후 배포 준비(Stage 11, EC2·MySQL·GitHub Actions).** 회원 탈퇴(T1)는 A안으로 결정되어 이번 F1-09 범위에서 제외했다.
+   - F1-09 관리자 기능: `main` 병합 완료 (PR #48, merge commit `4a2a11c`, 6.41). 실제 AWS S3 재시도와 브라우저 화면은 아직 검증하지 않았다.
+   - Stage 11 배포 기반: PR 병합 대기 (6.42, `docs/DEPLOYMENT.md`). 실제 AWS 리소스 생성, 배포, 백업·복구는 사용자 설정 뒤에 검증한다.
+   - **다음 개발 단계: Stage 11 배포 기반 PR 병합 → 사용자가 AWS 설정(EC2·EBS·MySQL·S3·IAM·OIDC·Variables) → 실제 배포와 백업·복구 검증.** 회원 탈퇴(T1)는 A안으로 결정되어 이번 F1-09 범위에서 제외했다.
    - F1-02 구현 차이는 API_SPEC 4절과 FUNCTION_SPEC F1-02의 구현 상태 메모에 있다 (`thumbnailUrl`, `storageDeleted`, 이미지·찜 자리표시, 오류 `details`).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
    - Google 액세스 토큰의 HttpSession 저장 정책 검토 (6.21 위험 항목)
-5. 미확정 항목(T4, T5, T6, T10)은 각 단계 시작 전에 결정합니다.
+5. 미확정 항목(T6, T10, T21)은 각 단계 시작 전에 결정합니다. T21은 이미지 공개 방식(권장안 검토 중), T6은 S3 삭제 자동 재시도, T10은 OpenRouter 모델 ID다.
 6. 실제 MySQL 스키마 적용은 사용자가 `db/manual/`의 SQL 파일을 직접 실행합니다. 이번 작업에서는 실행하지 않았습니다.

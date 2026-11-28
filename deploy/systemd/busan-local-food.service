@@ -1,0 +1,38 @@
+# Spring Boot 애플리케이션 systemd 서비스. 설치 경로: /etc/systemd/system/busan-local-food.service
+# 실행 JAR는 /opt/busan-local-food/current.jar (심볼릭 링크)를 가리킨다. 배포·롤백은 scripts/deploy.sh, scripts/rollback.sh가 링크만 바꾼다.
+[Unit]
+Description=Busan Local Food (Spring Boot)
+After=network-online.target mysql.service
+Wants=network-online.target
+# 데이터 디렉터리가 마운트되지 않았으면 MySQL과 앱 모두 기다린다 (EBS 분리 시 빈 디렉터리 접근 방지).
+RequiresMountsFor=/data/mysql
+
+[Service]
+Type=simple
+User=busan
+Group=busan
+WorkingDirectory=/opt/busan-local-food
+# 운영 환경변수. 소유자 root:busan, 권한 640. 값은 이 파일에만 둔다.
+EnvironmentFile=/etc/busan-local-food/app.env
+# 8080은 127.0.0.1에만 바인딩한다. 값은 application-prod.yml의 server.address: 127.0.0.1 이 정한다 (이 유닛은 바인딩을 바꾸지 않는다).
+# 외부 접근은 Nginx(80/443)를 거친다. 확인 절차: docs/DEPLOYMENT.md 11.6절.
+ExecStart=/usr/bin/java -Xms512m -Xmx1024m -Dfile.encoding=UTF-8 -jar /opt/busan-local-food/current.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+# 기동이 멈춰도 systemd가 무한 대기하지 않도록 시간 제한을 둔다.
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+# 권한 축소. 앱은 /opt/busan-local-food 와 로그(journald)만 쓴다.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/busan-local-food/tmp
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

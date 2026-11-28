@@ -1,6 +1,12 @@
 # 운영(prod) 설정. 운영 DB는 같은 EC2 내부의 MySQL 8이다 (Q4, NFR-12).
 # DB_URL, DB_USERNAME, DB_PASSWORD는 서버 환경변수로만 주입한다. 기본값을 두지 않는다.
+# 운영 웹 바인딩: 8080은 127.0.0.1에만 연다. 외부 접근은 같은 EC2의 Nginx(80/443)를 거친다 (docs/DEPLOYMENT.md 11.6절).
+# 로컬 프로필과 기본 설정은 바인딩 주소를 바꾸지 않는다.
 # 운영 DB 연결에는 SSL을 사용하도록 DB_URL을 구성한다 (로컬 설정의 useSSL=false를 쓰지 않는다).
+server:
+  address: 127.0.0.1
+  port: 8080
+
 logging:
   level:
     com.busanlocalfood: info
