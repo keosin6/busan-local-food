@@ -17,6 +17,7 @@
 | Stage 3 F1-03 맛집 이미지 | `main` 병합 완료 — PR #39 (merge commit `123db18`, 6.30·6.31). S3 업로드·삭제, 이미지 메타데이터(SQL 005), `storage_delete_task`, 목록 썸네일, 상세 갤러리, 수정 화면 사진 관리, 삭제·업로드 동시성 잠금. 실제 AWS 버킷 검증은 배포 단계. 자동 재시도는 없고, 관리자 수동 재시도는 F1-09에서 구현(PR #48 `main` 병합 완료, merge commit `4a2a11c`) |
 | Stage 5 F1-04 리뷰 | `main` 병합 완료 — PR #41 (merge commit `0f8b1f8`, 6.32·6.33). 작성(평점 1~5, 맛집당 한 번), 최신순 목록, 본인 삭제, 평균 평점과 리뷰 수의 잠금 기반 동기화, 맛집 삭제 시 리뷰 정리. AI 요약 캐시 무효화는 F1-05 |
 | Stage 6 F1-05 AI 리뷰 요약 | `main` 병합 완료 — PR #43 (merge commit `39532fa`, 6.34·6.35). Spring AI 1.1.8 OpenAI 스타터로 OpenRouter 호출. 3개 이상 맛집만 OpenRouter 요약, `ai_review_summary` 캐싱, 리뷰 작성·삭제 시 무효화, 동시 요청 공유, 실패는 UNAVAILABLE. 실제 OpenRouter 호출과 운영 설정은 미검증 |
+| Stage 11 운영 배포 기반 구축 | `main` 병합 완료 — PR #49 (merge commit `ab39f1d`, 6.42~6.49). EC2 초기 구성 스크립트, EBS 기반 MySQL 데이터 영속화, MySQL 백업·복구 기반, 배포·롤백 스크립트, GitHub Actions 배포 워크플로, S3 배포 아티팩트와 SSM 배포 연동이 저장소에 반영되었다. **실제 AWS 인프라 구성과 운영 배포 검증은 아직 진행하지 않았다 (후속 작업).** |
 | **다음 개발 단계** | AWS 리소스 생성 및 실환경 배포 검증. Stage 11 배포 기반 파일·문서는 PR #49로 `main` 병합 완료(merge commit `ab39f1d`, 6.49). 다음은 EC2·EBS·MySQL·S3·IAM·OIDC·GitHub Variables 설정과 실제 배포·롤백·백업·복구 확인이다. 기능 단계 F1-01~F1-09의 구현은 끝났다. F1-09 관리자 기능은 `main` 병합 완료(PR #48, merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴는 이번 범위에서 제외(T1). F1-08 메인 홈페이지는 `main` 병합 완료(PR #47, `7b20233`, 6.40). F1-07 AI 맛집 추천은 `main` 병합 완료(PR #46, `9206026`, 6.39). F1-06 찜하기·찜 목록은 `main` 병합 완료(PR #45, `c9cb668`, 6.37·6.38). F1-02(PR #37), F1-03(PR #39), F1-04(PR #41), F1-05(PR #43)은 `main` 병합 완료. 상세는 7절 |
 
 ## 1. 단계 요약
@@ -34,7 +35,7 @@
 | 8 | F1-07 AI 맛집 추천 | `main` 병합 완료 — PR #46 (`9206026`, 6.39). `/recommend` 세션 인증 보호 | 의존: F1-02, F1-05 (AI 연동). T10 (모델 설정) |
 | 9 | F1-08 메인 페이지 완성 (최신 맛집, 카테고리 연결) | `main` 병합 완료 — PR #47 (`7b20233`, 6.40) | 의존: F1-02 |
 | 10 | F1-09 관리자 기능 (role, `/admin/**`, `/api/admin/**`, 대시보드, S3 재시도) | `main` 병합 완료 — PR #48 (merge commit `4a2a11c`, 6.41). 회원 정지·탈퇴·권한 변경은 이번 범위 제외(T1, T2) | 의존: F1-01, F1-02, F1-03, F1-04. T1 범위 제외 |
-| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 배포 기반 파일·문서 main 병합 완료 (PR #49, merge commit `ab39f1d`, 6.42·6.43·6.44~6.48·6.49), 실제 AWS 구성 및 배포 검증 진행 전. 실제 AWS 리소스 생성·배포·백업 복구는 미검증 | T4, T5, T22 결정 (6.42·6.43). 이미지 공개 방식 T21은 권장안 검토 중. 상세는 `docs/DEPLOYMENT.md` |
+| 11 | 배포 (EC2, MySQL 설치, 영속 저장소, 백업, GitHub Actions 배포) | 병합 완료 — PR #49, merge commit `ab39f1d` (6.42~6.49). 배포 기반 파일·문서 반영. 실제 AWS 배포 및 검증은 별도 후속 작업이며 아직 실행하지 않음 | T4, T5, T22 결정 (6.42·6.43). 이미지 공개 방식 T21은 권장안 검토 중. 상세는 `docs/DEPLOYMENT.md` |
 
 ## 2. 기능별 상태
 
@@ -1150,6 +1151,14 @@
 ### 6.49 PR #49 병합 기록: Stage 11 배포 기반 구축 (2026-11-28)
 
 - 병합: PR #49 `feat: Stage 11 운영 배포 기반 구축 (#49)`, `main` merge commit `ab39f1d`. 이 저장소의 PR 병합은 squash 방식으로 기록되었다. 병합 전 PR 브랜치의 마지막 커밋은 `9433fa5`이다.
+- 포함 항목 (저장소 반영 기준):
+  - EC2 초기 구성 스크립트 (`deploy/scripts/setup-ec2.sh`)
+  - EBS 기반 MySQL 데이터 영속화 (`mount-data-volume.sh` UUID 검증, MySQL drop-in의 `RequiresMountsFor`·`AssertPathIsMountPoint`, 4.4절 절차)
+  - MySQL 백업 및 복구 기반 (`backup-mysql.sh`, 백업 계정 권한, S3 수명 규칙, 복구 절차 문서화)
+  - 배포 및 롤백 스크립트 (`deploy.sh`, `rollback.sh`, SHA-256 검증, 헬스 체크 기반 자동 복구)
+  - GitHub Actions 배포 워크플로 (`.github/workflows/deploy.yml`, 테스트 서비스 컨테이너와 결과 검사)
+  - S3 배포 아티팩트와 SSM 배포 연동 (`releases/` 경로 업로드, SSM Run Command 호출, 대기 한도 1080초)
+  - 실제 AWS 환경에서는 검증하지 않았다. 위 항목은 저장소 파일과 로컬 시험 기준이다.
 - 병합에 포함된 변경 범위 (문서와 배포 파일, 애플리케이션 기능 변경 없음):
   - 배포 문서 `docs/DEPLOYMENT.md`, 배포 파일 `deploy/`(환경변수 예시, systemd 유닛과 drop-in, Nginx 설정, MySQL 설정·계정 예시, S3 수명 규칙, 운영 스크립트와 가짜 명령 테스트), GitHub Actions `.github/workflows/deploy.yml`.
   - 애플리케이션 설정: 운영 프로필의 웹 바인딩 `server.address: 127.0.0.1` (`application-prod.yml`)과 이를 검사하는 테스트 1개. 기능 코드는 바꾸지 않았다.
@@ -1184,7 +1193,16 @@
    - F1-08 메인 홈페이지: `main` 병합 완료 (PR #47, merge commit `7b20233`, 6.40). 실제 브라우저 화면과 운영 데이터는 아직 검증하지 않았다.
    - F1-09 관리자 기능: `main` 병합 완료 (PR #48, merge commit `4a2a11c`, 6.41). 실제 AWS S3 재시도와 브라우저 화면은 아직 검증하지 않았다.
    - Stage 11 배포 기반: PR #49 `main` 병합 완료 (merge commit `ab39f1d`, 6.42·6.49). 실제 AWS 리소스 생성, 배포, 백업·복구는 아직 시작하지 않았고 검증되지 않았다.
-   - **다음 개발 단계: AWS 리소스 생성 및 실환경 배포 검증** (EC2·EBS·MySQL·S3·IAM·OIDC·GitHub Variables 설정, 배포·롤백·백업·복구 실제 확인). 회원 탈퇴(T1)는 A안으로 결정되어 이번 F1-09 범위에서 제외했다.
+   - **다음 작업: 실제 운영 환경 구성과 검증** (아직 시작하지 않음)
+     1. AWS EC2 및 EBS 구성
+     2. MySQL 데이터 볼륨 초기 설정 (4.4절 절차. 기존 데이터 서버는 별도 이전 계획 필요)
+     3. S3 배포 아티팩트 버킷 및 백업 버킷 구성 (T22 전용 버킷, 백업 버킷 분리)
+     4. IAM 역할 및 GitHub Actions OIDC 설정
+     5. SSM 연결 및 GitHub Repository Variables 설정
+     6. 실제 배포 실행 (배포와 롤백 확인)
+     7. 백업 및 복구 검증
+     8. HTTPS 및 운영 환경 점검 (도메인 연결, Google OAuth 운영 콜백, 이미지 공개 방식 T21 확정 후 적용)
+   - 회원 탈퇴(T1)는 A안으로 결정되어 이번 F1-09 범위에서 제외했다.
    - F1-02 구현 차이는 API_SPEC 4절과 FUNCTION_SPEC F1-02의 구현 상태 메모에 있다 (`thumbnailUrl`, `storageDeleted`, 이미지·찜 자리표시, 오류 `details`).
 4. 확인 필요: 비밀번호 확인값 누락 처리, 닉네임 대소문자 구분 정책, 이메일 형식의 Unicode 공백 처리.
    - Google 액세스 토큰의 HttpSession 저장 정책 검토 (6.21 위험 항목)
